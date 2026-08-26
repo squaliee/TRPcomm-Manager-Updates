@@ -1,1 +1,2 @@
 1.0
+https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/trpcomm-manager.lua
