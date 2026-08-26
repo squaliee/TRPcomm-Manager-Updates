@@ -28,8 +28,8 @@ local TG_THREAD_ID = "9"
 -- ============================================================
 --  юбрннамнбкемхе
 -- ============================================================
-SCRIPT_VERSION = "1.0"
-UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/рбни_чгеп/рбни_пеон/main/version.txt"
+SCRIPT_VERSION = "1.1"
+UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 local UPDATE_TEMP_PATH = getWorkingDirectory() .. "\\moonloader\\trpcomm_update_manifest.txt"
 
 local function parseVersion(v)
