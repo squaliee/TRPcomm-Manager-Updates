@@ -28,9 +28,8 @@ local TG_THREAD_ID = "9"
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "1.1"
+SCRIPT_VERSION = "1.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
-local UPDATE_TEMP_PATH = getWorkingDirectory() .. "\\moonloader\\trpcomm_update_manifest.txt"
 
 local function parseVersion(v)
     local parts = {}
@@ -51,26 +50,36 @@ local function isNewerVersion(remote, current)
 end
 
 local function checkForUpdates()
-    downloadUrlToFile(UPDATE_MANIFEST_URL, UPDATE_TEMP_PATH, function(id, status)
-        if status ~= 6 then return end
+    lua_thread.create(function()
+        local ok, response = pcall(requests.get, UPDATE_MANIFEST_URL, { timeout = 15 })
+        if not ok or response.status_code ~= 200 then
+            return
+        end
 
-        local f = io.open(UPDATE_TEMP_PATH, "r")
-        if not f then return end
-        local remoteVersion = f:read("*l")
-        local downloadUrl = f:read("*l")
-        f:close()
-        os.remove(UPDATE_TEMP_PATH)
+        local lines = {}
+        for line in response.text:gmatch("[^\r\n]+") do
+            lines[#lines + 1] = line
+        end
+        local remoteVersion, downloadUrl = lines[1], lines[2]
         if not remoteVersion or not downloadUrl then return end
 
         if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
             sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
-            downloadUrlToFile(downloadUrl, thisScript().path, function(id2, status2)
-                if status2 == 6 then
-                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Обновление скачано! Перезайди на сервер (или F4 -> reload), чтобы применить.', -1)
-                else
-                    sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось скачать обновление.', -1)
-                end
-            end)
+
+            local ok2, response2 = pcall(requests.get, downloadUrl, { timeout = 20 })
+            if not ok2 or response2.status_code ~= 200 then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось скачать обновление.', -1)
+                return
+            end
+
+            local fw = io.open(thisScript().path, "wb")
+            if fw then
+                fw:write(response2.text)
+                fw:close()
+                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Скрипт успешно обновлён, перезайдите в игру чтобы применить изменения.', -1)
+            else
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось записать файл обновления.', -1)
+            end
         end
     end)
 end
