@@ -28,7 +28,7 @@ local TG_THREAD_ID = "9"
 -- ============================================================
 --  юбрннамнбкемхе
 -- ============================================================
-SCRIPT_VERSION = "1.2"
+SCRIPT_VERSION = "1.3"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
