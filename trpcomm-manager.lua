@@ -1,6 +1,6 @@
 -- ============================================================
---  TRPcomm MANAGER | ГЂГўГІГ®Г°: ГЃГ®ГЈГ¤Г Г­ ГЌГ®Г¬ГЁГ­Г®Гў
---  ГЂГЄГІГіГ Г«ГјГ­Г Гї ГўГҐГ°Г±ГЁГї: 1.0
+--  TRPcomm MANAGER | Автор: Богдан Номинов
+--  Актуальная версия: 1.0
 -- ============================================================
 
 imgui = require 'imgui'
@@ -26,7 +26,7 @@ local TG_CHAT_ID = "-1003174705842"
 local TG_THREAD_ID = "9"
 
 -- ============================================================
---  ГЂГ‚Г’ГЋГЋГЃГЌГЋГ‚Г‹Г…ГЌГ€Г…
+--  АВТООБНОВЛЕНИЕ
 -- ============================================================
 SCRIPT_VERSION = "1.6"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
@@ -64,12 +64,12 @@ local function checkForUpdates()
         if not remoteVersion or not downloadUrl then return end
 
                 if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЌГ Г©Г¤ГҐГ­Г  Г­Г®ГўГ Гї ГўГҐГ°Г±ГЁГї ' .. remoteVersion .. ', Г±ГЄГ Г·ГЁГўГ Гѕ...', -1)
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
 
             local tempPath = getWorkingDirectory() .. "\\moonloader\\trpcomm_update_tmp.lua"
             os.remove(tempPath)
             downloadUrlToFile(downloadUrl .. "?cb=" .. os.time(), tempPath, function() end)
-            wait(4000) -- Г±ГІГ ГІГіГ±-ГЄГ®Г¤Г» ГЄГ®Г«ГЎГЅГЄГ  Г¤Г«Гї ГЅГІГ®ГЈГ® ГµГ®Г±ГІГ  Г­ГҐГ­Г Г¤ВёГ¦Г­Г», ГЇГ®ГЅГІГ®Г¬Гі ГЇГ°Г®Г±ГІГ® Г¦Г¤ВёГ¬ ГЁ ГЇГ®ГІГ®Г¬ ГЇГ°Г®ГўГҐГ°ГїГҐГ¬ ГґГ Г©Г« Г°ГіГЄГ Г¬ГЁ
+            wait(4000) -- статус-коды колбэка для этого хоста ненадёжны, поэтому просто ждём и потом проверяем файл руками
 
             local fr = io.open(tempPath, "rb")
             local content = fr and fr:read("*a")
@@ -78,17 +78,17 @@ local function checkForUpdates()
             local looksValid = content
                 and #content > 5000
                 and content:find("function main()", 1, true)
-                and not content:find("\239\187\191", 1, true)   -- BOM вЂ” ГЇГ°ГЁГ§Г­Г ГЄ UTF-8 ГўГ¬ГҐГ±ГІГ® CP1251
-                and not content:find("\208", 1, true)           -- ГЎГ Г©ГІГ» UTF-8-ГЄГЁГ°ГЁГ«Г«ГЁГ¶Г» вЂ” ГІГ®Г¦ГҐ ГЇГ°ГЁГ§Г­Г ГЄ ГЇГ®Г°Г·ГЁ
+                and not content:find("\239\187\191", 1, true)   -- BOM — признак UTF-8 вместо CP1251
+                and not content:find("\208", 1, true)           -- байты UTF-8-кириллицы — тоже признак порчи
                 and not content:find("\209", 1, true)
 
             if looksValid then
                 local targetPath = thisScript().path
                 os.remove(targetPath)
                 os.rename(tempPath, targetPath)
-                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Г‘ГЄГ°ГЁГЇГІ ГіГ±ГЇГҐГёГ­Г® Г®ГЎГ­Г®ГўГ«ВёГ­, ГЇГҐГ°ГҐГ§Г Г©Г¤ГЁГІГҐ Гў ГЁГЈГ°Гі Г·ГІГ®ГЎГ» ГЇГ°ГЁГ¬ГҐГ­ГЁГІГј ГЁГ§Г¬ГҐГ­ГҐГ­ГЁГї.', -1)
+                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Скрипт успешно обновлён, перезайдите в игру чтобы применить изменения.', -1)
             else
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘ГЄГ Г·Г Г­Г­Г»Г© ГґГ Г©Г« ГўГ»ГЈГ«ГїГ¤ГЁГІ ГЎГЁГІГ»Г¬, Г®ГЎГ­Г®ГўГ«ГҐГ­ГЁГҐ Г®ГІГ¬ГҐГ­ГҐГ­Г® вЂ” Г°Г ГЎГ®Г·ГЁГ© Г±ГЄГ°ГЁГЇГІ Г­ГҐ ГІГ°Г®Г­ГіГІ.', -1)
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Скачанный файл выглядит битым, обновление отменено — рабочий скрипт не тронут.', -1)
                 os.remove(tempPath)
             end
         end
@@ -134,11 +134,11 @@ local function findFilesByMask(mask)
 end
 
 -- ============================================================
---  Г’Г…ГЊГ› ГЋГ”ГЋГђГЊГ‹Г…ГЌГ€Гџ
+--  ТЕМЫ ОФОРМЛЕНИЯ
 -- ============================================================
 local themes = {
     {
-        name       = u8"TRPcomm (Г±ГЁГ­ГїГї)",
+        name       = u8"TRPcomm (синяя)",
         windowBg   = imgui.ImVec4(0.05, 0.08, 0.14, 0.97),
         titleBg    = imgui.ImVec4(0.196, 0.349, 0.573, 1.00),
         panelBg    = imgui.ImVec4(0.08, 0.13, 0.22, 1.00),
@@ -155,9 +155,9 @@ local themes = {
         textDim    = imgui.ImVec4(0.55, 0.63, 0.75, 1.00),
     },
 
-    -- 1. ГЉГ°Г®ГўГ ГўГ Гї (ГЄГ°Г Г±Г­Г Гї)
+    -- 1. Кровавая (красная)
     {
-        name       = u8"ГЉГ°Г®ГўГ ГўГ Гї",
+        name       = u8"Кровавая",
         windowBg   = imgui.ImVec4(0.08, 0.05, 0.05, 0.97),
         titleBg    = imgui.ImVec4(0.50, 0.15, 0.15, 1.00),
         panelBg    = imgui.ImVec4(0.14, 0.08, 0.08, 1.00),
@@ -174,9 +174,9 @@ local themes = {
         textDim    = imgui.ImVec4(0.75, 0.55, 0.55, 1.00),
     },
     
-    -- 2. Г€Г§ГіГ¬Г°ГіГ¤Г­Г Гї (Г‡ГҐГ«ГҐГ­Г»ГҐ ГЁ Г«ГҐГ±Г­Г»ГҐ Г®ГІГІГҐГ­ГЄГЁ)
+    -- 2. Изумрудная (Зеленые и лесные оттенки)
     {
-        name       = u8"Г€Г§ГіГ¬Г°ГіГ¤Г­Г Гї",
+        name       = u8"Изумрудная",
         windowBg   = imgui.ImVec4(0.05, 0.08, 0.06, 0.97),
         titleBg    = imgui.ImVec4(0.15, 0.45, 0.25, 1.00),
         panelBg    = imgui.ImVec4(0.08, 0.13, 0.09, 1.00),
@@ -193,9 +193,9 @@ local themes = {
         textDim    = imgui.ImVec4(0.55, 0.75, 0.60, 1.00),
     },
 
-    -- 3. ГЂГ¬ГҐГІГЁГ±ГІГ®ГўГ Гї (ГЌГҐГ®Г­Г®ГўГ®-ГґГЁГ®Г«ГҐГІГ®ГўГ Гї)
+    -- 3. Аметистовая (Неоново-фиолетовая)
     {
-        name       = u8"ГЂГ¬ГҐГІГЁГ±ГІГ®ГўГ Гї",
+        name       = u8"Аметистовая",
         windowBg   = imgui.ImVec4(0.06, 0.05, 0.09, 0.97),
         titleBg    = imgui.ImVec4(0.40, 0.20, 0.60, 1.00),
         panelBg    = imgui.ImVec4(0.10, 0.08, 0.15, 1.00),
@@ -212,9 +212,9 @@ local themes = {
         textDim    = imgui.ImVec4(0.65, 0.55, 0.75, 1.00),
     },
 
-    -- 4. ГџГ­ГІГ Г°Г­Г Гї (Г‘Г®ГўГ°ГҐГ¬ГҐГ­Г­Г»Г© ГІГҐГ¬Г­Г»Г© Г¤ГЁГ§Г Г©Г­)
+    -- 4. Янтарная (Современный темный дизайн)
     {
-        name       = u8"ГџГ­ГІГ Г°Г­Г Гї",
+        name       = u8"Янтарная",
         windowBg   = imgui.ImVec4(0.06, 0.06, 0.06, 0.98),
         titleBg    = imgui.ImVec4(0.08, 0.08, 0.08, 1.00),
         panelBg    = imgui.ImVec4(0.09, 0.09, 0.09, 1.00),
@@ -231,9 +231,9 @@ local themes = {
         textDim    = imgui.ImVec4(0.55, 0.50, 0.45, 1.00),
     },
 
-    -- 5. Г‘ГІГ°Г®ГЈГ Гї Г¬Г®Г­Г®ГµГ°Г®Г¬Г­Г Гї (Г—ГҐГ°Г­Г®-ГЎГҐГ«Г®-Г±ГҐГ°Г Гї, Г¬ГЁГ­ГЁГ¬Г Г«ГЁГ§Г¬)
+    -- 5. Строгая монохромная (Черно-бело-серая, минимализм)
     {
-        name       = u8"ГЊГ®Г­Г®ГµГ°Г®Г¬Г­Г Гї",
+        name       = u8"Монохромная",
         windowBg   = imgui.ImVec4(0.06, 0.06, 0.06, 0.97),
         titleBg    = imgui.ImVec4(0.20, 0.20, 0.20, 1.00),
         panelBg    = imgui.ImVec4(0.10, 0.10, 0.10, 1.00),
@@ -254,8 +254,8 @@ local themes = {
 currentThemeIdx = 1
 local function getTheme() return themes[currentThemeIdx] end
 
-THEME_COLOR_COUNT = 13 -- Г±ГЄГ®Г«ГјГЄГ® Г¶ГўГҐГІГ®Гў ГЇГіГёГЁГ¬ Гў pushThemeColors(), Г¤Г«Гї Г±ГЁГ¬Г¬ГҐГІГ°ГЁГ·Г­Г®ГЈГ® PopStyleColor
-THEME_ROUNDING_COUNT = 4 -- Г±ГЄГ®Г«ГјГЄГ® StyleVar ГЇГіГёГЁГ¬ Г¤Г«Гї Г±ГЄГ°ГіГЈГ«ГҐГ­ГЁГ©, Г¤Г«Гї Г±ГЁГ¬Г¬ГҐГІГ°ГЁГ·Г­Г®ГЈГ® PopStyleVar
+THEME_COLOR_COUNT = 13 -- сколько цветов пушим в pushThemeColors(), для симметричного PopStyleColor
+THEME_ROUNDING_COUNT = 4 -- сколько StyleVar пушим для скруглений, для симметричного PopStyleVar
 
 local function pushThemeColors()
     local t = getTheme()
@@ -282,12 +282,12 @@ local function pushThemeRounding()
 end
 
 -- ============================================================
---  Г‘ГЋГ‘Г’ГЋГџГЌГ€Г… ГЋГЉГЌГЂ
+--  СОСТОЯНИЕ ОКНА
 -- ============================================================
 local main_window_state = imgui.ImBool(false)
--- ГЋГІГЄГ°Г»ГІГ»ГҐ ГўГЄГ«Г Г¤ГЄГЁ
+-- Открытые вкладки
 local open_tabs = {
-    { kind = "home", title = u8"Г„Г®Г¬Г ГёГ­ГїГї Г±ГІГ°Г Г­ГЁГ¶Г ", closable = false },
+    { kind = "home", title = u8"Домашняя страница", closable = false },
 }
 active_tab_idx = 1
 
@@ -311,7 +311,7 @@ local function closeTab(idx)
 end
 
 -- ============================================================
---  ГЌГЂГ‘Г’ГђГЋГ‰ГЉГ€ / ГЉГЋГЌГ”Г€Гѓ (Г±Г®ГµГ°Г Г­ГҐГ­ГЁГҐ Гў ini)
+--  НАСТРОЙКИ / КОНФИГ (сохранение в ini)
 -- ============================================================
 CONFIG_DIR  = "moonloader\\config\\TRPcomm Manager Config"
 CONFIG_PATH = "moonloader\\config\\TRPcomm Manager Config\\trpcomm-manager.ini"
@@ -321,7 +321,7 @@ REPORTS_DIR        = "moonloader\\config\\TRPcomm Manager Config\\reports"
 REPORTS_INDEX_PATH = "moonloader\\config\\TRPcomm Manager Config\\reports\\index.ini"
 TRACKER_REPORTS_DIR        = "moonloader\\config\\TRPcomm Manager Config\\tracker_reports"
 TRACKER_REPORTS_INDEX_PATH = "moonloader\\config\\TRPcomm Manager Config\\tracker_reports\\index.ini"
-local addReport -- ГґГ®Г°ГўГ Г°Г¤-Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ
+local addReport -- форвард-объявление
 
 local defaultSettings = {
     settings = {
@@ -377,7 +377,7 @@ currentThemeIdx = tonumber(mainIni.settings.theme) or currentThemeIdx
 local selected_theme_combo = imgui.ImInt(currentThemeIdx - 1)
 
 local KEY_NAMES = {
-    [1]="Г‹ГЉГЊ",[2]="ГЏГЉГЊ",[4]="Г‘ГЉГЊ",
+    [1]="ЛКМ",[2]="ПКМ",[4]="СКМ",
     [8]="Backspace",[9]="Tab",[13]="Enter",[27]="Esc",[32]="Space",
     [112]="F1",[113]="F2",[114]="F3",[115]="F4",[116]="F5",[117]="F6",
     [118]="F7",[119]="F8",[120]="F9",[121]="F10",[122]="F11",[123]="F12",
@@ -413,7 +413,7 @@ waiting_for_key2 = false
 
 local function updateHotkey2Display()
     if hotkey2_key.v == 0 then
-        hotkey2_display.v = u8"ГЌГҐ Г­Г Г§Г­Г Г·ГҐГ­Г®"
+        hotkey2_display.v = u8"Не назначено"
         return
     end 
     local parts = {}
@@ -453,11 +453,11 @@ local function saveSettings()
 end
 
 -- ============================================================
---  Г‡ГЂГѓГђГ“Г‡ГЉГЂ Г€Г‡ГЋГЃГђГЂГ†Г…ГЌГ€Г‰ Г‘ГЉГ€ГЌГЋГ‚
+--  ЗАГРУЗКА ИЗОБРАЖЕНИЙ СКИНОВ
 -- ============================================================
 -- moonloader/resource/TRPcomm Manager/images/skins/skin_<id>.png
 local IMAGES_DIR = getWorkingDirectory() .. "\\resource\\TRPcomm Manager\\images\\skins\\"
-local skin_textures = {} -- ГЄГЅГё: [skinId] = texture | false (ГҐГ±Г«ГЁ ГґГ Г©Г« Г­ГҐ Г­Г Г©Г¤ГҐГ­)
+local skin_textures = {} -- кэш: [skinId] = texture | false (если файл не найден)
 
 local function loadSkinTexture(skinId)
     if skin_textures[skinId] ~= nil then
@@ -474,7 +474,7 @@ local function loadSkinTexture(skinId)
 end
 
 -- ============================================================
---  Г‚Г‘ГЏГЋГЊГЋГѓГЂГ’Г…Г‹ГњГЌГЋГ…
+--  ВСПОМОГАТЕЛЬНОЕ
 -- ============================================================
 local function drawInfoCard(t, label, value, thumbTexture)
     imgui.BeginChild("card_" .. label, imgui.ImVec2(0, 56), true)
@@ -489,12 +489,12 @@ local function drawInfoCard(t, label, value, thumbTexture)
 end
 
 -- ============================================================
---  Г„ГЋГЊГЂГГЌГџГџ Г‘Г’ГђГЂГЌГ€Г–ГЂ
+--  ДОМАШНЯЯ СТРАНИЦА
 -- ============================================================
 trpcomm_logo_texture = nil
 trpcomm_logo_checked = false
 
-upcoming_event_name = u8"ГЏГ®ГЄГ  Г­ГҐ ГЇГ®Г¤ГЄГ«ГѕГ·ГҐГ­Г®"
+upcoming_event_name = u8"Пока не подключено"
 upcoming_event_time = "--:--"
 
 local function loadLogoTexture()
@@ -522,9 +522,9 @@ local function centeredLabel(id, text, width, height, colorOverride)
 end
 
 -- ============================================================
---  HR ГЋГ’Г„Г…Г‹: ГЋГЎГєГїГўГ«ГҐГ­ГЁГї
+--  HR ОТДЕЛ: Объявления
 -- ============================================================
-AD_TEXT_MAX = 120 -- Г«ГЁГ¬ГЁГІ Г±ГЁГ¬ГўГ®Г«Г®Гў
+AD_TEXT_MAX = 120 -- лимит символов
 
 local AD_CITIES = {
     { code = "ls", name = u8"Los Santos" },
@@ -533,8 +533,8 @@ local AD_CITIES = {
 }
 ad_city_idx = imgui.ImInt(0)
 ad_text = imgui.ImBuffer("", AD_TEXT_MAX)
-ad_pending = false      -- Г¦Г¤ВёГ¬ Г«ГЁ Г±ГҐГ©Г·Г Г± Г¤ГЁГ Г«Г®ГЈГ®Гў ГЇГ®Г±Г«ГҐ Г®ГІГЇГ°Г ГўГЄГЁ ГЄГ®Г¬Г Г­Г¤Г»
-ad_pending_text = ""    -- ГІГҐГЄГ±ГІ, ГЄГ®ГІГ®Г°Г»Г© ГЇГ®Г¤Г±ГІГ ГўГЁГ¬ ГўГ® ГўГІГ®Г°Г®Г© Г¤ГЁГ Г«Г®ГЈ (CP1251, ГЎГҐГ§ u8)
+ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
+ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
 
 local function formatMMSS(sec)
     if sec < 0 then sec = 0 end
@@ -544,7 +544,7 @@ local function formatMMSS(sec)
     return string.format("%02d:%02d", m, s)
 end
 
--- ---------- Г‘ГЇГЁГ±Г®ГЄ Г®ГЎГєГїГўГ«ГҐГ­ГЁГ© (ГµГ°Г Г­ГЁГІГ±Гї Гў moonloader\config\TRPcomm Manager Config\ads.ini) ----------
+-- ---------- Список объявлений (хранится в moonloader\config\TRPcomm Manager Config\ads.ini) ----------
 local ADS_LIST_PATH = "moonloader\\config\\TRPcomm Manager Config\\ads.ini"
 
 do
@@ -585,7 +585,7 @@ do
     end
 end
 
--- ---------- Г”Г®Г°Г¬Г  Г¤Г®ГЎГ ГўГ«ГҐГ­ГЁГї Г®ГЎГєГїГўГ«ГҐГ­ГЁГї ----------
+-- ---------- Форма добавления объявления ----------
 local ad_add_form_open = false
 local ad_new_text = imgui.ImBuffer("", AD_TEXT_MAX)
 
@@ -600,18 +600,18 @@ local function drawAdAddForm(t)
     pushThemeRounding()
 
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"ГЌГ®ГўГ®ГҐ Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ##ad_add_form", open,
+    imgui.Begin(u8"Новое объявление##ad_add_form", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
     if not open.v then ad_add_form_open = false end
 
-    imgui.TextColored(t.textDim, u8"Г’ГҐГЄГ±ГІ (Г¤Г® " .. AD_TEXT_MAX .. u8" Г±ГЁГ¬ГўГ®Г«Г®Гў):")
+    imgui.TextColored(t.textDim, u8"Текст (до " .. AD_TEXT_MAX .. u8" символов):")
     imgui.PushItemWidth(-1)
     imgui.InputTextMultiline("##ad_new_text", ad_new_text, imgui.ImVec2(-1, 90))
     imgui.PopItemWidth()
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    if imgui.Button(u8"Г„Г®ГЎГ ГўГЁГІГј##ad_add_confirm", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Добавить##ad_add_confirm", imgui.ImVec2(140, 30)) then
         local raw = u8:decode(ad_new_text.v)
         if raw ~= "" then
             ads_list[#ads_list + 1] = { text = raw, enabled = true }
@@ -621,7 +621,7 @@ local function drawAdAddForm(t)
         end
     end
     imgui.SameLine()
-    if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##ad_add_cancel", imgui.ImVec2(120, 30)) then
+    if imgui.Button(u8"Отмена##ad_add_cancel", imgui.ImVec2(120, 30)) then
         ad_add_form_open = false
     end
 
@@ -630,7 +630,7 @@ local function drawAdAddForm(t)
     imgui.PopStyleColor(THEME_COLOR_COUNT)
 end
 
--- ---------- ГЂГўГІГ®Г®ГІГЇГ°Г ГўГЄГ  ГЇГ® Г®Г·ГҐГ°ГҐГ¤ГЁ ----------
+-- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
 ad_interval_minutes = imgui.ImInt(30)
 ad_next_send_time = 0
@@ -659,16 +659,16 @@ end
 local hr_subtab = "ads" -- "ads" | "messages" | "calendar"
 
 local function drawHRAdsTab(t)
-    imgui.TextColored(t.accent, u8"ГЃГ»Г±ГІГ°Г Гї Г®ГІГЇГ°Г ГўГЄГ ")
+    imgui.TextColored(t.accent, u8"Быстрая отправка")
     imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"Г’ГҐГЄГ±ГІ Г®ГЎГєГїГўГ«ГҐГ­ГЁГї (Г¤Г® " .. AD_TEXT_MAX .. u8" Г±ГЁГ¬ГўГ®Г«Г®Гў):")
+    imgui.TextColored(t.textDim, u8"Текст объявления (до " .. AD_TEXT_MAX .. u8" символов):")
     imgui.PushItemWidth(-1)
     imgui.InputTextMultiline("##ad_text", ad_text, imgui.ImVec2(-1, 80))
     imgui.PopItemWidth()
 
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"ГѓГ®Г°Г®Г¤:")
+    imgui.TextColored(t.textDim, u8"Город:")
     local cityNames = {}
     for _, c in ipairs(AD_CITIES) do cityNames[#cityNames + 1] = c.name end
     imgui.PushItemWidth(200)
@@ -678,12 +678,12 @@ local function drawHRAdsTab(t)
     imgui.Spacing()
 
     if ad_pending then
-        imgui.TextColored(t.textDim, u8"ГЋГ¦ГЁГ¤Г Г­ГЁГҐ Г¤ГЁГ Г«Г®ГЈГ®Гў Г±ГҐГ°ГўГҐГ°Г ...")
+        imgui.TextColored(t.textDim, u8"Ожидание диалогов сервера...")
     else
-        if imgui.Button(fa.ICON_BULLHORN .. u8" ГЋГІГЇГ°Г ГўГЁГІГј Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ##ad_send", imgui.ImVec2(220, 32)) then
+        if imgui.Button(fa.ICON_BULLHORN .. u8" Отправить объявление##ad_send", imgui.ImVec2(220, 32)) then
             local textRaw = u8:decode(ad_text.v)
             if textRaw == "" then
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘Г­Г Г·Г Г«Г  ГўГўГҐГ¤ГЁ ГІГҐГЄГ±ГІ Г®ГЎГєГїГўГ«ГҐГ­ГЁГї.', -1)
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления.', -1)
             else
                 sendAdNow(textRaw)
             end
@@ -692,14 +692,14 @@ local function drawHRAdsTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"Г‘ГЇГЁГ±Г®ГЄ Г®ГЎГєГїГўГ«ГҐГ­ГЁГ©")
+    imgui.TextColored(t.accent, u8"Список объявлений")
     imgui.SameLine(imgui.GetWindowWidth() - 140)
-    if imgui.Button(u8"+ Г„Г®ГЎГ ГўГЁГІГј##ad_add_open", imgui.ImVec2(130, 26)) then
+    if imgui.Button(u8"+ Добавить##ad_add_open", imgui.ImVec2(130, 26)) then
         ad_add_form_open = true
     end
     imgui.Spacing()
 
-    -- ---------- ГЏГ®Г«ГіГЇГ°Г®Г§Г°Г Г·Г­Г»ГҐ ГЇГ®Г¤Г±ГЄГ Г§ГЄГЁ ГЁГ§ ГЄГ Г«ГҐГ­Г¤Г Г°Гї вЂ” ГЇГ°ГїГ¬Г® Г­Г Г¤ Г±ГЇГЁГ±ГЄГ®Г¬ ----------
+    -- ---------- Полупрозрачные подсказки из календаря — прямо над списком ----------
     local faded = imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.55)
     for i, ev in ipairs(calendar_events) do
         if ev.location and ev.location ~= "" then
@@ -716,7 +716,7 @@ local function drawHRAdsTab(t)
                 imgui.PushStyleColor(imgui.Col.Text, faded)
                 imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
                 imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 0.35))
-                if imgui.Button(ev.location .. u8"   вЂ”   Г„Г®ГЎГ ГўГЁГІГј?##cal_suggest_btn", imgui.ImVec2(-1, 24)) then
+                if imgui.Button(ev.location .. u8"   —   Добавить?##cal_suggest_btn", imgui.ImVec2(-1, 24)) then
                     local raw = u8:decode(ev.location)
                     if #raw > AD_TEXT_MAX then raw = raw:sub(1, AD_TEXT_MAX) end
                     ads_list[#ads_list + 1] = { text = raw, enabled = true }
@@ -729,7 +729,7 @@ local function drawHRAdsTab(t)
     end
 
     if #ads_list == 0 then
-        imgui.TextColored(t.textDim, u8"Г‘ГЇГЁГ±Г®ГЄ ГЇГіГ±ГІ.")
+        imgui.TextColored(t.textDim, u8"Список пуст.")
     end
 
     local deleteAdIdx = nil
@@ -751,7 +751,7 @@ local function drawHRAdsTab(t)
             end
         end
         if imgui.IsItemHovered() then
-            imgui.SetTooltip(u8"Г‹ГЉГЊ вЂ” ГЋГІГЇГ°Г ГўГЁГІГј Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ | ГЉГ®Г«ВёГ±ГЁГЄГ® вЂ” Г“Г¤Г Г«ГЁГІГј Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ")
+            imgui.SetTooltip(u8"ЛКМ — Отправить объявление | Колёсико — Удалить объявление")
         end
         if imgui.IsItemClicked(2) then
             deleteAdIdx = i
@@ -771,27 +771,27 @@ local function drawHRAdsTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"ГЂГўГІГ®Г®ГІГЇГ°Г ГўГЄГ  ГЇГ® Г®Г·ГҐГ°ГҐГ¤ГЁ")
+    imgui.TextColored(t.accent, u8"Автоотправка по очереди")
     imgui.Spacing()
 
-    if imgui.Checkbox(u8"Г‚ГЄГ«ГѕГ·ГЁГІГј Г ГўГІГ®Г®ГІГЇГ°Г ГўГЄГі", ad_auto_send) then
+    if imgui.Checkbox(u8"Включить автоотправку", ad_auto_send) then
         if ad_auto_send.v then
             ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
         end
     end
 
-    imgui.TextColored(t.textDim, u8"Г€Г­ГІГҐГ°ГўГ Г« (Г¬ГЁГ­ГіГІ):")
+    imgui.TextColored(t.textDim, u8"Интервал (минут):")
     imgui.PushItemWidth(100)
     imgui.InputInt("##ad_interval", ad_interval_minutes)
     imgui.PopItemWidth()
 
     if ad_auto_send.v then
-        imgui.TextColored(t.textDim, u8"Г‘Г«ГҐГ¤ГіГѕГ№Г Гї Г®ГІГЇГ°Г ГўГЄГ  Г·ГҐГ°ГҐГ§: " .. formatMMSS(ad_next_send_time - os.time()))
+        imgui.TextColored(t.textDim, u8"Следующая отправка через: " .. formatMMSS(ad_next_send_time - os.time()))
     end
 end
 
 local function drawHRMessagesTab(t)
-    imgui.TextColored(t.textDim, u8"ГђГ Г§Г¤ГҐГ« Гў Г°Г Г§Г°Г ГЎГ®ГІГЄГҐ.")
+    imgui.TextColored(t.textDim, u8"Раздел в разработке.")
 end
 
 calendar_events = {}     -- { {summary=, description=, location=, y=,mo=,d=,h=,mi=, isAllDay=bool}, ... }
@@ -804,13 +804,13 @@ CAL_CELL_W = 118
 CAL_CELL_H = 56
 CAL_GAP = 4
 
-WEEKDAY_NAMES = { u8"ГЏГ­", u8"Г‚ГІ", u8"Г‘Г°", u8"Г—ГІ", u8"ГЏГІ", u8"Г‘ГЎ", u8"Г‚Г±" }
+WEEKDAY_NAMES = { u8"Пн", u8"Вт", u8"Ср", u8"Чт", u8"Пт", u8"Сб", u8"Вс" }
 MONTH_NAMES = {
-    u8"ГџГ­ГўГ Г°Гј", u8"Г”ГҐГўГ°Г Г«Гј", u8"ГЊГ Г°ГІ", u8"ГЂГЇГ°ГҐГ«Гј", u8"ГЊГ Г©", u8"Г€ГѕГ­Гј",
-    u8"Г€ГѕГ«Гј", u8"ГЂГўГЈГіГ±ГІ", u8"Г‘ГҐГ­ГІГїГЎГ°Гј", u8"ГЋГЄГІГїГЎГ°Гј", u8"ГЌГ®ГїГЎГ°Гј", u8"Г„ГҐГЄГ ГЎГ°Гј",
+    u8"Январь", u8"Февраль", u8"Март", u8"Апрель", u8"Май", u8"Июнь",
+    u8"Июль", u8"Август", u8"Сентябрь", u8"Октябрь", u8"Ноябрь", u8"Декабрь",
 }
 
--- ГђГ Г§ГЎГЁГ°Г ГҐГІ "2026-08-20T18:00:00+03:00" ГЁГ«ГЁ "2026-08-20" (ГўГҐГ±Гј Г¤ГҐГ­Гј)
+-- Разбирает "2026-08-20T18:00:00+03:00" или "2026-08-20" (весь день)
 local function parseISODateTime(iso)
     if not iso then return nil end
     local y, mo, d, h, mi = iso:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+)")
@@ -831,22 +831,22 @@ local function daysInMonth(year, month)
     return tonumber(os.date("%d", t))
 end
 
--- 0 = ГЏГ®Г­ГҐГ¤ГҐГ«ГјГ­ГЁГЄ ... 6 = Г‚Г®Г±ГЄГ°ГҐГ±ГҐГ­ГјГҐ
+-- 0 = Понедельник ... 6 = Воскресенье
 local function weekdayOfFirst(year, month)
     local t = os.time({ year = year, month = month, day = 1, hour = 12 })
-    local wd = tonumber(os.date("%w", t)) -- 0=Г‚Г±..6=Г‘ГЎ
+    local wd = tonumber(os.date("%w", t)) -- 0=Вс..6=Сб
     return (wd + 6) % 7
 end
 
 local function fetchCalendarEvents()
-    if GCAL_ID == "Г‚Г‘Г’ГЂГ‚Гњ_Г‘ГћГ„ГЂ_CALENDAR_ID" or GCAL_API_KEY == "Г‚Г‘Г’ГЂГ‚Гњ_Г‘ГћГ„ГЂ_API_KEY" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Calendar ID / API-ГЄГ«ГѕГ· Г­ГҐ Г§Г Г¤Г Г­Г» Гў ГЄГ®Г¤ГҐ Г±ГЄГ°ГЁГЇГІГ .', -1)
+    if GCAL_ID == "ВСТАВЬ_СЮДА_CALENDAR_ID" or GCAL_API_KEY == "ВСТАВЬ_СЮДА_API_KEY" then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Calendar ID / API-ключ не заданы в коде скрипта.', -1)
         return
     end
 
     calendar_loading = true
     lua_thread.create(function()
-        local timeMin = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 90 * 86400) -- 90 Г¤Г­ГҐГ© Г­Г Г§Г Г¤
+        local timeMin = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 90 * 86400) -- 90 дней назад
         local url = "https://www.googleapis.com/calendar/v3/calendars/"
             .. GCAL_ID:gsub(":", "%%3A")
             .. "/events?key=" .. GCAL_API_KEY
@@ -858,29 +858,29 @@ local function fetchCalendarEvents()
         calendar_loaded_once = true
 
         if not ok then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГёГЁГЎГЄГ  Г§Г ГЇГ°Г®Г±Г  ГЄ ГЄГ Г«ГҐГ­Г¤Г Г°Гѕ: ' .. tostring(response), -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка запроса к календарю: ' .. tostring(response), -1)
             return
         end
 
         if response.status_code ~= 200 then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Google Calendar ГўГҐГ°Г­ГіГ« Г®ГёГЁГЎГЄГі ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Google Calendar вернул ошибку ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
             return
         end
 
         local data = cjson.decode(response.text)
         if not data or not data.items then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЌГҐ ГіГ¤Г Г«Г®Г±Гј Г°Г Г§Г®ГЎГ°Г ГІГј Г®ГІГўГҐГІ ГЄГ Г«ГҐГ­Г¤Г Г°Гї.', -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось разобрать ответ календаря.', -1)
             return
         end
 
         calendar_events = {}
         for _, item in ipairs(data.items) do
-            -- summary/description/location ГЇГ°ГЁГµГ®Г¤ГїГІ Г®ГІ Google ГіГ¦ГҐ Гў UTF-8 вЂ” Г®ГЎГ®Г°Г Г·ГЁГўГ ГІГј Гў u8() ГЌГ… Г­ГіГ¦Г­Г®
+            -- summary/description/location приходят от Google уже в UTF-8 — оборачивать в u8() НЕ нужно
             local startRaw = item.start and (item.start.dateTime or item.start.date)
             local isAllDay = item.start and item.start.date ~= nil
             local y, mo, d, h, mi = parseISODateTime(startRaw)
             calendar_events[#calendar_events + 1] = {
-                summary     = (item.summary and item.summary ~= "") and item.summary or u8"ГЃГҐГ§ Г­Г Г§ГўГ Г­ГЁГї",
+                summary     = (item.summary and item.summary ~= "") and item.summary or u8"Без названия",
                 description = item.description,
                 location    = item.location,
                 y = y, mo = mo, d = d, h = h, mi = mi,
@@ -905,9 +905,9 @@ local function fetchCalendarEvents()
 
         if nextEvent then
             upcoming_event_name = nextEvent.summary
-            upcoming_event_time = nextEvent.h and string.format("%02d:%02d", nextEvent.h, nextEvent.mi) or u8"ГўГҐГ±Гј Г¤ГҐГ­Гј"
+            upcoming_event_time = nextEvent.h and string.format("%02d:%02d", nextEvent.h, nextEvent.mi) or u8"весь день"
         else
-            upcoming_event_name = u8"ГЌГҐГІ ГЇГ°ГҐГ¤Г±ГІГ®ГїГ№ГЁГµ ГЁГўГҐГ­ГІГ®Гў"
+            upcoming_event_name = u8"Нет предстоящих ивентов"
             upcoming_event_time = "--:--"
         end
 
@@ -916,16 +916,16 @@ end
 
 local function drawHRCalendarTab(t)
     if calendar_loading then
-        imgui.TextColored(t.textDim, u8"Г‡Г ГЈГ°ГіГ§ГЄГ ...")
+        imgui.TextColored(t.textDim, u8"Загрузка...")
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
     end
 
     if not calendar_loaded_once then
-        imgui.TextColored(t.textDim, u8"Г‡Г ГЈГ°ГіГ§ГЄГ  ГЄГ Г«ГҐГ­Г¤Г Г°Гї...")
+        imgui.TextColored(t.textDim, u8"Загрузка календаря...")
         return
     end
 
-    -- ---------- ГГ ГЇГЄГ : Г¬ГҐГ±ГїГ¶ + Г­Г ГўГЁГЈГ Г¶ГЁГї ----------
+    -- ---------- Шапка: месяц + навигация ----------
     if imgui.Button(fa.ICON_ARROW_LEFT .. "##cal_prev", imgui.ImVec2(30, 26)) then
         calendar_view_month = calendar_view_month - 1
         if calendar_view_month < 1 then calendar_view_month = 12; calendar_view_year = calendar_view_year - 1 end
@@ -940,7 +940,7 @@ local function drawHRCalendarTab(t)
 
     imgui.Spacing()
 
-    -- ---------- Г‡Г ГЈГ®Г«Г®ГўГЄГЁ Г¤Г­ГҐГ© Г­ГҐГ¤ГҐГ«ГЁ ----------
+    -- ---------- Заголовки дней недели ----------
     for col = 1, 7 do
         if col > 1 then imgui.SameLine(0, CAL_GAP) end
         imgui.BeginChild("cal_wd_" .. col, imgui.ImVec2(CAL_CELL_W, 20), false)
@@ -950,7 +950,7 @@ local function drawHRCalendarTab(t)
 
     imgui.Spacing()
 
-    -- ---------- Г‘ГҐГІГЄГ  Г¤Г­ГҐГ© ----------
+    -- ---------- Сетка дней ----------
     local firstWeekday = weekdayOfFirst(calendar_view_year, calendar_view_month)
     local totalDays = daysInMonth(calendar_view_year, calendar_view_month)
     local totalRows = math.ceil((firstWeekday + totalDays) / 7)
@@ -1001,22 +1001,22 @@ local function drawHRCalendarTab(t)
                     for idx, ev in ipairs(dayEvents) do
                         if idx > 1 then imgui.Separator() end
 
-                        imgui.TextColored(t.accent, u8"В«")
+                        imgui.TextColored(t.accent, u8"«")
                         imgui.SameLine(0, 0)
                         imgui.TextColored(white, ev.summary)
                         imgui.SameLine(0, 0)
-                        imgui.TextColored(t.accent, u8"В»")
+                        imgui.TextColored(t.accent, u8"»")
 
                         if ev.description and ev.description ~= "" then
-                            imgui.TextColored(t.accent, u8"ГЋГЇГЁГ±Г Г­ГЁГҐ:")
+                            imgui.TextColored(t.accent, u8"Описание:")
                             imgui.PushStyleColor(imgui.Col.Text, white)
                             imgui.TextWrapped(ev.description)
                             imgui.PopStyleColor()
                         end
 
-                        imgui.TextColored(t.accent, u8"Г‚Г°ГҐГ¬Гї:")
+                        imgui.TextColored(t.accent, u8"Время:")
                         imgui.SameLine()
-                        imgui.TextColored(white, ev.h and string.format("%02d:%02d", ev.h, ev.mi) or u8"Г‚ГҐГ±Гј Г¤ГҐГ­Гј")
+                        imgui.TextColored(white, ev.h and string.format("%02d:%02d", ev.h, ev.mi) or u8"Весь день")
                     end
 
                     imgui.PopTextWrapPos()
@@ -1033,7 +1033,7 @@ local function drawHRCalendarTab(t)
 end
 
 local function drawHRTab(t)
-    imgui.TextColored(t.accent, fa.ICON_BULLHORN .. u8" HR ГЋГ’Г„Г…Г‹")
+    imgui.TextColored(t.accent, fa.ICON_BULLHORN .. u8" HR ОТДЕЛ")
     imgui.Spacing()
 
     local pushed = 0
@@ -1042,7 +1042,7 @@ local function drawHRTab(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГђГҐГЄГ«Г Г¬Г ##hr_sub_ads", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Реклама##hr_sub_ads", imgui.ImVec2(140, 30)) then
         hr_subtab = "ads"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -1055,7 +1055,7 @@ local function drawHRTab(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"Г‘Г®Г®ГЎГ№ГҐГ­ГЁГї##hr_sub_messages", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Сообщения##hr_sub_messages", imgui.ImVec2(140, 30)) then
         hr_subtab = "messages"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -1068,7 +1068,7 @@ local function drawHRTab(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГЉГ Г«ГҐГ­Г¤Г Г°Гј##hr_sub_calendar", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Календарь##hr_sub_calendar", imgui.ImVec2(140, 30)) then
         hr_subtab = "calendar"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -1091,7 +1091,7 @@ local function drawHomeTab(t)
 
     imgui.Dummy(imgui.ImVec2(1, 40))
 
-    -- ---------- ГЋГ°ГҐГ®Г« Г§Г  ГЁГЄГ®Г­ГЄГ®Г© ----------
+    -- ---------- Ореол за иконкой ----------
     local haloSize = 130
     local haloY = imgui.GetCursorPosY()
     imgui.PushStyleColor(imgui.Col.ChildWindowBg, tint)
@@ -1115,12 +1115,12 @@ local function drawHomeTab(t)
     imgui.SetCursorPosY(haloY + haloSize)
     imgui.Dummy(imgui.ImVec2(1, 10))
 
-    -- ---------- Г‡Г ГЈГ®Г«Г®ГўГ®ГЄ ----------
+    -- ---------- Заголовок ----------
     if arial_font then imgui.PushFont(arial_font) end
     centeredLabel("home_title", u8"Trinity Roleplay Community Manager", avail.x, 30, t.accent)
     if arial_font then imgui.PopFont() end
 
-    -- ---------- ГЂГЄГ¶ГҐГ­ГІГ­Г Гї ГЇГ®Г«Г®Г±ГЄГ -Г°Г Г§Г¤ГҐГ«ГЁГІГҐГ«Гј ----------
+    -- ---------- Акцентная полоска-разделитель ----------
     imgui.Dummy(imgui.ImVec2(1, 6))
     local underlineW = 220
     imgui.SetCursorPosX(centerX - underlineW / 2)
@@ -1132,15 +1132,15 @@ local function drawHomeTab(t)
     imgui.Dummy(imgui.ImVec2(1, 10))
 
     local ok, myId = sampGetPlayerIdByCharHandle(playerPed)
-    local nickname = (ok and myId and myId >= 0) and sampGetPlayerNickname(myId) or "вЂ”"
+    local nickname = (ok and myId and myId >= 0) and sampGetPlayerNickname(myId) or "—"
 
     if arial_font_small then imgui.PushFont(arial_font_small) end
-    centeredLabel("home_welcome", u8"Г„Г®ГЎГ°Г® ГЇГ®Г¦Г Г«Г®ГўГ ГІГј, " .. nickname, avail.x, 20, t.textDim)
+    centeredLabel("home_welcome", u8"Добро пожаловать, " .. nickname, avail.x, 20, t.textDim)
     if arial_font_small then imgui.PopFont() end
 
     imgui.Dummy(imgui.ImVec2(1, 30))
 
-    -- ---------- ГЏГ«ГЁГІГЄГЁ-Г¤Г®Г«Г¦Г­Г®Г±ГІГЁ, ГЄГ Г¦Г¤Г Гї Гў Г±ГўГ®ВёГ¬ Г¶ГўГҐГІГҐ ----------
+    -- ---------- Плитки-должности, каждая в своём цвете ----------
     local tileW, tileH = 160, 90
     local gap = 20
     local totalW = tileW * 4 + gap * 3
@@ -1148,8 +1148,8 @@ local function drawHomeTab(t)
 
     imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.45, 0.75, 1.0))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.30, 0.55, 0.85, 1.0))
-    if imgui.Button(fa.ICON_USER .. "" .. u8" ГЂГЄГІВёГ°##home_actor", imgui.ImVec2(tileW, tileH)) then
-        openTab("roles", u8"ГЂГЄГІВёГ°")
+    if imgui.Button(fa.ICON_USER .. "" .. u8" Актёр##home_actor", imgui.ImVec2(tileW, tileH)) then
+        openTab("roles", u8"Актёр")
     end
     imgui.PopStyleColor(2)
 
@@ -1157,8 +1157,8 @@ local function drawHomeTab(t)
 
     imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.55, 0.60, 1.0))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.65, 0.70, 1.0))
-    if imgui.Button(fa.ICON_DESKTOP .. "" .. u8" Г”Г®ГІГ®ГЈГ°Г Гґ##home_photo", imgui.ImVec2(tileW, tileH)) then
-        openTab("photographer", u8"Г”Г®ГІГ®ГЈГ°Г Гґ")
+    if imgui.Button(fa.ICON_DESKTOP .. "" .. u8" Фотограф##home_photo", imgui.ImVec2(tileW, tileH)) then
+        openTab("photographer", u8"Фотограф")
     end
     imgui.PopStyleColor(2)
 
@@ -1166,8 +1166,8 @@ local function drawHomeTab(t)
 
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.20, 0.20, 1.0))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.28, 0.28, 1.0))
-    if imgui.Button(fa.ICON_CROSSHAIRS .. "" .. u8" ГЉГіГ°Г ГІГ®Г°Г»##home_tracker", imgui.ImVec2(tileW, tileH)) then
-        openTab("tracker", u8"ГЉГіГ°Г ГІГ®Г°Г»")
+    if imgui.Button(fa.ICON_CROSSHAIRS .. "" .. u8" Кураторы##home_tracker", imgui.ImVec2(tileW, tileH)) then
+        openTab("tracker", u8"Кураторы")
     end
     imgui.PopStyleColor(2)
 
@@ -1175,8 +1175,8 @@ local function drawHomeTab(t)
 
     imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.55, 0.20, 1.0))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.65, 0.30, 1.0))
-    if imgui.Button(fa.ICON_BULLHORN .. "" .. u8" HR Г®ГІГ¤ГҐГ«##home_hr", imgui.ImVec2(tileW, tileH)) then
-        openTab("hr", u8"HR Г®ГІГ¤ГҐГ«")
+    if imgui.Button(fa.ICON_BULLHORN .. "" .. u8" HR отдел##home_hr", imgui.ImVec2(tileW, tileH)) then
+        openTab("hr", u8"HR отдел")
     end
     imgui.PopStyleColor(2)
 
@@ -1186,16 +1186,16 @@ local function drawHomeTab(t)
     imgui.SetCursorPosX(centerX - eventBarWidth / 2)
     imgui.BeginChild("HomeUpcomingEvent", imgui.ImVec2(eventBarWidth, 50), true)
         imgui.SetCursorPos(imgui.ImVec2(16, 14))
-        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" ГЃГ«ГЁГ¦Г Г©ГёГЁГ© ГЁГўГҐГ­ГІ: ")
+        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Ближайший ивент: ")
         imgui.SameLine(0, 4)
-        imgui.Text(upcoming_event_name .. u8"   |   Г‚Г°ГҐГ¬Гї: " .. upcoming_event_time)
+        imgui.Text(upcoming_event_name .. u8"   |   Время: " .. upcoming_event_time)
     imgui.EndChild()
 end
 
 -- ============================================================
---  Г‡Г Г¬ГҐГІГЄГЁ : ГµГ°Г Г­ГҐГ­ГЁГҐ
---  ГЉГ Г¦Г¤Г Гї Г§Г Г¬ГҐГІГЄГ  - moonloader\config\TRPcomm Manager Config\notes\<id>.txt
---  Г€Г­Г¤ГҐГЄГ± (ГЇГ®Г°ГїГ¤Г®ГЄ, Г­Г Г§ГўГ Г­ГЁГї, ГЄГ®Г«-ГўГ®) - notes\index.ini
+--  Заметки : хранение
+--  Каждая заметка - moonloader\config\TRPcomm Manager Config\notes\<id>.txt
+--  Индекс (порядок, названия, кол-во) - notes\index.ini
 -- ============================================================
 local defaultNotesIndex = { notes = { count = "0" } }
 
@@ -1278,14 +1278,14 @@ local function deleteNote(idx)
     os.remove(NOTES_DIR .. "\\" .. n.id .. ".txt")
     table.remove(notes, idx)
     if #notes == 0 then
-        addNote(u8"Г‡Г Г¬ГҐГІГЄГ  1")
+        addNote(u8"Заметка 1")
     else
         saveNotesIndex()
         if activeNoteIdx > #notes then activeNoteIdx = #notes end
     end
 end
 
--- Г§Г ГЈГ°ГіГ¦Г ГҐГ¬ Г±ГЇГЁГ±Г®ГЄ Г§Г Г¬ГҐГІГ®ГЄ ГЇГ°ГЁ ГЇГҐГ°ГўГ®Г¬ Г§Г ГЇГіГ±ГЄГҐ
+-- загружаем список заметок при первом запуске
 local notesCount = tonumber(notesIndexIni.notes.count) or 0
 for i = 1, notesCount do
     local id    = notesIndexIni.notes["note" .. i .. "_id"]
@@ -1294,21 +1294,21 @@ for i = 1, notesCount do
         local content = loadNoteContentFromDisk(id)
         notes[#notes + 1] = {
             id = id,
-            title = u8(title or ("Г‡Г Г¬ГҐГІГЄГ  " .. i)),
+            title = u8(title or ("Заметка " .. i)),
             buffer = imgui.ImBuffer(content, 16384),
         }
     end
 end
 if #notes == 0 then
-    addNote(u8"Г‡Г Г¬ГҐГІГЄГ  1")
+    addNote(u8"Заметка 1")
 end
 
 local function drawNotesTab(t)
-    imgui.TextColored(t.accent, u8"Г‡Г Г¬ГҐГІГЄГЁ")
+    imgui.TextColored(t.accent, u8"Заметки")
     imgui.Separator()
     imgui.Spacing()
 
-    -- ------- Г«ГҐГўГ Гї ГЄГ®Г«Г®Г­ГЄГ : Г±ГЇГЁГ±Г®ГЄ Г§Г Г¬ГҐГІГ®ГЄ -------
+    -- ------- левая колонка: список заметок -------
     imgui.BeginChild("NotesList", imgui.ImVec2(180, 0), true)
         for i, n in ipairs(notes) do
             local isActive = (i == activeNoteIdx)
@@ -1328,23 +1328,23 @@ local function drawNotesTab(t)
             imgui.Spacing()
         end
         imgui.Separator()
-        if imgui.Button(fa.ICON_PLUS .. u8"  Г„Г®ГЎГ ГўГЁГІГј##note_add", imgui.ImVec2(-1, 28)) then
-            addNote(u8("Г‡Г Г¬ГҐГІГЄГ  " .. (#notes + 1)))
+        if imgui.Button(fa.ICON_PLUS .. u8"  Добавить##note_add", imgui.ImVec2(-1, 28)) then
+            addNote(u8("Заметка " .. (#notes + 1)))
         end
     imgui.EndChild()
 
     imgui.SameLine()
 
-    -- ------- ГЇГ°Г ГўГ Гї ГЄГ®Г«Г®Г­ГЄГ : Г°ГҐГ¤Г ГЄГІГ®Г° -------
+    -- ------- правая колонка: редактор -------
     imgui.BeginChild("NotesEditor", imgui.ImVec2(0, 0), true)
         local n = notes[activeNoteIdx]
         if not n then
-            imgui.TextColored(t.textDim, u8"ГЌГҐГІ Г§Г Г¬ГҐГІГ®ГЄ")
+            imgui.TextColored(t.textDim, u8"Нет заметок")
             imgui.EndChild()
             return
         end
 
-        -- ГЇГҐГ°ГҐГЁГ¬ГҐГ­Г®ГўГ Г­ГЁГҐ
+        -- переименование
         if notes_rename_active then
             imgui.PushItemWidth(240)
             imgui.InputText("##note_rename", notes_rename_buf)
@@ -1356,7 +1356,7 @@ local function drawNotesTab(t)
                 notes_rename_active = false
             end
             imgui.SameLine()
-            if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##rename_cancel", imgui.ImVec2(70, 24)) then
+            if imgui.Button(u8"Отмена##rename_cancel", imgui.ImVec2(70, 24)) then
                 notes_rename_active = false
             end
         else
@@ -1372,20 +1372,20 @@ local function drawNotesTab(t)
                     notes_delete_pending = true
                 end
             else
-                if imgui.Button(u8"Г“Г¤Г Г«ГЁГІГј?##note_del_confirm", imgui.ImVec2(90, 24)) then
+                if imgui.Button(u8"Удалить?##note_del_confirm", imgui.ImVec2(90, 24)) then
                     deleteNote(activeNoteIdx)
                     notes_delete_pending = false
                 end
                 imgui.SameLine()
-                if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##note_del_cancel", imgui.ImVec2(70, 24)) then
+                if imgui.Button(u8"Отмена##note_del_cancel", imgui.ImVec2(70, 24)) then
                     notes_delete_pending = false
                 end
             end
         end
 
         imgui.SameLine()
-        -- Г±Г®ГµГ°Г Г­ГЁГІГј
-        if imgui.Button(fa.ICON_FLOPPY_O .. u8"  Г‘Г®ГµГ°Г Г­ГЁГІГј##note_save", imgui.ImVec2(120, 26)) then
+        -- сохранить
+        if imgui.Button(fa.ICON_FLOPPY_O .. u8"  Сохранить##note_save", imgui.ImVec2(120, 26)) then
             saveActiveNote()
         end
 
@@ -1396,109 +1396,109 @@ local function drawNotesTab(t)
 end
 
 -- ============================================================
---  ГЉГ ГІГ Г«Г®ГЈ Г®Г°ГіГ¦ГЁГї ГЁ Г¶ГўГҐГІГ®Гў (Г¤Г«Гї ГёГ ГЎГ«Г®Г­Г®Гў Г°Г®Г«ГҐГ©)
+--  Каталог оружия и цветов (для шаблонов ролей)
 -- ============================================================
 local colorNames = {
-    [0]  = u8"#0 - ГЉГ°Г Г±Г­Г»Г©",
-    [1]  = u8"#1 - Г”ГЁГ®Г«ГҐГІГ®ГўГ»Г©",
-    [2]  = u8"#2 - ГЃГ®Г°Г¤Г®ГўГ»Г©",
-    [3]  = u8"#3 - Г’ВёГ¬Г­Г®-ГЄГ°Г Г±Г­Г»Г©",
-    [4]  = u8"#4 - Г‘ГҐГ°Г»Г©",
-    [5]  = u8"#5 - Г’ВёГ¬Г­Г®-Г±ГҐГ°Г»Г©",
-    [6]  = u8"#6 - Г‘ГўГҐГІГ«Г®-Г±ГҐГ°Г»Г©",
-    [7]  = u8"#7 - ГђГ®Г§Г®ГўГ»Г©",
-    [8]  = u8"#8 - Г‘ГўГҐГІГ«Г®-Г°Г®Г§Г®ГўГ»Г©",
-    [9]  = u8"#9 - ГЋГ°Г Г­Г¦ГҐГўГ®-ГЄГ°Г Г±Г­Г»Г©",
-    [10] = u8"#10 - ГЋГ°Г Г­Г¦ГҐГўГ»Г©",
-    [11] = u8"#11 - Г†ВёГ«ГІГ»Г©",
-    [12] = u8"#12 - Г‘ГўГҐГІГ«Г®-Г§ГҐГ«ВёГ­Г»Г©",
-    [13] = u8"#13 - Г‡ГҐГ«ВёГ­Г»Г©",
-    [14] = u8"#14 - ГЊГїГІГ­Г»Г©",
-    [15] = u8"#15 - ГЃГҐГ«Г»Г©",
-    [16] = u8"#16 - ГЌГҐГЎГҐГ±Г­Г»Г©",
-    [17] = u8"#17 - Г’Г°Г ГўГїГ­Г®Г©",
-    [18] = u8"#18 - Г‘ГЁГ­ГЁГ©",
-    [19] = u8"#19 - Г’ВёГ¬Г­Г®-Г±ГЁГ­ГЁГ©",
-    [20] = u8"#20 - ГќГ«ГҐГЄГІГ°ГЁГЄ",
-    [21] = u8"#21 - Г‹ГЁГ¬Г®Г­Г­Г»Г©",
-    [22] = u8"#22 - Г€Г§ГіГ¬Г°ГіГ¤Г­Г»Г©",
-    [23] = u8"#23 - ГЉГ®Г°ГЁГ·Г­ГҐГўГ»Г©",
-    [24] = u8"#24 - ГЃГҐГ¦ГҐГўГ»Г©",
-    [25] = u8"#25 - ГЏГіГ°ГЇГіГ°Г­Г»Г©",
-    [26] = u8"#26 - Г‘ГЁГ°ГҐГ­ГҐГўГ»Г©",
-    [27] = u8"#27 - ГЂГ¬ГҐГІГЁГ±ГІ",
-    [28] = u8"#28 - Г‡Г®Г«Г®ГІГ®Г©",
-    [29] = u8"#29 - ГГ®ГЄГ®Г«Г Г¤Г­Г»Г©",
-    [30] = u8"#30 - ГѓГ®Г«ГіГЎГ®ГўГ ГІГ®-Г±ГҐГ°Г»Г©",
-    [31] = u8"#31 - ГџГ°ГЄГ®-Г§ГҐГ«ВёГ­Г»Г©",
-    [32] = u8"#32 - ГЋГ«ГЁГўГЄГ®ГўГ»Г©",
-    [33] = u8"#33 - ГЂГЄГўГ Г¬Г Г°ГЁГ­",
-    [34] = u8"#34 - ГЉГ Г°Г Г¬ГҐГ«ГјГ­Г»Г©",
-    [35] = u8"#35 - Г‹Г ГўГ Г­Г¤Г®ГўГ»Г©",
-    [36] = u8"#36 - Г‚ГҐГ±ГҐГ­Г­ГЁГ©",
-    [37] = u8"#37 - ГЉГ®Г°Г Г«Г«Г®ГўГ»Г©",
-    [38] = u8"#38 - ГЉГЁГ°ГЇГЁГ·Г­Г»Г©",
-    [39] = u8"#39 - Г‹Г Г©Г¬Г®ГўГ»Г©",
-    [40] = u8"#40 - Г€Г­Г¤ГЁГЈГ®",
-    [41] = u8"#41 - ГЋГ°ГµГЁГ¤ГҐГї",
-    [42] = u8"#42 - ГџГ­ГІГ Г°Г­Г»Г©",
-    [43] = u8"#43 - Г‘ГЁГ°ГҐГ­ГҐГўГ»Г© Г±ГўГҐГІГ«Г»Г©",
-    [44] = u8"#44 - ГЃГ°Г®Г­Г§Г®ГўГ»Г©",
-    [45] = u8"#45 - ГЏГҐГ°Г±ГЁГЄГ®ГўГ»Г©",
-    [46] = u8"#46 - Г‘ГІГ Г«ГјГ­Г®Г© Г±ГЁГ­ГЁГ©",
-    [47] = u8"#47 - Г•Г ГЄГЁ",
-    [48] = u8"#48 - Г‹Г®Г±Г®Г±ГҐГўГ»Г©",
-    [49] = u8"#49 - ГЌГҐГґГ°ГЁГІГ®ГўГ»Г©",
-    [50] = u8"#50 - ГЏГ«Г ГІГЁГ­Г®ГўГ»Г©",
-    [51] = u8"#51 - Г‘ГҐГ°ГҐГЎГ°ГїГ­Г»Г©",
-    [52] = u8"#52 - ГЂГ«Г¬Г Г§Г­Г»Г©",
-    [53] = u8"#53 - ГЌГҐГ®Г­Г®ГўГ®-Г§ГҐГ«ВёГ­Г»Г©",
-    [54] = u8"#54 - Г„Г¦ГЁГ­Г±Г®ГўГ»Г©",
-    [55] = u8"#55 - ГЌГҐГ¦Г­Г®-ГґГЁГ®Г«ГҐГІГ®ГўГ»Г©",
-    [56] = u8"#56 - Г‹ГҐГ¤ГїГ­Г®Г©",
-    [57] = u8"#57 - ГЂГЎГ°ГЁГЄГ®Г±Г®ГўГ»Г©",
-    [58] = u8"#58 - ГЃГЁГ°ГѕГ§Г®ГўГ»Г©",
-    [59] = u8"#59 - ГЊГҐГ­ГІГ®Г«Г®ГўГ»Г©",
-    [60] = u8"#60 - Г‘Г«ГЁГўГ®ГўГ»Г©",
-    [61] = u8"#61 - ГЊГҐГ¤Г®ГўГ»Г©",
-    [62] = u8"#62 - Г‘Г ГЇГґГЁГ°Г®ГўГ»Г©",
-    [63] = u8"#63 - ГЊГ Г«Г ГµГЁГІГ®ГўГ»Г©",
-    [64] = u8"#64 - Г‘Г®Г«Г­ГҐГ·Г­Г»Г©",
-    [65] = u8"#65 - Г”Г«Г Г¬ГЁГ­ГЈГ®",
-    [66] = u8"#66 - ГЊГ Г«ГЁГ­Г®ГўГ»Г©",
-    [67] = u8"#67 - ГЃГ®Г«Г®ГІГ­Г»Г©",
-    [68] = u8"#68 - ГГ Г«ГґГҐГ©",
-    [69] = u8"#69 - Г†Г Г±Г¬ГЁГ­",
-    [70] = u8"#70 - Г‹Г Г§ГіГ°Г­Г»Г©",
-    [71] = u8"#71 - ГЊГ ГЈГҐГ­ГІГ ",
-    [72] = u8"#72 - ГГ ГґГ°Г Г­Г®ГўГ»Г©",
-    [73] = u8"#73 - Г‚Г Г­ГЁГ«ГјГ­Г»Г©",
-    [74] = u8"#74 - ГЌГҐГ¦Г­Г®-Г°Г®Г§Г®ГўГ»Г©",
-    [75] = u8"#75 - Г’ГіГ¬Г Г­Г­Г»Г©",
-    [76] = u8"#76 - Г‹ГјГ­ГїГ­Г®Г©",
-    [77] = u8"#77 - Г‘Г«Г®Г­Г®ГўГ Гї ГЄГ®Г±ГІГј",
-    [78] = u8"#78 - ГѓГҐГ«ГЁГ®ГІГ°Г®ГЇ",
-    [79] = u8"#79 - ГЏГҐГ°Г«Г Г¬ГіГІГ°Г®ГўГ»Г©",
-    [80] = u8"#80 - ГЏГ®Г«Г­Г®Г·Г­Г»Г©",
-    [81] = u8"#81 - ГЏГ ГЇГ®Г°Г®ГІГ­ГЁГЄГ®ГўГ»Г©",
-    [82] = u8"#82 - Г‹ГЁГ«Г®ГўГ»Г©",
-    [83] = u8"#83 - Г‚ГЁГ­Г®ГЈГ°Г Г¤Г­Г»Г©",
-    [84] = u8"#84 - Г‘ГЁГ°ГҐГ­ГҐГўГ®-Г°Г®Г§Г®ГўГ»Г©",
-    [85] = u8"#85 - ГЂГ«Г»Г©",
-    [86] = u8"#86 - Г’Г»ГЄГўГҐГ­Г­Г»Г©",
-    [87] = u8"#87 - ГЂГЇГҐГ«ГјГ±ГЁГ­Г®ГўГ»Г©",
-    [88] = u8"#88 - ГЉГ Г­Г Г°ГҐГҐГ·Г­Г»Г©",
-    [89] = u8"#89 - ГЉГЁГ±Г«Г®ГІГ­Г»Г©",
-    [90] = u8"#90 - ГЊГ®Г°Г±ГЄГ®Г©",
-    [91] = u8"#91 - Г‚Г Г±ГЁГ«ГјГЄГ®ГўГ»Г©",
-    [92] = u8"#92 - ГЌГҐГ®Г­Г®ГўГ»Г©",
-    [93] = u8"#93 - Г“Г«ГјГІГ°Г ГґГЁГ®Г«ГҐГІ",
-    [94] = u8"#94 - ГЂГ±ГІГ°Г®ГўГ»Г©",
-    [95] = u8"#95 - Г’ГіГ¬Г Г­Г­Г®-Г°Г®Г§Г®ГўГ»Г©",
-    [96] = u8"#96 - ГЏГёГҐГ­ГЁГ·Г­Г»Г©",
-    [97] = u8"#97 - Г‚ГЁГёГ­ВёГўГ»Г©",
-    [98] = u8"#98 - ГЉГ°ГҐГ¬Г®ГўГ»Г©",
-    [99] = u8"#99 - ГЃГ°ГЁГ«Г«ГЁГ Г­ГІГ®ГўГ»Г©",
+    [0]  = u8"#0 - Красный",
+    [1]  = u8"#1 - Фиолетовый",
+    [2]  = u8"#2 - Бордовый",
+    [3]  = u8"#3 - Тёмно-красный",
+    [4]  = u8"#4 - Серый",
+    [5]  = u8"#5 - Тёмно-серый",
+    [6]  = u8"#6 - Светло-серый",
+    [7]  = u8"#7 - Розовый",
+    [8]  = u8"#8 - Светло-розовый",
+    [9]  = u8"#9 - Оранжево-красный",
+    [10] = u8"#10 - Оранжевый",
+    [11] = u8"#11 - Жёлтый",
+    [12] = u8"#12 - Светло-зелёный",
+    [13] = u8"#13 - Зелёный",
+    [14] = u8"#14 - Мятный",
+    [15] = u8"#15 - Белый",
+    [16] = u8"#16 - Небесный",
+    [17] = u8"#17 - Травяной",
+    [18] = u8"#18 - Синий",
+    [19] = u8"#19 - Тёмно-синий",
+    [20] = u8"#20 - Электрик",
+    [21] = u8"#21 - Лимонный",
+    [22] = u8"#22 - Изумрудный",
+    [23] = u8"#23 - Коричневый",
+    [24] = u8"#24 - Бежевый",
+    [25] = u8"#25 - Пурпурный",
+    [26] = u8"#26 - Сиреневый",
+    [27] = u8"#27 - Аметист",
+    [28] = u8"#28 - Золотой",
+    [29] = u8"#29 - Шоколадный",
+    [30] = u8"#30 - Голубовато-серый",
+    [31] = u8"#31 - Ярко-зелёный",
+    [32] = u8"#32 - Оливковый",
+    [33] = u8"#33 - Аквамарин",
+    [34] = u8"#34 - Карамельный",
+    [35] = u8"#35 - Лавандовый",
+    [36] = u8"#36 - Весенний",
+    [37] = u8"#37 - Коралловый",
+    [38] = u8"#38 - Кирпичный",
+    [39] = u8"#39 - Лаймовый",
+    [40] = u8"#40 - Индиго",
+    [41] = u8"#41 - Орхидея",
+    [42] = u8"#42 - Янтарный",
+    [43] = u8"#43 - Сиреневый светлый",
+    [44] = u8"#44 - Бронзовый",
+    [45] = u8"#45 - Персиковый",
+    [46] = u8"#46 - Стальной синий",
+    [47] = u8"#47 - Хаки",
+    [48] = u8"#48 - Лососевый",
+    [49] = u8"#49 - Нефритовый",
+    [50] = u8"#50 - Платиновый",
+    [51] = u8"#51 - Серебряный",
+    [52] = u8"#52 - Алмазный",
+    [53] = u8"#53 - Неоново-зелёный",
+    [54] = u8"#54 - Джинсовый",
+    [55] = u8"#55 - Нежно-фиолетовый",
+    [56] = u8"#56 - Ледяной",
+    [57] = u8"#57 - Абрикосовый",
+    [58] = u8"#58 - Бирюзовый",
+    [59] = u8"#59 - Ментоловый",
+    [60] = u8"#60 - Сливовый",
+    [61] = u8"#61 - Медовый",
+    [62] = u8"#62 - Сапфировый",
+    [63] = u8"#63 - Малахитовый",
+    [64] = u8"#64 - Солнечный",
+    [65] = u8"#65 - Фламинго",
+    [66] = u8"#66 - Малиновый",
+    [67] = u8"#67 - Болотный",
+    [68] = u8"#68 - Шалфей",
+    [69] = u8"#69 - Жасмин",
+    [70] = u8"#70 - Лазурный",
+    [71] = u8"#71 - Магента",
+    [72] = u8"#72 - Шафрановый",
+    [73] = u8"#73 - Ванильный",
+    [74] = u8"#74 - Нежно-розовый",
+    [75] = u8"#75 - Туманный",
+    [76] = u8"#76 - Льняной",
+    [77] = u8"#77 - Слоновая кость",
+    [78] = u8"#78 - Гелиотроп",
+    [79] = u8"#79 - Перламутровый",
+    [80] = u8"#80 - Полночный",
+    [81] = u8"#81 - Папоротниковый",
+    [82] = u8"#82 - Лиловый",
+    [83] = u8"#83 - Виноградный",
+    [84] = u8"#84 - Сиренево-розовый",
+    [85] = u8"#85 - Алый",
+    [86] = u8"#86 - Тыквенный",
+    [87] = u8"#87 - Апельсиновый",
+    [88] = u8"#88 - Канареечный",
+    [89] = u8"#89 - Кислотный",
+    [90] = u8"#90 - Морской",
+    [91] = u8"#91 - Васильковый",
+    [92] = u8"#92 - Неоновый",
+    [93] = u8"#93 - Ультрафиолет",
+    [94] = u8"#94 - Астровый",
+    [95] = u8"#95 - Туманно-розовый",
+    [96] = u8"#96 - Пшеничный",
+    [97] = u8"#97 - Вишнёвый",
+    [98] = u8"#98 - Кремовый",
+    [99] = u8"#99 - Бриллиантовый",
 }
 local color_list = {}
 for i = 0, 99 do
@@ -1506,22 +1506,22 @@ for i = 0, 99 do
 end
 
 local weapon_list = {
-    u8"1 - ГЉГ Г±ГІГҐГІ", u8"2 - ГЉГ«ГѕГёГЄГ ", u8"3 - Г„ГіГЎГЁГ­ГЄГ ", u8"4 - ГЌГ®Г¦",
-    u8"5 - ГЃГЁГІГ ", u8"6 - Г‹Г®ГЇГ ГІГ ", u8"7 - ГЉГЁГ©", u8"8 - ГЉГ ГІГ Г­Г ", u8"9 - ГЃГҐГ­Г§Г®ГЇГЁГ«Г ",
-    u8"10 - ГђГ®Г§Г®ГўГ»Г© ГўГЁГЎГ°Г ГІГ®Г°", u8"11 - ГЉГ Г°Г¬Г Г­Г­Г»Г© ГўГЁГЎГ°Г ГІГ®Г°",
-    u8"12 - Г„ГЁГ«Г¤Г®", u8"13 - Г‚ГЁГЎГ°Г ГІГ®Г°", u8"15 - Г’Г°Г®Г±ГІГј", u8"16 - ГѓГ°Г Г­Г ГІГ»",
-    u8"17 - Г„Г»Г¬Г®ГўГ»ГҐ ГёГ ГёГЄГЁ", u8"18 - ГЉГ®ГЄГІГҐГ©Г«Гј Г¬Г®Г«Г®ГІГ®ГўГ ",
-    u8"22 - Glock 18", u8"23 - Glock 18 (ГЈГ«ГіГё.)", u8"24 - Desert Eagle",
-    u8"25 - Г„Г°Г®ГЎГ®ГўГЁГЄ", u8"26 - ГЋГЎГ°ГҐГ§", u8"27 - Spas-12", u8"28 - UZI", u8"29 - MP5",
+    u8"1 - Кастет", u8"2 - Клюшка", u8"3 - Дубинка", u8"4 - Нож",
+    u8"5 - Бита", u8"6 - Лопата", u8"7 - Кий", u8"8 - Катана", u8"9 - Бензопила",
+    u8"10 - Розовый вибратор", u8"11 - Карманный вибратор",
+    u8"12 - Дилдо", u8"13 - Вибратор", u8"15 - Трость", u8"16 - Гранаты",
+    u8"17 - Дымовые шашки", u8"18 - Коктейль молотова",
+    u8"22 - Glock 18", u8"23 - Glock 18 (глуш.)", u8"24 - Desert Eagle",
+    u8"25 - Дробовик", u8"26 - Обрез", u8"27 - Spas-12", u8"28 - UZI", u8"29 - MP5",
     u8"30 - AK-47", u8"31 - M4", u8"32 - TEC9",
-    u8"33 - Г‚ГЁГ­ГІГ®ГўГЄГ ", u8"34 - Г‘Г­Г Г©ГЇГҐГ°ГЄГ ", u8"35 - ГђГЏГѓ-7",
-    u8"36 - ГѓГ°Г Г­Г ГІГ®Г¬ВёГІ", u8"37 - ГЋГЈГ­ГҐГ¬ВёГІ", u8"38 - ГЊГЁГ­ГЁГЈГ Г­", u8"39 - C4",
-    u8"41 - ГЃГ Г«Г«Г®Г­Г·ГЁГЄ", u8"42 - ГЋГЈГ­ГҐГІГіГёГЁГІГҐГ«Гј",
-    u8"43 - Г”Г®ГІГ®Г ГЇГЇГ Г°Г ГІ", u8"44 - ГЏГЌГ‚", u8"45 - Г’ГҐГЇГ«Г®ГўГЁГ§Г®Г°", u8"46 - ГЏГ Г°Г ГёГѕГІ"
+    u8"33 - Винтовка", u8"34 - Снайперка", u8"35 - РПГ-7",
+    u8"36 - Гранатомёт", u8"37 - Огнемёт", u8"38 - Миниган", u8"39 - C4",
+    u8"41 - Баллончик", u8"42 - Огнетушитель",
+    u8"43 - Фотоаппарат", u8"44 - ПНВ", u8"45 - Тепловизор", u8"46 - Парашют"
 }
 
 -- ============================================================
---  ГђГ®Г«ГЁ: ГµГ°Г Г­ГҐГ­ГЁГҐ ГЄГ Г±ГІГ®Г¬Г­Г»Гµ ГёГ ГЎГ«Г®Г­Г®Гў (roles.ini)
+--  Роли: хранение кастомных шаблонов (roles.ini)
 -- ============================================================
 local ROLES_PATH = CONFIG_DIR .. "\\roles.ini"
 local defaultRolesIndex = { roles = { count = "0" } }
@@ -1555,7 +1555,7 @@ local function deleteRoleTemplate(idx)
     saveRoleTemplates()
 end
 
--- Г§Г ГЈГ°ГіГ¦Г ГҐГ¬ Г±Г®ГµГ°Г Г­ВёГ­Г­Г»ГҐ ГЄГ Г±ГІГ®Г¬Г­Г»ГҐ ГёГ ГЎГ«Г®Г­Г» ГЇГ°ГЁ Г±ГІГ Г°ГІГҐ
+-- загружаем сохранённые кастомные шаблоны при старте
 local rolesCount = tonumber(rolesIni.roles.count) or 0
 for i = 1, rolesCount do
     local nm = rolesIni.roles["role" .. i .. "_name"]
@@ -1570,26 +1570,26 @@ for i = 1, rolesCount do
 end
 
 -- ============================================================
---  ГѓГ®ГІГ®ГўГ»ГҐ ГёГ ГЎГ«Г®Г­Г» Г°Г®Г«ГҐГ©
+--  Готовые шаблоны ролей
 -- ============================================================
 local builtinRoleTemplates = {
-    { name = u8"ГЋГµГ°Г Г­Г­ГЁГЄ", skinId = 285, weaponLabel = u8"24 - Desert Eagle", colorId = 15 },
+    { name = u8"Охранник", skinId = 285, weaponLabel = u8"24 - Desert Eagle", colorId = 15 },
 }
 
 local function sendRoleTemplate(tmpl)
     local ok, myId = sampGetPlayerIdByCharHandle(playerPed)
     if not ok then
-        sampAddChatMessage(u8"{FF6B6B}[TRPcomm] ГЌГҐ ГіГ¤Г Г«Г®Г±Гј Г®ГЇГ°ГҐГ¤ГҐГ«ГЁГІГј Г±ГўГ®Г© ID.", -1)
+        sampAddChatMessage(u8"{FF6B6B}[TRPcomm] Не удалось определить свой ID.", -1)
         return
     end
     local weaponCp1251 = u8:decode(tmpl.weaponLabel)
-    local msg = string.format("/rc ГЊГ®Г© ID: %d | Г‘ГЄГЁГ­: %d | ГЋГ°ГіГ¦ГЁГҐ: %s | ГЉГ«ГЁГ±ГІ: %d",
+    local msg = string.format("/rc Мой ID: %d | Скин: %d | Оружие: %s | Клист: %d",
         myId, tmpl.skinId, weaponCp1251, tmpl.colorId)
     sampSendChat(msg)
 end
 
 -- ------------------------------------------------------------
--- ГЄГ ГІГ Г«Г®ГЈ Г±ГЄГЁГ­Г®Гў Г± ГЇГ®Г±ГІГ°Г Г­ГЁГ·Г­Г»Г¬ Г«ГЁГ±ГІГ Г­ГЁГҐГ¬
+-- каталог скинов с постраничным листанием
 -- ------------------------------------------------------------
 ROLE_SKIN_MIN, ROLE_SKIN_MAX = 0, 311
 ROLE_SKINS_PER_PAGE = 30
@@ -1597,7 +1597,7 @@ roleCreateSkinId = imgui.ImInt(0)
 roleCatalogPage = 0
 
 local function drawSkinCatalogPopup(t)
-    if imgui.BeginPopupModal("ГЉГ ГІГ Г«Г®ГЈ Г±ГЄГЁГ­Г®Гў##skin_catalog_popup", nil, imgui.WindowFlags.AlwaysAutoResize) then
+    if imgui.BeginPopupModal("Каталог скинов##skin_catalog_popup", nil, imgui.WindowFlags.AlwaysAutoResize) then
         local totalSkins = ROLE_SKIN_MAX - ROLE_SKIN_MIN + 1
         local totalPages = math.ceil(totalSkins / ROLE_SKINS_PER_PAGE)
         local pageStart  = ROLE_SKIN_MIN + roleCatalogPage * ROLE_SKINS_PER_PAGE
@@ -1627,18 +1627,18 @@ local function drawSkinCatalogPopup(t)
 
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-        if imgui.Button(u8"<< ГЌГ Г§Г Г¤##catalog_prev", imgui.ImVec2(90, 26)) then
+        if imgui.Button(u8"<< Назад##catalog_prev", imgui.ImVec2(90, 26)) then
             if roleCatalogPage > 0 then roleCatalogPage = roleCatalogPage - 1 end
         end
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8"Г‘ГІГ°Г Г­ГЁГ¶Г  " .. (roleCatalogPage + 1) .. u8" ГЁГ§ " .. totalPages)
+        imgui.TextColored(t.textDim, u8"Страница " .. (roleCatalogPage + 1) .. u8" из " .. totalPages)
         imgui.SameLine()
-        if imgui.Button(u8"Г‚ГЇГҐГ°ВёГ¤ >>##catalog_next", imgui.ImVec2(90, 26)) then
+        if imgui.Button(u8"Вперёд >>##catalog_next", imgui.ImVec2(90, 26)) then
             if roleCatalogPage < totalPages - 1 then roleCatalogPage = roleCatalogPage + 1 end
         end
 
         imgui.Spacing()
-        if imgui.Button(u8"Г‡Г ГЄГ°Г»ГІГј##close_catalog", imgui.ImVec2(-1, 26)) then
+        if imgui.Button(u8"Закрыть##close_catalog", imgui.ImVec2(-1, 26)) then
             imgui.CloseCurrentPopup()
         end
 
@@ -1647,7 +1647,7 @@ local function drawSkinCatalogPopup(t)
 end
 
 -- ------------------------------------------------------------
--- Г®ГІГ°ГЁГ±Г®ГўГЄГ  ГўГЄГ«Г Г¤ГЄГЁ "ГђГ®Г«ГЁ"
+-- отрисовка вкладки "Роли"
 -- ------------------------------------------------------------
 roles_new_name = imgui.ImBuffer("", 64)
 roles_new_weapon_combo = imgui.ImInt(0)
@@ -1668,10 +1668,10 @@ local function drawBuiltinRoleRow(t, tmpl)
             local weaponName = tmpl.weaponLabel:match("%- (.+)$") or tmpl.weaponLabel
             local colorLabel = colorNames[tmpl.colorId] or ""
             local colorName  = colorLabel:match("%- (.+)$") or colorLabel
-            imgui.TextColored(t.textDim, u8"ГЋГ°ГіГ¦ГЁГҐ: " .. weaponName .. u8"  |  Г–ГўГҐГІ: " .. colorName)
+            imgui.TextColored(t.textDim, u8"Оружие: " .. weaponName .. u8"  |  Цвет: " .. colorName)
         imgui.EndGroup()
         imgui.SameLine(imgui.GetWindowWidth() - 100)
-        if imgui.Button(u8"Г‚Г»Г¤Г ГІГј##builtin_" .. tmpl.name, imgui.ImVec2(90, 28)) then
+        if imgui.Button(u8"Выдать##builtin_" .. tmpl.name, imgui.ImVec2(90, 28)) then
             sendRoleTemplate(tmpl)
         end
     imgui.EndChild()
@@ -1689,10 +1689,10 @@ local function drawCustomRoleRow(t, idx, tmpl)
             local weaponName = tmpl.weaponLabel:match("%- (.+)$") or tmpl.weaponLabel
             local colorLabel = colorNames[tmpl.colorId] or ""
             local colorName  = colorLabel:match("%- (.+)$") or colorLabel
-            imgui.TextColored(t.textDim, u8"ГЋГ°ГіГ¦ГЁГҐ: " .. weaponName .. u8"  |  Г–ГўГҐГІ: " .. colorName)
+            imgui.TextColored(t.textDim, u8"Оружие: " .. weaponName .. u8"  |  Цвет: " .. colorName)
         imgui.EndGroup()
         imgui.SameLine(imgui.GetWindowWidth() - 170)
-        if imgui.Button(u8"Г‚Г»Г¤Г ГІГј##custom_" .. idx, imgui.ImVec2(90, 28)) then
+        if imgui.Button(u8"Выдать##custom_" .. idx, imgui.ImVec2(90, 28)) then
             sendRoleTemplate(tmpl)
         end
         imgui.SameLine()
@@ -1728,22 +1728,22 @@ local function drawCustomRoleRow(t, idx, tmpl)
 end
 
 local function drawAddRolePopup(t)
-    local popupTitle = roles_edit_idx and u8"ГђГҐГ¤Г ГЄГІГЁГ°Г®ГўГ ГІГј ГёГ ГЎГ«Г®Г­" or u8"ГЌГ®ГўГ»Г© ГёГ ГЎГ«Г®Г­"
+    local popupTitle = roles_edit_idx and u8"Редактировать шаблон" or u8"Новый шаблон"
     if imgui.BeginPopupModal(popupTitle .. "###add_role_popup", nil, imgui.WindowFlags.AlwaysAutoResize) then
-        imgui.TextColored(t.textDim, u8"ГЌГ Г§ГўГ Г­ГЁГҐ:")
+        imgui.TextColored(t.textDim, u8"Название:")
         imgui.PushItemWidth(240)
         imgui.InputText("##new_role_name", roles_new_name)
         imgui.PopItemWidth()
 
         imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"ID Г±ГЄГЁГ­Г :")
+        imgui.TextColored(t.textDim, u8"ID скина:")
         imgui.PushItemWidth(100)
         imgui.InputInt("##new_role_skin_id", roleCreateSkinId, 0, 0)
         imgui.PopItemWidth()
         imgui.SameLine()
-        if imgui.Button(u8"ГЉГ ГІГ Г«Г®ГЈ##open_skin_catalog", imgui.ImVec2(100, 24)) then
+        if imgui.Button(u8"Каталог##open_skin_catalog", imgui.ImVec2(100, 24)) then
             roleCatalogPage = 0
-            imgui.OpenPopup("ГЉГ ГІГ Г«Г®ГЈ Г±ГЄГЁГ­Г®Гў##skin_catalog_popup")
+            imgui.OpenPopup("Каталог скинов##skin_catalog_popup")
         end
         local previewTex = loadSkinTexture(roleCreateSkinId.v)
         if previewTex then
@@ -1752,20 +1752,20 @@ local function drawAddRolePopup(t)
         end
 
         imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"ГЋГ°ГіГ¦ГЁГҐ:")
+        imgui.TextColored(t.textDim, u8"Оружие:")
         imgui.PushItemWidth(260)
         imgui.Combo("##new_role_weapon", roles_new_weapon_combo, weapon_list)
         imgui.PopItemWidth()
 
         imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"ГЉГ«ГЁГ±ГІ (Г¶ГўГҐГІ Г­ГЁГЄГ ):")
+        imgui.TextColored(t.textDim, u8"Клист (цвет ника):")
         imgui.PushItemWidth(260)
         imgui.Combo("##new_role_color", roles_new_color_combo, color_list)
         imgui.PopItemWidth()
 
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-        if imgui.Button(u8"Г‘Г®ГµГ°Г Г­ГЁГІГј##save_new_role", imgui.ImVec2(120, 28)) then
+        if imgui.Button(u8"Сохранить##save_new_role", imgui.ImVec2(120, 28)) then
             if roles_new_name.v ~= "" then
                 if roles_edit_idx then
                     local tmpl = customRoleTemplates[roles_edit_idx]
@@ -1788,7 +1788,7 @@ local function drawAddRolePopup(t)
             end
         end
         imgui.SameLine()
-        if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##cancel_new_role", imgui.ImVec2(100, 28)) then
+        if imgui.Button(u8"Отмена##cancel_new_role", imgui.ImVec2(100, 28)) then
             roles_edit_idx = nil
             imgui.CloseCurrentPopup()
         end
@@ -1800,9 +1800,9 @@ local function drawAddRolePopup(t)
 end
 
 local function drawRolesTab(t)
-    imgui.TextColored(t.accent, u8"ГђГ®Г«ГЁ")
+    imgui.TextColored(t.accent, u8"Роли")
     imgui.SameLine(imgui.GetWindowWidth() - 150)
-    if imgui.Button(fa.ICON_PLUS .. u8"  Г„Г®ГЎГ ГўГЁГІГј##add_role", imgui.ImVec2(140, 26)) then
+    if imgui.Button(fa.ICON_PLUS .. u8"  Добавить##add_role", imgui.ImVec2(140, 26)) then
         roles_edit_idx = nil
         roles_new_name.v = ""
         roleCreateSkinId.v = 0
@@ -1813,7 +1813,7 @@ local function drawRolesTab(t)
     imgui.Separator()
     imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"ГѓГ®ГІГ®ГўГ»ГҐ ГёГ ГЎГ«Г®Г­Г»")
+    imgui.TextColored(t.accent, u8"Готовые шаблоны")
     imgui.Spacing()
     for _, tmpl in ipairs(builtinRoleTemplates) do
         drawBuiltinRoleRow(t, tmpl)
@@ -1822,7 +1822,7 @@ local function drawRolesTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"ГЊГ®ГЁ ГёГ ГЎГ«Г®Г­Г»")
+    imgui.TextColored(t.accent, u8"Мои шаблоны")
     imgui.Spacing()
     for idx, tmpl in ipairs(customRoleTemplates) do
         drawCustomRoleRow(t, idx, tmpl)
@@ -1838,29 +1838,29 @@ local function drawRolesTab(t)
 end
 
 -- ============================================================
---  ГЌГЂГ‘Г’ГђГЋГ‰ГЉГ€
+--  НАСТРОЙКИ
 -- ============================================================
 
 local function drawSettingsTab(t)
-    imgui.TextColored(t.accent, u8"ГЌГЂГ‘Г’ГђГЋГ‰ГЉГ€")
+    imgui.TextColored(t.accent, u8"НАСТРОЙКИ")
     imgui.Separator()
     imgui.Spacing()
 
-    -- ---------- ГЃГЁГ­Г¤ Г­Г  Г®ГІГЄГ°Г»ГІГЁГҐ Г¬ГҐГ­Гѕ ----------
-    imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8" ГЋГІГЄГ°Г»ГІГЁГҐ Г¬ГҐГ­Гѕ")
-    imgui.TextColored(t.textDim, u8"Г’ГҐГЄГіГ№Г Гї ГЄГ®Г¬ГЎГЁГ­Г Г¶ГЁГї:")
+    -- ---------- Бинд на открытие меню ----------
+    imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8" Открытие меню")
+    imgui.TextColored(t.textDim, u8"Текущая комбинация:")
     imgui.SameLine()
     imgui.Text(hotkey_display.v)
 
     if waiting_for_key then
-        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"ГЌГ Г¦Г¬ГЁГІГҐ ГЄГ«Г ГўГЁГёГі ГЁГ«ГЁ ГЄГ®Г¬ГЎГЁГ­Г Г¶ГЁГѕ...")
+        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"Нажмите клавишу или комбинацию...")
     else
-        if imgui.Button(u8"Г€Г§Г¬ГҐГ­ГЁГІГј##hotkey_change", imgui.ImVec2(180, 25)) then
+        if imgui.Button(u8"Изменить##hotkey_change", imgui.ImVec2(180, 25)) then
             waiting_for_key2 = false
             waiting_for_key = true
         end
         imgui.SameLine()
-        if imgui.Button(u8"Г‘ГЎГ°Г®Г± Г­Г  Alt + P##hotkey_reset", imgui.ImVec2(180, 25)) then
+        if imgui.Button(u8"Сброс на Alt + P##hotkey_reset", imgui.ImVec2(180, 25)) then
             hotkey_alt.v   = true
             hotkey_ctrl.v  = false
             hotkey_shift.v = false
@@ -1888,21 +1888,21 @@ local function drawSettingsTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    -- ---------- ГЃГЁГ­Г¤ Г­Г  ГЇГ®Г¤ГЄГ«ГѕГ·ГҐГ­ГЁГҐ ГЄ Г°Г Г¶ГЁГЁ ----------
-    imgui.TextColored(t.accent, fa.ICON_WIFI .. u8" ГЏГ®Г¤ГЄГ«ГѕГ·ГҐГ­ГЁГҐ ГЄ Г°Г Г¶ГЁГЁ")
-    imgui.TextColored(t.textDim, u8"Г’ГҐГЄГіГ№Г Гї ГЄГ®Г¬ГЎГЁГ­Г Г¶ГЁГї:")
+    -- ---------- Бинд на подключение к рации ----------
+    imgui.TextColored(t.accent, fa.ICON_WIFI .. u8" Подключение к рации")
+    imgui.TextColored(t.textDim, u8"Текущая комбинация:")
     imgui.SameLine()
     imgui.Text(hotkey2_display.v)
 
     if waiting_for_key2 then
-        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"ГЌГ Г¦Г¬ГЁГІГҐ ГЄГ«Г ГўГЁГёГі ГЁГ«ГЁ ГЄГ®Г¬ГЎГЁГ­Г Г¶ГЁГѕ...")
+        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"Нажмите клавишу или комбинацию...")
     else
-        if imgui.Button(u8"Г€Г§Г¬ГҐГ­ГЁГІГј##hotkey2_change", imgui.ImVec2(180, 25)) then
+        if imgui.Button(u8"Изменить##hotkey2_change", imgui.ImVec2(180, 25)) then
             waiting_for_key = false
             waiting_for_key2 = true
         end
         imgui.SameLine()
-        if imgui.Button(u8"Г“ГЎГ°Г ГІГј ГЎГЁГ­Г¤##hotkey2_clear", imgui.ImVec2(180, 25)) then
+        if imgui.Button(u8"Убрать бинд##hotkey2_clear", imgui.ImVec2(180, 25)) then
             hotkey2_alt.v   = false
             hotkey2_ctrl.v  = false
             hotkey2_shift.v = false
@@ -1930,8 +1930,8 @@ local function drawSettingsTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    -- ---------- Г’ГҐГ¬Г  Г®ГґГ®Г°Г¬Г«ГҐГ­ГЁГї ----------
-    imgui.TextColored(t.accent, fa.ICON_PAINT_BRUSH .. u8" Г’ГҐГ¬Г  Г®ГґГ®Г°Г¬Г«ГҐГ­ГЁГї")
+    -- ---------- Тема оформления ----------
+    imgui.TextColored(t.accent, fa.ICON_PAINT_BRUSH .. u8" Тема оформления")
     local theme_names = {}
     for _, th in ipairs(themes) do theme_names[#theme_names + 1] = th.name end
     if imgui.Combo("##theme_select", selected_theme_combo, theme_names) then
@@ -1941,44 +1941,44 @@ local function drawSettingsTab(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    -- ---------- ГђГ Г¶ГЁГї ----------
-    imgui.TextColored(t.accent, fa.ICON_WRENCH .. u8" ГђГ Г¶ГЁГї")
-    imgui.TextColored(t.textDim, u8"Г—Г Г±ГІГ®ГІГ  Г°Г Г¶ГЁГЁ:")
+    -- ---------- Рация ----------
+    imgui.TextColored(t.accent, fa.ICON_WRENCH .. u8" Рация")
+    imgui.TextColored(t.textDim, u8"Частота рации:")
     imgui.PushItemWidth(200)
     imgui.InputText("##radio_freq", radio_freq)
     imgui.PopItemWidth()
 
-    imgui.TextColored(t.textDim, u8"ГЏГ Г°Г®Г«Гј Г°Г Г¶ГЁГЁ:")
+    imgui.TextColored(t.textDim, u8"Пароль рации:")
     imgui.PushItemWidth(200)
     imgui.InputText("##radio_pass", radio_pass)
     imgui.PopItemWidth()
 
-    imgui.TextColored(t.textDim, u8"ГЏГ Г°Г®Г«Гј ГЄ ГІГҐГ«ГҐГЇГ®Г°ГІГі:")
+    imgui.TextColored(t.textDim, u8"Пароль к телепорту:")
     imgui.PushItemWidth(200)
     imgui.InputText("##teleport_pass", teleport_pass)
     imgui.PopItemWidth()
 
 imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-    imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Г„Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г»ГҐ Г­Г Г±ГІГ°Г®Г©ГЄГЁ")
+    imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Дополнительные настройки")
 
-    if imgui.Checkbox(u8"ГЋГІГЇГ°Г ГўГ«ГїГІГј Г±ГЄГ°ГЁГ­ГёГ®ГІГ» Г¤Г®ГЄГіГ¬ГҐГ­ГІГ®Г¬ (Г«ГіГ·ГёГҐГҐ ГЄГ Г·ГҐГ±ГІГўГ®)", send_as_document) then
+    if imgui.Checkbox(u8"Отправлять скриншоты документом (лучшее качество)", send_as_document) then
         saveSettings()
     end
 
     imgui.Spacing()
-    if imgui.Button(u8"Г‘Г®ГµГ°Г Г­ГЁГІГј##radio_save", imgui.ImVec2(150, 28)) then
+    if imgui.Button(u8"Сохранить##radio_save", imgui.ImVec2(150, 28)) then
         saveSettings()
     end
 end
 
 -- ============================================================
---  ГѓГЂГ‹Г…ГђГ…Гџ Г‘ГЉГђГ€ГЌГГЋГ’ГЋГ‚ (Г”Г®ГІГ®ГЈГ°Г Гґ)
+--  ГАЛЕРЕЯ СКРИНШОТОВ (Фотограф)
 -- ============================================================
--- ГЏГ ГЇГЄГ  Г±Г® Г±ГЄГ°ГЁГ­ГёГ®ГІГ Г¬ГЁ SAMP вЂ” Г±ГІГ Г­Г¤Г Г°ГІГ­Г Гї ГЇГ ГЇГЄГ  "Г„Г®ГЄГіГ¬ГҐГ­ГІГ»" ГЇГ®Г«ГјГ§Г®ГўГ ГІГҐГ«Гї
+-- Папка со скриншотами SAMP — стандартная папка "Документы" пользователя
 local SCREENS_DIR = (os.getenv("USERPROFILE") or "") .. "\\Documents\\GTA San Andreas User Files\\SAMP\\screens\\"
 
-GALLERY_SCAN_LIMIT = 60 -- Г±ГЄГ®Г«ГјГЄГ® ГЇГ®Г±Г«ГҐГ¤Г­ГЁГµ ГґГ Г©Г«Г®Гў ГўГ®Г®ГЎГ№ГҐ ГЁГ№ГҐГ¬
-GALLERY_PER_PAGE   = 9  -- 3x3 Г­Г  Г±ГІГ°Г Г­ГЁГ¶ГҐ
+GALLERY_SCAN_LIMIT = 60 -- сколько последних файлов вообще ищем
+GALLERY_PER_PAGE   = 9  -- 3x3 на странице
 GALLERY_MAX_SELECT = 10
 
 gallery_textures      = {}
@@ -2014,7 +2014,7 @@ local function scanGallery()
     gallery_selected      = {}
 end
 
--- Г‘Г®ГЎГЁГ°Г ГҐГІ ГІГҐГ«Г® multipart/form-data Г§Г ГЇГ°Г®Г±Г  ГўГ°ГіГ·Г­ГіГѕ (requests.lua ГЅГІГ® Г­ГҐ ГіГ¬ГҐГҐГІ Г±Г Г¬Г )
+-- Собирает тело multipart/form-data запроса вручную (requests.lua это не умеет сама)
 local function buildMultipartBody(boundary, fields, fileFieldName, filePath, fileMime)
     local f = io.open(filePath, "rb")
     if not f then return nil end
@@ -2052,7 +2052,7 @@ local function sendScreenshotToTelegram(filePath, caption)
     local chatId = TG_CHAT_ID
 
     if token == "" or chatId == "" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г“ГЄГ Г¦ГЁ ГІГ®ГЄГҐГ­ ГЎГ®ГІГ  ГЁ ID Г·Г ГІГ  Гў Г­Г Г±ГІГ°Г®Г©ГЄГ Гµ.', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Укажи токен бота и ID чата в настройках.', -1)
         return false
     end
 
@@ -2074,7 +2074,7 @@ local function sendScreenshotToTelegram(filePath, caption)
     local fieldName = asDocument and "document" or "photo"
     local body = buildMultipartBody(boundary, fields, fieldName, filePath, mime)
     if not body then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЌГҐ ГіГ¤Г Г«Г®Г±Гј ГЇГ°Г®Г·ГЁГІГ ГІГј ГґГ Г©Г«: ' .. filePath, -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось прочитать файл: ' .. filePath, -1)
         return false
     end
 
@@ -2087,19 +2087,19 @@ local function sendScreenshotToTelegram(filePath, caption)
     })
 
     if not ok then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГёГЁГЎГЄГ  Г®ГІГЇГ°Г ГўГЄГЁ: ' .. tostring(response), -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки: ' .. tostring(response), -1)
         return false
     end
 
     if response.status_code == 200 then
         return true
     else
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Telegram ГўГҐГ°Г­ГіГ« Г®ГёГЁГЎГЄГі ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Telegram вернул ошибку ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
         return false
     end
 end
 
--- Г‘Г®ГЎГЁГ°Г ГҐГІ multipart-ГІГҐГ«Г® Г¤Г«Гї sendMediaGroup (Г­ГҐГ±ГЄГ®Г«ГјГЄГ® ГґГ Г©Г«Г®Гў Г®Г¤Г­ГЁГ¬ Г§Г ГЇГ°Г®Г±Г®Г¬)
+-- Собирает multipart-тело для sendMediaGroup (несколько файлов одним запросом)
 local function buildMediaGroupBody(boundary, chatId, filePaths, caption)
     local asDocument = send_as_document.v
     local mediaType = asDocument and "document" or "photo"
@@ -2148,20 +2148,20 @@ local function buildMediaGroupBody(boundary, chatId, filePaths, caption)
     return table.concat(parts)
 end
 
--- ГЋГІГЇГ°Г ГўГ«ГїГҐГІ Г­ГҐГ±ГЄГ®Г«ГјГЄГ® Г±ГЄГ°ГЁГ­ГёГ®ГІГ®Гў Г®Г¤Г­ГЁГ¬ Г Г«ГјГЎГ®Г¬Г®Г¬ (2-10 ГёГІГіГЄ). Г‚Г®Г§ГўГ°Г Г№Г ГҐГІ true/false.
+-- Отправляет несколько скриншотов одним альбомом (2-10 штук). Возвращает true/false.
 local function sendMediaGroupToTelegram(filePaths, caption)
     local token = TG_BOT_TOKEN
     local chatId = TG_CHAT_ID
 
     if token == "" or chatId == "" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г“ГЄГ Г¦ГЁ ГІГ®ГЄГҐГ­ ГЎГ®ГІГ  ГЁ ID Г·Г ГІГ  Гў Г­Г Г±ГІГ°Г®Г©ГЄГ Гµ.', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Укажи токен бота и ID чата в настройках.', -1)
         return false
     end
 
     local boundary = "----TRPcommBoundary" .. tostring(os.time()) .. tostring(math.random(1000, 9999))
     local body = buildMediaGroupBody(boundary, chatId, filePaths, caption)
     if not body then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЌГҐ ГіГ¤Г Г«Г®Г±Гј Г±Г®ГЎГ°Г ГІГј Г Г«ГјГЎГ®Г¬ (ГЇГ°Г®ГўГҐГ°Гј ГґГ Г©Г«Г»).', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось собрать альбом (проверь файлы).', -1)
         return false
     end
 
@@ -2173,14 +2173,14 @@ local function sendMediaGroupToTelegram(filePaths, caption)
     })
 
     if not ok then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГёГЁГЎГЄГ  Г®ГІГЇГ°Г ГўГЄГЁ: ' .. tostring(response), -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки: ' .. tostring(response), -1)
         return false
     end
 
     if response.status_code == 200 then
         return true
     else
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Telegram ГўГҐГ°Г­ГіГ« Г®ГёГЁГЎГЄГі ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Telegram вернул ошибку ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
         return false
     end
 end
@@ -2199,7 +2199,7 @@ local function loadGalleryTexture(filename)
     return nil
 end
 
--- ГЈГ°ГіГ§ГЁГІ ГЄГ Г°ГІГЁГ­ГЄГЁ ГІГ®Г«ГјГЄГ® Г¤Г«Гї ГЄГ®Г­ГЄГ°ГҐГІГ­Г®Г© Г±ГІГ°Г Г­ГЁГ¶Г», Г°Г Г±ГІГїГЈГЁГўГ Гї ГЇГ® ГЄГ Г¤Г°Г Г¬
+-- грузит картинки только для конкретной страницы, растягивая по кадрам
 local function loadGalleryPage(page)
     if gallery_loaded_pages[page] then return end
     gallery_loaded_pages[page] = true
@@ -2213,13 +2213,13 @@ local function loadGalleryPage(page)
     end)
 end
 
--- ---------- ГЋГЄГ­Г® "ГЌГ Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ  ГЇГҐГ°ГҐГ¤ Г®ГІГЇГ°Г ГўГЄГ®Г©" ----------
+-- ---------- Окно "Название ивента перед отправкой" ----------
 gallery_send_form_open = false
 gallery_send_event_name = imgui.ImBuffer("", 64)
 gallery_pending_files = {}
 
 local function sendGalleryReport(filesToSend, eventNameUtf8)
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЋГІГЇГ°Г ГўГ«ГїГѕ {5B85C4}' .. #filesToSend .. ' {FFFFFF}Г±ГЄГ°ГЁГ­ГёГ®ГІ(Г®Гў) Гў Telegram...', -1)
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправляю {5B85C4}' .. #filesToSend .. ' {FFFFFF}скриншот(ов) в Telegram...', -1)
     lua_thread.create(function()
         local paths = {}
         for _, fname in ipairs(filesToSend) do
@@ -2236,11 +2236,11 @@ local function sendGalleryReport(filesToSend, eventNameUtf8)
         end
 
         if ok then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГѓГ®ГІГ®ГўГ®: Г®ГІГЇГ°Г ГўГ«ГҐГ­Г® {5B85C4}' .. #paths .. ' {FFFFFF}Г±ГЄГ°ГЁГ­(Г®Гў) Г®Г¤Г­ГЁГ¬ Г Г«ГјГЎГ®Г¬Г®Г¬.', -1)
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Готово: отправлено {5B85C4}' .. #paths .. ' {FFFFFF}скрин(ов) одним альбомом.', -1)
             addReport(eventNameUtf8, filesToSend)
             gallery_selected = {}
         else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГІГЇГ°Г ГўГЄГ  Г­ГҐ ГіГ¤Г Г«Г Г±Гј.', -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Отправка не удалась.', -1)
         end
     end)
 end
@@ -2256,29 +2256,29 @@ local function drawGallerySendReportForm(t)
     pushThemeRounding()
 
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"ГЋГІГЇГ°Г ГўГЄГ  Г®ГІГ·ВёГІГ ##gallery_send_form", open,
+    imgui.Begin(u8"Отправка отчёта##gallery_send_form", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
     if not open.v then gallery_send_form_open = false end
 
-    imgui.TextColored(t.textDim, u8"ГЌГ Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ :")
+    imgui.TextColored(t.textDim, u8"Название ивента:")
     imgui.PushItemWidth(360)
     imgui.InputText("##gallery_send_event_name", gallery_send_event_name)
     imgui.PopItemWidth()
 
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Г‘ГЄГ°ГЁГ­ГёГ®ГІГ®Гў: " .. #gallery_pending_files)
+    imgui.TextColored(t.textDim, u8"Скриншотов: " .. #gallery_pending_files)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    if imgui.Button(u8"ГЋГІГЇГ°Г ГўГЁГІГј##gallery_send_confirm", imgui.ImVec2(160, 30)) then
+    if imgui.Button(u8"Отправить##gallery_send_confirm", imgui.ImVec2(160, 30)) then
         local nameText = u8:decode(gallery_send_event_name.v)
-        local eventNameUtf8 = (nameText == "") and u8"ГЃГҐГ§ Г­Г Г§ГўГ Г­ГЁГї" or u8(nameText)
+        local eventNameUtf8 = (nameText == "") and u8"Без названия" or u8(nameText)
         sendGalleryReport(gallery_pending_files, eventNameUtf8)
         gallery_send_event_name.v = ""
         gallery_send_form_open = false
     end
     imgui.SameLine()
-    if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##gallery_send_cancel", imgui.ImVec2(120, 30)) then
+    if imgui.Button(u8"Отмена##gallery_send_cancel", imgui.ImVec2(120, 30)) then
         gallery_send_form_open = false
     end
 
@@ -2304,14 +2304,14 @@ local function drawGalleryPreview(t)
     pushThemeRounding()
 
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"Г‘ГЄГ°ГЁГ­ГёГ®ГІ##gallery_preview", open,
+    imgui.Begin(u8"Скриншот##gallery_preview", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
     if not open.v then gallery_preview_open = false end
 
     local avail = imgui.GetContentRegionAvail()
     imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 40))
 
-    if imgui.Button(u8"Г‡Г ГЄГ°Г»ГІГј##gallery_preview_close", imgui.ImVec2(-1, 30)) then
+    if imgui.Button(u8"Закрыть##gallery_preview_close", imgui.ImVec2(-1, 30)) then
         gallery_preview_open = false
     end
 
@@ -2321,11 +2321,11 @@ local function drawGalleryPreview(t)
 end
 
 photographer_subtab = "gallery" -- "gallery" | "reports"
-local drawGalleryTab   -- ГґГ®Г°ГўГ Г°Г¤-Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ, ГІГҐГ«Г  Г­ГЁГ¦ГҐ
+local drawGalleryTab   -- форвард-объявление, тела ниже
 local drawReportsTab
 
 local function drawPhotographerTab(t)
-    imgui.TextColored(t.accent, fa.ICON_DESKTOP .. u8" Г”ГЋГ’ГЋГѓГђГЂГ”")
+    imgui.TextColored(t.accent, fa.ICON_DESKTOP .. u8" ФОТОГРАФ")
     imgui.Spacing()
 
     local pushed = 0
@@ -2334,7 +2334,7 @@ local function drawPhotographerTab(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГѓГ Г«ГҐГ°ГҐГї##photo_sub_gallery", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Галерея##photo_sub_gallery", imgui.ImVec2(140, 30)) then
         photographer_subtab = "gallery"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -2347,7 +2347,7 @@ local function drawPhotographerTab(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГЋГІГ·ВёГІГ»##photo_sub_reports", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Отчёты##photo_sub_reports", imgui.ImVec2(140, 30)) then
         photographer_subtab = "reports"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -2363,9 +2363,9 @@ end
 
 local tracker_subtab = "radius" -- "radius" | "reports"
 
--- ---------- ГЏГ®Г¤Г±Г·ВёГІ ГЁГЈГ°Г®ГЄГ®Гў Гў Г°Г Г¤ГЁГіГ±ГҐ + ГІГ Г©Г¬ГҐГ° ----------
+-- ---------- Подсчёт игроков в радиусе + таймер ----------
 tracker_active  = false
-TRACKER_RADIUS = 300 -- Г¬ГҐГІГ°Г®Гў, Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г»Г© Г°Г Г¤ГЁГіГ± Г±ГІГ°ГЁГ¬Г  ГЁГЈГ°Г®ГЄГ®Гў
+TRACKER_RADIUS = 300 -- метров, максимальный радиус стрима игроков
 tracker_players = {} -- [pid] = { nickname=, totalSeconds=, inRadius=, lastTick= }
 tracker_last_update = 0
 
@@ -2376,7 +2376,7 @@ local function formatDuration(sec)
     return string.format("%02d:%02d", m, s)
 end
 
--- Г¤ВёГ°ГЈГ ГҐГІГ±Гї Г°Г Г§ Гў Г±ГҐГЄГіГ­Г¤Гі ГЁГ§ main(), Г°Г ГЎГ®ГІГ ГҐГІ Г¤Г Г¦ГҐ ГҐГ±Г«ГЁ ГўГЄГ«Г Г¤ГЄГ  Г±ГҐГ©Г·Г Г± Г§Г ГЄГ°Г»ГІГ 
+-- дёргается раз в секунду из main(), работает даже если вкладка сейчас закрыта
 local function updateTrackerRadius()
     local myX, myY, myZ = getCharCoordinates(playerPed)
     local seenNow = {}
@@ -2424,21 +2424,21 @@ local function drawTrackerRadiusTab(t)
     if tracker_active then
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
         imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.35, 0.35, 1.0))
-        if imgui.Button(fa.ICON_TIMES .. u8" ГЋГ±ГІГ Г­Г®ГўГЁГІГј Г±ГЎГ®Г°##tracker_toggle", imgui.ImVec2(200, 32)) then
+        if imgui.Button(fa.ICON_TIMES .. u8" Остановить сбор##tracker_toggle", imgui.ImVec2(200, 32)) then
             tracker_active = false
         end
         imgui.PopStyleColor(2)
     else
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.25, 0.65, 0.35, 1.0))
         imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.35, 0.75, 0.45, 1.0))
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" ГЌГ Г·Г ГІГј Г±ГЎГ®Г°##tracker_toggle", imgui.ImVec2(200, 32)) then
+        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##tracker_toggle", imgui.ImVec2(200, 32)) then
             tracker_active = true
         end
         imgui.PopStyleColor(2)
     end
 
     imgui.SameLine()
-    if imgui.Button(u8"Г‘ГЎГ°Г®Г±ГЁГІГј##tracker_reset", imgui.ImVec2(120, 32)) then
+    if imgui.Button(u8"Сбросить##tracker_reset", imgui.ImVec2(120, 32)) then
         tracker_players = {}
     end
 
@@ -2449,7 +2449,7 @@ local function drawTrackerRadiusTab(t)
     table.sort(ids)
 
     if #ids == 0 then
-        imgui.TextColored(t.textDim, u8"ГЏГ®ГЄГ  Г­ГЁГЄГІГ® Г­ГҐ ГЇГ®ГЇГ Г« Гў Г°Г Г¤ГЁГіГ±.")
+        imgui.TextColored(t.textDim, u8"Пока никто не попал в радиус.")
         return
     end
 
@@ -2470,7 +2470,7 @@ local function drawTrackerRadiusTab(t)
 end
 
 -- ============================================================
---  ГЋГ’Г—ВЁГ’Г› Г‘Г‹Г…Г„ГџГ™Г…ГѓГЋ: ГµГ°Г Г­ГҐГ­ГЁГҐ
+--  ОТЧЁТЫ СЛЕДЯЩЕГО: хранение
 --  moonloader\config\TRPcomm Manager Config\tracker_reports\index.ini
 -- ============================================================
 local defaultTrackerReportsIndex = { reports = { count = "0" } }
@@ -2513,7 +2513,7 @@ local function deleteTrackerReport(idx)
     saveTrackerReportsIndex()
 end
 
--- Г§Г ГЈГ°ГіГ¦Г ГҐГ¬ Г±ГЇГЁГ±Г®ГЄ ГЇГ°ГЁ ГЇГҐГ°ГўГ®Г¬ Г§Г ГЇГіГ±ГЄГҐ
+-- загружаем список при первом запуске
 local trackerReportsCount = tonumber(trackerReportsIndexIni.reports.count) or 0
 for i = 1, trackerReportsCount do
     local id        = trackerReportsIndexIni.reports["report" .. i .. "_id"]
@@ -2539,7 +2539,7 @@ for i = 1, trackerReportsCount do
     end
 end
 
--- ---------- Г”Г®Г°Г¬Г  Г±Г®Г§Г¤Г Г­ГЁГї Г®ГІГ·ВёГІГ  ----------
+-- ---------- Форма создания отчёта ----------
 local tracker_report_form_open = false
 local tracker_report_name = imgui.ImBuffer("", 64)
 
@@ -2554,28 +2554,28 @@ local function drawTrackerCreateReportForm(t)
     pushThemeRounding()
 
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"ГЌГ®ГўГ»Г© Г®ГІГ·ВёГІ##tracker_report_form", open,
+    imgui.Begin(u8"Новый отчёт##tracker_report_form", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
     if not open.v then tracker_report_form_open = false end
 
-    imgui.TextColored(t.textDim, u8"ГЌГ Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ :")
+    imgui.TextColored(t.textDim, u8"Название ивента:")
     imgui.PushItemWidth(380)
     imgui.InputText("##tracker_report_name", tracker_report_name)
     imgui.PopItemWidth()
 
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Г„Г ГІГ  ГЁ ГўГ°ГҐГ¬Гї: " .. os.date("%d.%m.%Y  %H:%M"))
+    imgui.TextColored(t.textDim, u8"Дата и время: " .. os.date("%d.%m.%Y  %H:%M"))
 
     imgui.Spacing()
     local count = 0
     for _ in pairs(tracker_players) do count = count + 1 end
-    imgui.TextColored(t.textDim, u8"Г€ГЈГ°Г®ГЄГ®Гў Г±Г®ГЎГ°Г Г­Г®: " .. count)
+    imgui.TextColored(t.textDim, u8"Игроков собрано: " .. count)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    if imgui.Button(u8"Г‘Г®ГµГ°Г Г­ГЁГІГј Г®ГІГ·ВёГІ##tracker_report_save", imgui.ImVec2(180, 30)) then
+    if imgui.Button(u8"Сохранить отчёт##tracker_report_save", imgui.ImVec2(180, 30)) then
         local nameText = u8:decode(tracker_report_name.v)
-        if nameText == "" then nameText = u8"ГЃГҐГ§ Г­Г Г§ГўГ Г­ГЁГї" end
+        if nameText == "" then nameText = u8"Без названия" end
 
         local players = {}
         for pid, entry in pairs(tracker_players) do
@@ -2593,7 +2593,7 @@ local function drawTrackerCreateReportForm(t)
         tracker_report_form_open = false
     end
     imgui.SameLine()
-    if imgui.Button(u8"ГЋГІГ¬ГҐГ­Г ##tracker_report_cancel", imgui.ImVec2(120, 30)) then
+    if imgui.Button(u8"Отмена##tracker_report_cancel", imgui.ImVec2(120, 30)) then
         tracker_report_form_open = false
     end
 
@@ -2602,7 +2602,7 @@ local function drawTrackerCreateReportForm(t)
     imgui.PopStyleColor(THEME_COLOR_COUNT)
 end
 
--- ---------- ГЋГЄГ­Г® ГЇГ°Г®Г±Г¬Г®ГІГ°Г  Г®ГІГ·ВёГІГ  ----------
+-- ---------- Окно просмотра отчёта ----------
 local tracker_report_viewer_open = false
 local tracker_report_viewer_idx = nil
 
@@ -2629,7 +2629,7 @@ local function drawTrackerReportViewer(t)
 
     imgui.BeginChild("TrackerReportPlayers", imgui.ImVec2(0, 0), false)
         if #r.players == 0 then
-            imgui.TextColored(t.textDim, u8"Г‘ГЇГЁГ±Г®ГЄ ГЇГіГ±ГІ.")
+            imgui.TextColored(t.textDim, u8"Список пуст.")
         end
         for i, p in ipairs(r.players) do
             imgui.BeginChild("trp_" .. i, imgui.ImVec2(0, 32), true)
@@ -2647,21 +2647,21 @@ local function drawTrackerReportViewer(t)
 end
 
 local function drawTrackerReportsTab(t)
-    if imgui.Button(fa.ICON_BULLHORN .. u8" Г‘Г®Г§Г¤Г ГІГј Г®ГІГ·ВёГІ##tracker_create_report", imgui.ImVec2(180, 32)) then
+    if imgui.Button(fa.ICON_BULLHORN .. u8" Создать отчёт##tracker_create_report", imgui.ImVec2(180, 32)) then
         tracker_report_form_open = true
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
     if #trackerReports == 0 then
-        imgui.TextColored(t.textDim, u8"ГЋГІГ·ВёГІГ®Гў ГЇГ®ГЄГ  Г­ГҐГІ.")
+        imgui.TextColored(t.textDim, u8"Отчётов пока нет.")
         return
     end
 
     for i = #trackerReports, 1, -1 do
         local r = trackerReports[i]
         imgui.PushID("tracker_report_" .. i)
-        local label = r.event .. u8"   |   Г‚Г°ГҐГ¬Гї " .. os.date("%H:%M", r.time) .. u8"   |   Г„Г ГІГ  " .. os.date("%d.%m.%Y", r.time)
+        local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time)
         if imgui.Button(label, imgui.ImVec2(-1, 32)) then
             tracker_report_viewer_open = true
             tracker_report_viewer_idx = i
@@ -2675,14 +2675,14 @@ local function drawTrackerReportsTab(t)
 end
 
 local CURATOR_SECTIONS = {
-    u8"Г‘ГЎГ®Г° ГіГ·Г Г±ГІГ­ГЁГЄГ®Гў ГЁГўГҐГ­ГІГ ",
-    u8"ГЂГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ ГЄГіГ°Г ГІГ®Г°Г®Гў Г­Г  ГЁГўГҐГ­ГІГҐ",
-    u8"ГЂГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ Г ГЄГІВёГ°Г®Гў Г­Г  ГЁГўГҐГ­ГІГҐ",
-    u8"ГЊГҐГ­ГҐГ¤Г¦ГҐГ° ГўГ»Г¤Г Г·ГЁ Г°Г®Г«ГҐГ© Г ГЄГІВёГ°Г Г¬",
+    u8"Сбор участников ивента",
+    u8"Автозаполнение кураторов на ивенте",
+    u8"Автозаполнение актёров на ивенте",
+    u8"Менеджер выдачи ролей актёрам",
 }
 local curators_selected_section = 1
 
--- ГЇГіГ­ГЄГІ 1: Г±ГІГ Г°Г»Г© ГґГіГ­ГЄГ¶ГЁГ®Г­Г Г« "ГђГ Г¤ГЁГіГ±"/"ГЋГІГ·ВёГІГ­Г®Г±ГІГј" Г¶ГҐГ«ГЁГЄГ®Г¬, ГЎГҐГ§ ГЁГ§Г¬ГҐГ­ГҐГ­ГЁГ©
+-- пункт 1: старый функционал "Радиус"/"Отчётность" целиком, без изменений
 local function drawCuratorsCollectSection(t)
     local pushed = 0
     if tracker_subtab == "radius" then
@@ -2690,7 +2690,7 @@ local function drawCuratorsCollectSection(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГђГ Г¤ГЁГіГ±##tracker_sub_radius", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Радиус##tracker_sub_radius", imgui.ImVec2(140, 30)) then
         tracker_subtab = "radius"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -2703,7 +2703,7 @@ local function drawCuratorsCollectSection(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"ГЋГІГ·ВёГІГ­Г®Г±ГІГј##tracker_sub_reports", imgui.ImVec2(140, 30)) then
+    if imgui.Button(u8"Отчётность##tracker_sub_reports", imgui.ImVec2(140, 30)) then
         tracker_subtab = "reports"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -2718,7 +2718,7 @@ local function drawCuratorsCollectSection(t)
 end
 
 -- ============================================================
---  ГЉГ“ГђГЂГ’ГЋГђГ›: Г ГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ ГЇГ®Г±ГҐГ№Г ГҐГ¬Г®Г±ГІГЁ (ГЇГіГ­ГЄГІ 2)
+--  КУРАТОРЫ: автозаполнение посещаемости (пункт 2)
 -- ============================================================
 local CURATOR_LIST_URL = "https://script.google.com/macros/s/AKfycbwhudcprJVYxSnMN0f57kaFGD9O4Fy3nPpGJwztmywrZL5CZCHT8M9EEQE2vaxGiQFn2g/exec"
 local CURATOR_LIST_PATH = "moonloader\\config\\curators.txt"
@@ -2726,7 +2726,7 @@ local CURATOR_LIST_PATH = "moonloader\\config\\curators.txt"
 curator_list = {}
 curator_active = false
 curator_event_name = imgui.ImBuffer("", 64)
-curator_captured = {}       -- Г±ГЇГЁГ±Г®ГЄ Г­ГЁГЄГ®Гў (raw CP1251)
+curator_captured = {}       -- список ников (raw CP1251)
 curator_last_scan = 0
 curator_list_loading = false
 
@@ -2776,7 +2776,7 @@ local function scanForCurators()
                 end
                 if not already then
                     curator_captured[#curator_captured + 1] = name
-                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЉГіГ°Г ГІГ®Г° Г§Г ГґГЁГЄГ±ГЁГ°Г®ГўГ Г­: {5B85C4}' .. name, -1)
+                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Куратор зафиксирован: {5B85C4}' .. name, -1)
                 end
             end
         end
@@ -2786,7 +2786,7 @@ end
 local function sendCuratorReport()
     curator_active = false
     if #curator_captured == 0 then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЉГіГ°Г ГІГ®Г°Г» Г­ГҐ Г­Г Г©Г¤ГҐГ­Г», Г®ГІГЇГ°Г ГўГЄГ  Г®ГІГ¬ГҐГ­ГҐГ­Г .', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Кураторы не найдены, отправка отменена.', -1)
         return
     end
 
@@ -2795,30 +2795,30 @@ local function sendCuratorReport()
     local finalUrl = string.format("%s?event=%s&nicknames=%s",
         CURATOR_LIST_URL, encodeUrlComponent(u8(eventText)), encodeUrlComponent(u8(nicksString)))
 
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЋГІГЇГ°Г ГўГЄГ  Г®ГІГ·ВёГІГ  ГЇГ® ГЄГіГ°Г ГІГ®Г°Г Г¬...', -1)
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка отчёта по кураторам...', -1)
     downloadUrlToFile(finalUrl, "moonloader\\config\\trp_temp.txt", function(id, status)
         if status == 6 then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Г„Г Г­Г­Г»ГҐ ГЇГ® ГЄГіГ°Г ГІГ®Г°Г Г¬ Г§Г Г­ГҐГ±ГҐГ­Г» Гў ГІГ ГЎГ«ГЁГ¶Гі.', -1)
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Данные по кураторам занесены в таблицу.', -1)
             curator_captured = {}
         else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГёГЁГЎГЄГ  Г®ГІГЇГ°Г ГўГЄГЁ Г®ГІГ·ВёГІГ  ГЇГ® ГЄГіГ°Г ГІГ®Г°Г Г¬.', -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки отчёта по кураторам.', -1)
         end
     end)
 end
 
 local function drawCuratorsFillCuratorsSection(t)
-    imgui.TextColored(t.accent, u8"ГЂГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ ГЄГіГ°Г ГІГ®Г°Г®Гў")
+    imgui.TextColored(t.accent, u8"Автозаполнение кураторов")
     imgui.Spacing()
 
-    if imgui.Button(fa.ICON_RANDOM .. u8" ГЋГЎГ­Г®ГўГЁГІГј Г±ГЇГЁГ±Г®ГЄ ГЄГіГ°Г ГІГ®Г°Г®Гў##curator_list_refresh", imgui.ImVec2(230, 28)) then
+    if imgui.Button(fa.ICON_RANDOM .. u8" Обновить список кураторов##curator_list_refresh", imgui.ImVec2(230, 28)) then
         if not curator_list_loading then updateCuratorList() end
     end
     imgui.SameLine()
-    imgui.TextColored(t.textDim, u8"Г‚ Г±ГЇГЁГ±ГЄГҐ: " .. #curator_list)
+    imgui.TextColored(t.textDim, u8"В списке: " .. #curator_list)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"ГЌГ Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ :")
+    imgui.TextColored(t.textDim, u8"Название ивента:")
     imgui.PushItemWidth(300)
     imgui.InputText("##curator_event_name", curator_event_name)
     imgui.PopItemWidth()
@@ -2826,30 +2826,30 @@ local function drawCuratorsFillCuratorsSection(t)
     imgui.Spacing()
 
     if curator_active then
-        if imgui.Button(fa.ICON_BULLHORN .. u8" Г‡Г ГўГҐГ°ГёГЁГІГј ГЁ Г®ГІГЇГ°Г ГўГЁГІГј##curator_finish", imgui.ImVec2(230, 32)) then
+        if imgui.Button(fa.ICON_BULLHORN .. u8" Завершить и отправить##curator_finish", imgui.ImVec2(230, 32)) then
             sendCuratorReport()
         end
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8"Г€Г¤ВёГІ Г±ГЎГ®Г°...")
+        imgui.TextColored(t.textDim, u8"Идёт сбор...")
     else
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" ГЌГ Г·Г ГІГј Г±ГЎГ®Г°##curator_start", imgui.ImVec2(230, 32)) then
+        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##curator_start", imgui.ImVec2(230, 32)) then
             local nameText = u8:decode(curator_event_name.v)
             if nameText == "" then
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘Г­Г Г·Г Г«Г  ГіГЄГ Г¦ГЁ Г­Г Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ .', -1)
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала укажи название ивента.', -1)
             else
                 curator_active = true
                 curator_captured = {}
-                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЊГ®Г­ГЁГІГ®Г°ГЁГ­ГЈ ГЄГіГ°Г ГІГ®Г°Г®Гў Г§Г ГЇГіГ№ГҐГ­: ' .. nameText, -1)
+                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Мониторинг кураторов запущен: ' .. nameText, -1)
             end
         end
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"Г‡Г ГґГЁГЄГ±ГЁГ°Г®ГўГ Г­Г­Г»ГҐ ГЄГіГ°Г ГІГ®Г°Г»:")
+    imgui.TextColored(t.textDim, u8"Зафиксированные кураторы:")
     imgui.Spacing()
     if #curator_captured == 0 then
-        imgui.TextColored(t.textDim, u8"ГЏГ®ГЄГ  Г­ГЁГЄГ®ГЈГ®.")
+        imgui.TextColored(t.textDim, u8"Пока никого.")
     end
     for i, name in ipairs(curator_captured) do
         imgui.Text(i .. ". " .. name)
@@ -2857,17 +2857,17 @@ local function drawCuratorsFillCuratorsSection(t)
 end
 
 -- ============================================================
---  ГЉГ“ГђГЂГ’ГЋГђГ›: Г ГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ ГЇГ®Г±ГҐГ№Г ГҐГ¬Г®Г±ГІГЁ Г ГЄГІВёГ°Г®Гў (ГЇГіГ­ГЄГІ 3)
+--  КУРАТОРЫ: автозаполнение посещаемости актёров (пункт 3)
 -- ============================================================
 local ACTORS_GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzAeXxqpPiaK70P9OqI0EgdpzoM0skt-84xiYzLR8Sp5cLLfZMwRsssx4APiaq2pca1eQ/exec"
 
 actors_event_name = imgui.ImBuffer("", 64)
 actors_active     = false
-actors_captured   = {}      -- Г±ГЇГЁГ±Г®ГЄ Г­ГЁГЄГ®Гў (raw CP1251)
+actors_captured   = {}      -- список ников (raw CP1251)
 
 local function sendActorsReport()
     if #actors_captured == 0 then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘ГЇГЁГ±Г®ГЄ Г ГЄГІВёГ°Г®Гў ГЇГіГ±ГІ, Г®ГІГЇГ°Г ГўГЄГ  Г®ГІГ¬ГҐГ­ГҐГ­Г .', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Список актёров пуст, отправка отменена.', -1)
         return
     end
 
@@ -2878,7 +2878,7 @@ local function sendActorsReport()
     end
     local json_data = cjson.encode({ event = u8(eventText), members = membersUtf8 })
 
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЋГІГЇГ°Г ГўГЄГ  Г¤Г Г­Г­Г»Гµ ГЇГ® Г ГЄГІВёГ°Г Г¬...', -1)
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка данных по актёрам...', -1)
     lua_thread.create(function()
         local ok, response = pcall(requests.post, ACTORS_GOOGLE_URL, {
             headers = { ["Content-Type"] = "application/json; charset=UTF-8" },
@@ -2887,15 +2887,15 @@ local function sendActorsReport()
         })
 
         if not ok then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГёГЁГЎГЄГ  Г®ГІГЇГ°Г ГўГЄГЁ! ГЏГ°Г®ГўГҐГ°Гј ГЁГ­ГІГҐГ°Г­ГҐГІ ГЁГ«ГЁ URL.', -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки! Проверь интернет или URL.', -1)
             return
         end
 
         if response.status_code == 200 then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Г„Г Г­Г­Г»ГҐ ГЇГ® Г ГЄГІВёГ°Г Г¬ Г§Г Г­ГҐГ±ГҐГ­Г» Гў ГІГ ГЎГ«ГЁГ¶Гі.', -1)
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Данные по актёрам занесены в таблицу.', -1)
             actors_captured = {}
         else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘ГҐГ°ГўГҐГ° ГўГҐГ°Г­ГіГ« Г®ГёГЁГЎГЄГі ' .. tostring(response.status_code), -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сервер вернул ошибку ' .. tostring(response.status_code), -1)
         end
     end)
 end
@@ -2903,13 +2903,13 @@ end
 local function startActorsCollection()
     local nameText = u8:decode(actors_event_name.v)
     if nameText == "" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘Г­Г Г·Г Г«Г  ГіГЄГ Г¦ГЁ Г­Г Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ .', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала укажи название ивента.', -1)
         return
     end
 
     actors_active   = true
     actors_captured = {}
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Г‘ГЎГ®Г° Г ГЄГІВёГ°Г®Гў Г§Г ГЇГіГ№ГҐГ­: ' .. nameText, -1)
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Сбор актёров запущен: ' .. nameText, -1)
     sampSendChat("/rwave members")
 
     lua_thread.create(function()
@@ -2920,10 +2920,10 @@ local function startActorsCollection()
 end
 
 local function drawCuratorsFillActorsSection(t)
-    imgui.TextColored(t.accent, u8"ГЂГўГІГ®Г§Г ГЇГ®Г«Г­ГҐГ­ГЁГҐ Г ГЄГІВёГ°Г®Гў")
+    imgui.TextColored(t.accent, u8"Автозаполнение актёров")
     imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"ГЌГ Г§ГўГ Г­ГЁГҐ ГЁГўГҐГ­ГІГ :")
+    imgui.TextColored(t.textDim, u8"Название ивента:")
     imgui.PushItemWidth(300)
     imgui.InputText("##actors_event_name", actors_event_name)
     imgui.PopItemWidth()
@@ -2931,19 +2931,19 @@ local function drawCuratorsFillActorsSection(t)
     imgui.Spacing()
 
     if actors_active then
-        imgui.TextColored(t.textDim, u8"Г€Г¤ВёГІ Г±ГЎГ®Г°...")
+        imgui.TextColored(t.textDim, u8"Идёт сбор...")
     else
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" ГЌГ Г·Г ГІГј Г±ГЎГ®Г°##actors_start", imgui.ImVec2(230, 32)) then
+        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##actors_start", imgui.ImVec2(230, 32)) then
             startActorsCollection()
         end
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"Г‡Г ГґГЁГЄГ±ГЁГ°Г®ГўГ Г­Г­Г»ГҐ Г ГЄГІВёГ°Г»:")
+    imgui.TextColored(t.textDim, u8"Зафиксированные актёры:")
     imgui.Spacing()
     if #actors_captured == 0 then
-        imgui.TextColored(t.textDim, u8"ГЏГ®ГЄГ  Г­ГЁГЄГ®ГЈГ®.")
+        imgui.TextColored(t.textDim, u8"Пока никого.")
     end
     for i, name in ipairs(actors_captured) do
         imgui.Text(i .. ". " .. name)
@@ -2951,15 +2951,15 @@ local function drawCuratorsFillActorsSection(t)
 end
 
 local function drawCuratorsRoleManagerSection(t)
-    imgui.TextColored(t.textDim, u8"ГђГ Г§Г¤ГҐГ« Гў Г°Г Г§Г°Г ГЎГ®ГІГЄГҐ.")
+    imgui.TextColored(t.textDim, u8"Раздел в разработке.")
 end
 
 local function drawTrackerTab(t)
-    imgui.TextColored(t.accent, fa.ICON_CROSSHAIRS .. u8" ГЉГ“ГђГЂГ’ГЋГђГ›")
+    imgui.TextColored(t.accent, fa.ICON_CROSSHAIRS .. u8" КУРАТОРЫ")
     imgui.Separator()
     imgui.Spacing()
 
-    -- ------- Г«ГҐГўГ Гї ГЄГ®Г«Г®Г­ГЄГ : Г±ГЇГЁГ±Г®ГЄ Г°Г Г§Г¤ГҐГ«Г®Гў -------
+    -- ------- левая колонка: список разделов -------
     imgui.BeginChild("CuratorsList", imgui.ImVec2(220, 0), true)
         for i, name in ipairs(CURATOR_SECTIONS) do
             local isActive = (curators_selected_section == i)
@@ -2979,7 +2979,7 @@ local function drawTrackerTab(t)
 
     imgui.SameLine()
 
-    -- ------- ГЇГ°Г ГўГ Гї ГЄГ®Г«Г®Г­ГЄГ : Г±Г®Г¤ГҐГ°Г¦ГЁГ¬Г®ГҐ ГўГ»ГЎГ°Г Г­Г­Г®ГЈГ® Г°Г Г§Г¤ГҐГ«Г  -------
+    -- ------- правая колонка: содержимое выбранного раздела -------
     imgui.BeginChild("CuratorsContent", imgui.ImVec2(0, 0), true)
         if curators_selected_section == 1 then
             drawCuratorsCollectSection(t)
@@ -2994,13 +2994,13 @@ local function drawTrackerTab(t)
 end
 
 drawGalleryTab = function(t)
-    if imgui.Button(fa.ICON_RANDOM .. u8" ГЋГЎГ­Г®ГўГЁГІГј##gallery_refresh", imgui.ImVec2(150, 28)) then
+    if imgui.Button(fa.ICON_RANDOM .. u8" Обновить##gallery_refresh", imgui.ImVec2(150, 28)) then
         scanGallery()
     end
     imgui.SameLine()
-    imgui.TextColored(t.textDim, u8"Г‚Г»ГЎГ°Г Г­Г®: " .. gallerySelectedCount() .. "/" .. GALLERY_MAX_SELECT)
+    imgui.TextColored(t.textDim, u8"Выбрано: " .. gallerySelectedCount() .. "/" .. GALLERY_MAX_SELECT)
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"ГЏГ ГЇГЄГ : " .. SCREENS_DIR)
+    imgui.TextColored(t.textDim, u8"Папка: " .. SCREENS_DIR)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
@@ -3009,7 +3009,7 @@ drawGalleryTab = function(t)
     end
 
     if #gallery_files == 0 then
-        imgui.TextColored(t.textDim, u8"Г‘ГЄГ°ГЁГ­ГёГ®ГІГ» Г­ГҐ Г­Г Г©Г¤ГҐГ­Г» (ГЁГ«ГЁ ГЇГ ГЇГЄГ  Г­ГҐГ¤Г®Г±ГІГіГЇГ­Г ).")
+        imgui.TextColored(t.textDim, u8"Скриншоты не найдены (или папка недоступна).")
         return
     end
 
@@ -3053,33 +3053,33 @@ drawGalleryTab = function(t)
                             if gallerySelectedCount() < GALLERY_MAX_SELECT then
                                 gallery_selected[filename] = true
                             else
-                                sampAddChatMessage(u8"{FF6B6B}[TRPcomm] {FFFFFF}ГЊГ®Г¦Г­Г® ГўГ»ГЎГ°Г ГІГј Г­ГҐ ГЎГ®Г«ГҐГҐ 10 Г±ГЄГ°ГЁГ­ГёГ®ГІГ®Гў.", -1)
+                                sampAddChatMessage(u8"{FF6B6B}[TRPcomm] {FFFFFF}Можно выбрать не более 10 скриншотов.", -1)
                             end
                         end
                     end
 
                     if imgui.BeginPopupContextItem("##gctx") then
                         if isSelected then
-                            if imgui.MenuItem(fa.ICON_TIMES .. u8" Г‘Г­ГїГІГј ГўГ»ГЎГ®Г°") then
+                            if imgui.MenuItem(fa.ICON_TIMES .. u8" Снять выбор") then
                                 gallery_selected[filename] = nil
                             end
                         else
-                            if imgui.MenuItem(fa.ICON_STAR .. u8" Г‚Г»ГЎГ°Г ГІГј") then
+                            if imgui.MenuItem(fa.ICON_STAR .. u8" Выбрать") then
                                 if gallerySelectedCount() < GALLERY_MAX_SELECT then
                                     gallery_selected[filename] = true
                                 else
-                                    sampAddChatMessage(u8"{FF6B6B}[TRPcomm] {FFFFFF}ГЊГ®Г¦Г­Г® ГўГ»ГЎГ°Г ГІГј Г­ГҐ ГЎГ®Г«ГҐГҐ 10 Г±ГЄГ°ГЁГ­ГёГ®ГІГ®Гў.", -1)
+                                    sampAddChatMessage(u8"{FF6B6B}[TRPcomm] {FFFFFF}Можно выбрать не более 10 скриншотов.", -1)
                                 end
                             end
                         end
                         imgui.Separator()
-                        if imgui.MenuItem(fa.ICON_BULLHORN .. u8" ГЋГІГЇГ°Г ГўГЁГІГј Г®ГІГ·ВёГІ") then
+                        if imgui.MenuItem(fa.ICON_BULLHORN .. u8" Отправить отчёт") then
                             local filesToSend = {}
                             for fname in pairs(gallery_selected) do
                                 filesToSend[#filesToSend + 1] = fname
                             end
                             if #filesToSend == 0 then
-                                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘Г­Г Г·Г Г«Г  ГўГ»ГЎГҐГ°ГЁ ГµГ®ГІГї ГЎГ» Г®Г¤ГЁГ­ Г±ГЄГ°ГЁГ­ГёГ®ГІ {5B85C4}(ГЏГЉГЊ -> Г‚Г»ГЎГ°Г ГІГј).', -1)
+                                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала выбери хотя бы один скриншот {5B85C4}(ПКМ -> Выбрать).', -1)
                             else
                                 gallery_pending_files = filesToSend
                                 gallery_send_form_open = true
@@ -3089,10 +3089,10 @@ drawGalleryTab = function(t)
                     end
                 elseif tex == false then
                     imgui.SetCursorPos(imgui.ImVec2(10, 55))
-                    imgui.TextColored(t.textDim, u8"Г­ГҐГІ ГЇГ°ГҐГўГјГѕ")
+                    imgui.TextColored(t.textDim, u8"нет превью")
                 else
                     imgui.SetCursorPos(imgui.ImVec2(10, 55))
-                    imgui.TextColored(t.textDim, u8"Г§Г ГЈГ°ГіГ§ГЄГ ...")
+                    imgui.TextColored(t.textDim, u8"загрузка...")
                 end
             imgui.EndChild()
 
@@ -3110,7 +3110,7 @@ drawGalleryTab = function(t)
         end
         imgui.SameLine()
     end
-    imgui.Text(u8"Г‘ГІГ°. " .. gallery_page .. " / " .. total_pages)
+    imgui.Text(u8"Стр. " .. gallery_page .. " / " .. total_pages)
     if gallery_page < total_pages then
         imgui.SameLine()
         if imgui.Button(fa.ICON_ARROW_RIGHT .. "##gal_next", imgui.ImVec2(40, 28)) then
@@ -3120,7 +3120,7 @@ drawGalleryTab = function(t)
 end
 
 -- ============================================================
---  ГЋГ’Г—ВЁГ’Г›: ГЁГµ ГµГ°Г Г­ГҐГ­ГЁГҐ
+--  ОТЧЁТЫ: их хранение
 --  moonloader\config\TRPcomm Manager Config\reports\index.ini
 -- ============================================================
 local defaultReportsIndex = { reports = { count = "0" } }
@@ -3129,7 +3129,7 @@ ensureIniFile(REPORTS_INDEX_PATH, "reports", { "count=0" })
 
 local reportsIndexIni = inicfg.load(defaultReportsIndex, REPORTS_INDEX_PATH) or defaultReportsIndex
 
-local reports = {} -- { {id=, event=(u8-ГІГҐГЄГ±ГІ), time=os.time(), files={filename, ...}}, ... }
+local reports = {} -- { {id=, event=(u8-текст), time=os.time(), files={filename, ...}}, ... }
 
 local function saveReportsIndex()
     local cfg = { reports = { count = tostring(#reports) } }
@@ -3159,7 +3159,7 @@ local function deleteReport(idx)
     saveReportsIndex()
 end
 
--- Г§Г ГЈГ°ГіГ¦Г ГҐГ¬ Г±ГЇГЁГ±Г®ГЄ Г®ГІГ·ВёГІГ®Гў ГЇГ°ГЁ ГЇГҐГ°ГўГ®Г¬ Г§Г ГЇГіГ±ГЄГҐ
+-- загружаем список отчётов при первом запуске
 local reportsCount = tonumber(reportsIndexIni.reports.count) or 0
 for i = 1, reportsCount do
     local id       = reportsIndexIni.reports["report" .. i .. "_id"]
@@ -3182,7 +3182,7 @@ for i = 1, reportsCount do
     end
 end
 
--- ---------- ГЋГЄГ­Г® ГЇГ°Г®Г±Г¬Г®ГІГ°Г  Г®ГІГ·ВёГІГ  ----------
+-- ---------- Окно просмотра отчёта ----------
 report_viewer_open = false
 report_viewer_idx = nil
 
@@ -3225,7 +3225,7 @@ local function drawReportViewer(t)
                     end
                 else
                     imgui.SetCursorPos(imgui.ImVec2(10, 40))
-                    imgui.TextColored(t.textDim, u8"Г­ГҐГІ ГґГ Г©Г«Г ")
+                    imgui.TextColored(t.textDim, u8"нет файла")
                 end
             imgui.EndChild()
             imgui.PopID()
@@ -3240,18 +3240,18 @@ local function drawReportViewer(t)
 end
 
 drawReportsTab = function(t)
-    imgui.TextColored(t.textDim, u8"Г€Г±ГІГ®Г°ГЁГї Г®ГІГЇГ°Г ГўГ«ГҐГ­Г­Г»Гµ Г®ГІГ·ВёГІГ®Гў:")
+    imgui.TextColored(t.textDim, u8"История отправленных отчётов:")
     imgui.Spacing()
 
     if #reports == 0 then
-        imgui.TextColored(t.textDim, u8"ГЋГІГ·ВёГІГ®Гў ГЇГ®ГЄГ  Г­ГҐГІ.")
+        imgui.TextColored(t.textDim, u8"Отчётов пока нет.")
         return
     end
 
     for i = #reports, 1, -1 do
         local r = reports[i]
         imgui.PushID("report_" .. i)
-        local label = r.event .. u8"   |   Г‚Г°ГҐГ¬Гї " .. os.date("%H:%M", r.time) .. u8"   |   Г„Г ГІГ  " .. os.date("%d.%m.%Y", r.time)
+        local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time)
         if imgui.Button(label, imgui.ImVec2(-1, 32)) then
             report_viewer_open = true
             report_viewer_idx = i
@@ -3265,7 +3265,7 @@ drawReportsTab = function(t)
 end
 
 -- ============================================================
---  ГЋГ’ГђГ€Г‘ГЋГ‚ГЉГЂ ГЋГЉГЌГЂ
+--  ОТРИСОВКА ОКНА
 -- ============================================================
 
 function imgui.BeforeDrawFrame()
@@ -3321,7 +3321,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPcomm MANAGER | ГЂГЄГІГіГ Г«ГјГ­Г Гї ГўГҐГ°Г±ГЁГї: 1.0")
+        imgui.TextColored(t.accent, u8 "TRPcomm MANAGER | Актуальная версия: 1.0")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -3330,7 +3330,7 @@ function imgui.OnDrawFrame()
         imgui.Separator()
         imgui.Spacing()
 
-        -- ---------- Г‘ГІГ°Г®ГЄГ  ГўГЄГ«Г Г¤Г®ГЄ (ГЄГ ГЄ Гў ГЎГ°Г ГіГ§ГҐГ°ГҐ) ----------
+        -- ---------- Строка вкладок (как в браузере) ----------
         imgui.BeginChild("TabStrip", imgui.ImVec2(0, 28), false)
             imgui.PushStyleVar(imgui.StyleVar.FrameRounding, 3.0)
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(10, 4))
@@ -3358,19 +3358,19 @@ function imgui.OnDrawFrame()
 
                 if imgui.IsItemHovered() then
                     if tb.closable then
-                        imgui.SetTooltip(tb.title .. u8" | Г‹ГЉГЊ вЂ” ГЋГІГЄГ°Г»ГІГј Г±ГІГ°Г Г­ГЁГ¶Гі | ГЉГ®Г«ВёГ±ГЁГЄГ® вЂ” Г‡Г ГЄГ°Г»ГІГј Г±ГІГ°Г Г­ГЁГ¶Гі")
+                        imgui.SetTooltip(tb.title .. u8" | ЛКМ — Открыть страницу | Колёсико — Закрыть страницу")
                     else
-                        imgui.SetTooltip(tb.title .. u8" | Г‹ГЉГЊ вЂ” ГЋГІГЄГ°Г»ГІГј Г±ГІГ°Г Г­ГЁГ¶Гі")
+                        imgui.SetTooltip(tb.title .. u8" | ЛКМ — Открыть страницу")
                     end
                 end
 
                 if tb.closable then
-                    -- Г§Г ГЄГ°Г»ГІГЁГҐ ГЄГ®Г«ВёГ±ГЁГЄГ®Г¬ Г¬Г»ГёГЁ
+                    -- закрытие колёсиком мыши
                     if imgui.IsItemClicked(2) then
                         closeIdx = i
                     end
 
-                    -- ГЇГҐГ°ГҐГІГ Г±ГЄГЁГўГ Г­ГЁГҐ Г‹ГЉГЊ Г¤Г«Гї Г±Г¬ГҐГ­Г» ГЇГ®Г°ГїГ¤ГЄГ  (Г­ГҐ Г¤Г ВёГ¬ ГіГІГ Г№ГЁГІГј Г­Г  Г¬ГҐГ±ГІГ® "Г„Г®Г¬Г ГёГ­ГҐГ©")
+                    -- перетаскивание ЛКМ для смены порядка (не даём утащить на место "Домашней")
                     if imgui.IsItemActive() and not imgui.IsItemHovered() then
                         local delta = imgui.GetMouseDragDelta(0)
                         if delta.x < -(w / 2) and i > 2 then
@@ -3395,15 +3395,15 @@ function imgui.OnDrawFrame()
 
             imgui.SameLine(imgui.GetWindowWidth() - 100)
             if imgui.Button(fa.ICON_CALENDAR, imgui.ImVec2(30, 22)) then
-                openTab("calendar", u8"ГЉГ Г«ГҐГ­Г¤Г Г°Гј")
+                openTab("calendar", u8"Календарь")
             end
             imgui.SameLine(0, 2)
             if imgui.Button(fa.ICON_STICKY_NOTE, imgui.ImVec2(30, 22)) then
-                openTab("notes", u8"ГЌГ®ГІГ ГІГЄГЁ")
+                openTab("notes", u8"Нотатки")
             end
             imgui.SameLine(0, 2)
             if imgui.Button(fa.ICON_COG, imgui.ImVec2(30, 22)) then
-                openTab("settings", u8"ГЌГ Г±ГІГ°Г®Г©ГЄГЁ")
+                openTab("settings", u8"Настройки")
             end
 
             imgui.PopStyleVar(2)
@@ -3413,7 +3413,7 @@ function imgui.OnDrawFrame()
 
         imgui.Spacing()
 
-                -- ---------- Г‘Г®Г¤ГҐГ°Г¦ГЁГ¬Г®ГҐ Г ГЄГІГЁГўГ­Г®Г© ГўГЄГ«Г Г¤ГЄГЁ ----------
+                -- ---------- Содержимое активной вкладки ----------
         local calendarShouldBeVisible = open_tabs[active_tab_idx] and (
             open_tabs[active_tab_idx].kind == "calendar"
             or open_tabs[active_tab_idx].kind == "hr"
@@ -3468,13 +3468,13 @@ end
 
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if ad_pending then
-        if dialogId == 3409 and title:find("Г‘Г®Г§Г¤Г Г­ГЁГҐ Г®ГЎГєГїГўГ«ГҐГ­ГЁГї") then
+        if dialogId == 3409 and title:find("Создание объявления") then
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
-        if dialogId == 3410 and title:find("ГЋГІГЇГ°Г ГўГЄГ  Г°ГҐГЄГ«Г Г¬Г» Г­Г  Г°Г Г¤ГЁГ®") then
+        if dialogId == 3410 and title:find("Отправка рекламы на радио") then
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}ГЋГЎГєГїГўГ«ГҐГ­ГЁГҐ Г®ГІГЇГ°Г ГўГ«ГҐГ­Г® Г­Г  Г¬Г®Г¤ГҐГ°Г Г¶ГЁГѕ.', -1)
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Объявление отправлено на модерацию.', -1)
             ad_pending = false
             ad_text.v = ""
             if ad_auto_send.v then
@@ -3484,7 +3484,7 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
         end
     end
 
-    if dialogId == 45 and text and text:find("Г‚Г ГёГҐ Г®ГЎГєГїГўГ«ГҐГ­ГЁГҐ") then
+    if dialogId == 45 and text and text:find("Ваше объявление") then
         sampSendDialogResponse(dialogId, 1, 65535, "")
         return false
     end
@@ -3492,14 +3492,14 @@ end
 
 sampev.onServerMessage = function(color, text)
     if ad_pending then
-        if text:find("ГЋГ¤Г­Г® ГЁГ§ ГўГ ГёГЁГµ Г®ГЎГєГїГўГ«ГҐГ­ГЁГ© ГіГ¦ГҐ Г­Г ГµГ®Г¤ГЁГІГ±Гї Гў Г®Г·ГҐГ°ГҐГ¤ГЁ Г­Г  Г¬Г®Г¤ГҐГ°Г Г¶ГЁГѕ") then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ГЋГ¤Г­Г® ГЁГ§ Г®ГЎГєГїГўГ«ГҐГ­ГЁГ© ГіГ¦ГҐ Гў Г®Г·ГҐГ°ГҐГ¤ГЁ Г­Г  Г¬Г®Г¤ГҐГ°Г Г¶ГЁГѕ.', -1)
+        if text:find("Одно из ваших объявлений уже находится в очереди на модерацию") then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Одно из объявлений уже в очереди на модерацию.', -1)
             ad_pending = false
-        elseif text:find("ГЌГҐГ«ГјГ§Гї Г®ГІГЇГ°Г ГўГ«ГїГІГј Г°ГҐГЄГ«Г Г¬Гі Г­Г  Г°Г Г¤ГЁГ® Г±Г«ГЁГёГЄГ®Г¬ Г·Г Г±ГІГ®") then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Г‘Г«ГЁГёГЄГ®Г¬ Г·Г Г±ГІГ® вЂ” ГЇГ®Г¤Г®Г¦Г¤ГЁ Г­ГҐГ¬Г­Г®ГЈГ® ГЁ ГЇГ®ГЇГ°Г®ГЎГіГ© Г±Г­Г®ГўГ .', -1)
+        elseif text:find("Нельзя отправлять рекламу на радио слишком часто") then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Слишком часто — подожди немного и попробуй снова.', -1)
             ad_pending = false
             if ad_auto_send.v then
-                local secs = tonumber(text:match("Г·ГҐГ°ГҐГ§ (%d+)"))
+                local secs = tonumber(text:match("через (%d+)"))
                 ad_next_send_time = os.time() + (secs and (secs + 2) or 60)
             end
         end
@@ -3507,7 +3507,7 @@ sampev.onServerMessage = function(color, text)
 
     if actors_active then
         local clean = text:gsub("{%x%x%x%x%x%x}", "")
-        local nick = clean:match("ГЌГЁГЄ%s+([%w_]+)")
+        local nick = clean:match("Ник%s+([%w_]+)")
         if nick then
             nick = nick:gsub("%.", "")
             actors_captured[#actors_captured + 1] = nick
@@ -3517,7 +3517,7 @@ sampev.onServerMessage = function(color, text)
 end
 
 -- ============================================================
---  Г’ГЋГ—ГЉГЂ Г‚Г•ГЋГ„ГЂ
+--  ТОЧКА ВХОДА
 -- ============================================================
 function main()
     repeat wait(0) until isSampAvailable()
@@ -3527,8 +3527,8 @@ function main()
 
     checkForUpdates()
 
-    sampAddChatMessage('{5B85C4}[TRPcomm Manager]{FFFFFF} Г„Г®ГЎГ°Г® ГЇГ®Г¦Г Г«Г®ГўГ ГІГј Г­Г  Г±ГҐГ°ГўГҐГ°, {5B85C4}' .. clientName .. '{FFFFFF}.', -1)
-    sampAddChatMessage('{FFFFFF}Г„Г«Гї Г ГЄГІГЁГўГ Г¶ГЁГЁ Г±ГЄГ°ГЁГЇГІГ  ГЁГ±ГЇГ®Г«ГјГ§ГіГ©ГІГҐ ГЄГ®Г¬Г Г­Г¤Гі вЂ” {5B85C4}/trpcomm {FFFFFF}ГЁГ«ГЁ {5B85C4}' .. hotkey_display.v .. '{FFFFFF}.', -1)
+    sampAddChatMessage('{5B85C4}[TRPcomm Manager]{FFFFFF} Добро пожаловать на сервер, {5B85C4}' .. clientName .. '{FFFFFF}.', -1)
+    sampAddChatMessage('{FFFFFF}Для активации скрипта используйте команду — {5B85C4}/trpcomm {FFFFFF}или {5B85C4}' .. hotkey_display.v .. '{FFFFFF}.', -1)
 
         sampRegisterChatCommand('trpcomm', function()
         main_window_state.v = not main_window_state.v
@@ -3578,7 +3578,7 @@ function main()
                             sampSendChat(string.format("/video %s", tpPass))
                         end
                     else
-                        sampAddChatMessage(u8"{FF6B6B}[TRPcomm] Г‘Г­Г Г·Г Г«Г  ГіГЄГ Г¦ГЁ Г·Г Г±ГІГ®ГІГі Г°Г Г¶ГЁГЁ Гў Г­Г Г±ГІГ°Г®Г©ГЄГ Гµ.", -1)
+                        sampAddChatMessage(u8"{FF6B6B}[TRPcomm] Сначала укажи частоту рации в настройках.", -1)
 
                     end
                 end
