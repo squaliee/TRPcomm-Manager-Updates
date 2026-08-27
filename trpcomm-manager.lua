@@ -63,22 +63,33 @@ local function checkForUpdates()
         local remoteVersion, downloadUrl = lines[1], lines[2]
         if not remoteVersion or not downloadUrl then return end
 
-        if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
+                if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
             sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
 
-            local ok2, response2 = pcall(requests.get, downloadUrl, { timeout = 20 })
-            if not ok2 or response2.status_code ~= 200 then
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось скачать обновление.', -1)
-                return
-            end
+            local tempPath = getWorkingDirectory() .. "\\moonloader\\trpcomm_update_tmp.lua"
+            os.remove(tempPath)
+            downloadUrlToFile(downloadUrl .. "?cb=" .. os.time(), tempPath, function() end)
+            wait(4000) -- статус-коды колбэка для этого хоста ненадёжны, поэтому просто ждём и потом проверяем файл руками
 
-            local fw = io.open(thisScript().path, "wb")
-            if fw then
-                fw:write(response2.text)
-                fw:close()
+            local fr = io.open(tempPath, "rb")
+            local content = fr and fr:read("*a")
+            if fr then fr:close() end
+
+            local looksValid = content
+                and #content > 5000
+                and content:find("function main()", 1, true)
+                and not content:find("\239\187\191", 1, true)   -- BOM — признак UTF-8 вместо CP1251
+                and not content:find("\208", 1, true)           -- байты UTF-8-кириллицы — тоже признак порчи
+                and not content:find("\209", 1, true)
+
+            if looksValid then
+                local targetPath = thisScript().path
+                os.remove(targetPath)
+                os.rename(tempPath, targetPath)
                 sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Скрипт успешно обновлён, перезайдите в игру чтобы применить изменения.', -1)
             else
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось записать файл обновления.', -1)
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Скачанный файл выглядит битым, обновление отменено — рабочий скрипт не тронут.', -1)
+                os.remove(tempPath)
             end
         end
     end)
