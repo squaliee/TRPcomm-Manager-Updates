@@ -19,11 +19,51 @@ sampev = require 'samp.events'
 requests = require 'requests'
 cjson = require 'cjson.safe'
 
-local GCAL_ID = "e750c65e6ebd96513d62dca03f7b23a0746137364a24d4daba502a4e555756bc@group.calendar.google.com"
-local GCAL_API_KEY = "AIzaSyBtsyCi9A0ikrclVl919OfPC2z5rlaHZs4"
-local TG_BOT_TOKEN = "8515415643:AAEOzuIFq1gJdWeRY27Ux4ItbdHzI9UOUEI"
-local TG_CHAT_ID = "-1003174705842"
-local TG_THREAD_ID = "9"
+GCAL_ID = "e750c65e6ebd96513d62dca03f7b23a0746137364a24d4daba502a4e555756bc@group.calendar.google.com"
+GCAL_API_KEY = "AIzaSyBtsyCi9A0ikrclVl919OfPC2z5rlaHZs4"
+TG_BOT_TOKEN = "8515415643:AAEOzuIFq1gJdWeRY27Ux4ItbdHzI9UOUEI"
+TG_CHAT_ID = "-1003174705842"
+TG_THREAD_ID = "9"
+
+-- ============================================================
+--  ДОСТУПЫ К РАЗДЕЛАМ
+-- ============================================================
+local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
+local ACCESS_SECTIONS = { "photographer", "tracker", "hr", "actors" }
+
+access_lists = {} -- access_lists["photographer"] = {"Nick_One", "Nick_Two"} ; nil = ещё не загружен
+
+local function loadAccessList(sectionKey)
+    lua_thread.create(function()
+        local url = ACCESS_BASE_URL .. "access_" .. sectionKey .. ".txt?cb=" .. os.time()
+        local ok, response = pcall(requests.get, url, { timeout = 15 })
+        if not ok or response.status_code ~= 200 then
+            access_lists[sectionKey] = {} -- не удалось загрузить — безопасный дефолт: доступа ни у кого нет
+            return
+        end
+
+        local list = {}
+        for nick in response.text:gmatch("[^,%s]+") do
+            list[#list + 1] = nick
+        end
+        access_lists[sectionKey] = list
+    end)
+end
+
+local function loadAllAccessLists()
+    for _, key in ipairs(ACCESS_SECTIONS) do
+        loadAccessList(key)
+    end
+end
+
+local function hasAccess(sectionKey)
+    local list = access_lists[sectionKey]
+    if not list then return false end
+    for _, nick in ipairs(list) do
+        if nick:lower() == clientName:lower() then return true end
+    end
+    return false
+end
 
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
@@ -49,12 +89,18 @@ local function isNewerVersion(remote, current)
     return false
 end
 
+local function normalizeRawUrl(url)
+    local user, repo, branch, path = url:match("^https?://github%.com/([^/]+)/([^/]+)/raw/refs/heads/([^/]+)/(.+)$")
+    if user then
+        return "https://raw.githubusercontent.com/" .. user .. "/" .. repo .. "/" .. branch .. "/" .. path
+    end
+    return url
+end
+
 local function checkForUpdates()
     lua_thread.create(function()
-        local ok, response = pcall(requests.get, UPDATE_MANIFEST_URL, { timeout = 15 })
-        if not ok or response.status_code ~= 200 then
-            return
-        end
+        local ok, response = pcall(requests.get, UPDATE_MANIFEST_URL .. "?cb=" .. os.time(), { timeout = 15 })
+        if not ok or response.status_code ~= 200 then return end
 
         local lines = {}
         for line in response.text:gmatch("[^\r\n]+") do
@@ -62,14 +108,27 @@ local function checkForUpdates()
         end
         local remoteVersion, downloadUrl = lines[1], lines[2]
         if not remoteVersion or not downloadUrl then return end
+        downloadUrl = normalizeRawUrl(downloadUrl)
 
-                if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
+        if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
             sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
 
-            local tempPath = getWorkingDirectory() .. "\\moonloader\\trpcomm_update_tmp.lua"
+            local tempPath = "moonloader\\trpcomm_update_tmp.lua"
             os.remove(tempPath)
             downloadUrlToFile(downloadUrl .. "?cb=" .. os.time(), tempPath, function() end)
-            wait(4000) -- статус-коды колбэка для этого хоста ненадёжны, поэтому просто ждём и потом проверяем файл руками
+
+            local lastSize, stableTicks, waitedMs = -1, 0, 0
+            while waitedMs < 20000 and stableTicks < 3 do
+                wait(500)
+                waitedMs = waitedMs + 500
+                local f = io.open(tempPath, "rb")
+                if f then
+                    local size = f:seek("end")
+                    f:close()
+                    stableTicks = (size == lastSize and size > 0) and (stableTicks + 1) or 0
+                    lastSize = size
+                end
+            end
 
             local fr = io.open(tempPath, "rb")
             local content = fr and fr:read("*a")
@@ -78,9 +137,7 @@ local function checkForUpdates()
             local looksValid = content
                 and #content > 5000
                 and content:find("function main()", 1, true)
-                and not content:find("\239\187\191", 1, true)   -- BOM — признак UTF-8 вместо CP1251
-                and not content:find("\208", 1, true)           -- байты UTF-8-кириллицы — тоже признак порчи
-                and not content:find("\209", 1, true)
+                and not content:find("\239\187\191", 1, true) -- BOM — признак UTF-8 вместо CP1251
 
             if looksValid then
                 local targetPath = thisScript().path
@@ -338,6 +395,10 @@ local defaultSettings = {
         radio_pass   = "",
         teleport_pass = "",
         send_as_document = "false",
+        acs_rem = "false",
+        acs_rem_me = "false",
+        remove_armour = "false",
+        delete_textdraw = "false",
     }
 }
 
@@ -359,6 +420,10 @@ else
         fw:write("radio_pass=\n")
         fw:write("teleport_pass=\n")
         fw:write("send_as_document=false\n")
+        fw:write("acs_rem=false\n")
+        fw:write("acs_rem_me=false\n")
+        fw:write("remove_armour=false\n")
+        fw:write("delete_textdraw=false\n")
         fw:close()
     end
 end
@@ -430,6 +495,30 @@ radio_pass = imgui.ImBuffer(u8(mainIni.settings.radio_pass or ""), 32)
 teleport_pass = imgui.ImBuffer(u8(mainIni.settings.teleport_pass or ""), 32)
 send_as_document = imgui.ImBool(boolFromSetting(mainIni.settings.send_as_document))
 
+acs_rem = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem))
+acs_rem_me = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem_me))
+remove_armour = imgui.ImBool(boolFromSetting(mainIni.settings.remove_armour))
+delete_textdraw = imgui.ImBool(boolFromSetting(mainIni.settings.delete_textdraw))
+
+local function deleteAllAcs(id)
+    local bs = raknetNewBitStream()
+    for i = 0, 7 do
+        raknetBitStreamWriteInt16(bs, id)
+        raknetBitStreamWriteInt32(bs, i)
+        raknetBitStreamWriteBool(bs, false)
+        raknetEmulRpcReceiveBitStream(113, bs)
+        raknetResetBitStream(bs)
+
+        raknetBitStreamWriteInt8(bs, 155)
+        raknetBitStreamWriteInt16(bs, id)
+        raknetBitStreamWriteInt32(bs, i)
+        raknetBitStreamWriteBool(bs, false)
+        raknetEmulPacketReceiveBitStream(220, bs)
+        raknetResetBitStream(bs)
+    end
+    raknetDeleteBitStream(bs)
+end
+
 local function saveSettings()
     local cfg = {
         settings = {
@@ -446,6 +535,10 @@ local function saveSettings()
             radio_pass   = u8:decode(radio_pass.v),
             teleport_pass = u8:decode(teleport_pass.v),
             send_as_document = tostring(send_as_document.v),
+            acs_rem = tostring(acs_rem.v),
+            acs_rem_me = tostring(acs_rem_me.v),
+            remove_armour = tostring(remove_armour.v),
+            delete_textdraw = tostring(delete_textdraw.v),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -496,6 +589,20 @@ trpcomm_logo_checked = false
 
 upcoming_event_name = u8"Пока не подключено"
 upcoming_event_time = "--:--"
+upcoming_event_timestamp = nil
+
+-- Toast-уведомления (напоминания о скором начале ивента)
+toast_text = ""
+toast_timer = 0
+toast_font = nil
+event_notify_30_sent = false
+event_notify_10_sent = false
+event_notify_last_check = 0
+
+function showToast(text)
+    toast_text = text
+    toast_timer = 150
+end
 
 local function loadLogoTexture()
     if trpcomm_logo_checked then return trpcomm_logo_texture end
@@ -656,6 +763,73 @@ local function triggerNextAdSend()
     end
 end
 
+-- ---------- Кампания к ивенту (норма объяв до начала, с ускорением по мере приближения) ----------
+campaign_active           = imgui.ImBool(false)
+campaign_target_count     = imgui.ImInt(20)
+campaign_window_hour      = imgui.ImInt(12)
+campaign_window_minute    = imgui.ImInt(0)
+campaign_ad_text          = imgui.ImBuffer("", AD_TEXT_MAX)
+campaign_selected_event   = nil   -- ссылка на выбранное событие из calendar_events
+campaign_event_timestamp  = nil
+campaign_sent_count       = 0
+campaign_next_send_time   = 0
+
+local function getUpcomingTimedEvents()
+    local list = {}
+    local nowTime = os.time()
+    for _, ev in ipairs(calendar_events) do
+        if ev.y and ev.h and not ev.isAllDay then
+            local ts = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
+            if ts >= nowTime then
+                list[#list + 1] = { event = ev, timestamp = ts }
+            end
+        end
+    end
+    table.sort(list, function(a, b) return a.timestamp < b.timestamp end)
+    return list
+end
+
+local function startCampaign()
+    if not campaign_selected_event then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала выбери ивент для кампании.', -1)
+        return
+    end
+    local textRaw = u8:decode(campaign_ad_text.v)
+    if textRaw == "" then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления для кампании.', -1)
+        return
+    end
+
+    local ev = campaign_selected_event
+    campaign_event_timestamp = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
+    local windowStart = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = campaign_window_hour.v, min = campaign_window_minute.v, sec = 0 })
+
+    campaign_sent_count     = 0
+    campaign_next_send_time = math.max(os.time(), windowStart)
+    campaign_active.v       = true
+end
+
+local function stopCampaign()
+    campaign_active.v = false
+end
+
+local function campaignTick()
+    if not campaign_active.v or ad_pending then return end
+    if os.time() < campaign_next_send_time then return end
+
+    if campaign_sent_count >= campaign_target_count.v or os.time() >= campaign_event_timestamp then
+        stopCampaign()
+        return
+    end
+
+    sendAdNow(u8:decode(campaign_ad_text.v))
+    campaign_sent_count = campaign_sent_count + 1
+
+    local remainingSeconds = math.max(campaign_event_timestamp - os.time(), 1)
+    local remainingQuota   = math.max(campaign_target_count.v - campaign_sent_count, 1)
+    campaign_next_send_time = os.time() + math.floor(remainingSeconds / remainingQuota)
+end
+
 local hr_subtab = "ads" -- "ads" | "messages" | "calendar"
 
 local function drawHRAdsTab(t)
@@ -785,8 +959,112 @@ local function drawHRAdsTab(t)
     imgui.InputInt("##ad_interval", ad_interval_minutes)
     imgui.PopItemWidth()
 
-    if ad_auto_send.v then
+        if ad_auto_send.v then
         imgui.TextColored(t.textDim, u8"Следующая отправка через: " .. formatMMSS(ad_next_send_time - os.time()))
+    end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    imgui.TextColored(t.accent, u8"Кампания к ивенту")
+    imgui.Spacing()
+
+    imgui.TextColored(t.textDim, u8"Ивент:")
+    local upcoming = getUpcomingTimedEvents()
+    local eventLabels = {}
+    for _, item in ipairs(upcoming) do
+        eventLabels[#eventLabels + 1] = u8(os.date("%d.%m %H:%M", item.timestamp)) .. " - " .. item.event.summary
+    end
+    if #eventLabels == 0 then
+        imgui.TextColored(t.textDim, u8"Нет предстоящих ивентов с указанным временем.")
+    else
+        campaign_event_combo_idx = campaign_event_combo_idx or imgui.ImInt(0)
+        imgui.PushItemWidth(-1)
+        if imgui.Combo("##campaign_event", campaign_event_combo_idx, eventLabels) then
+            campaign_selected_event = upcoming[campaign_event_combo_idx.v + 1].event
+        end
+        imgui.PopItemWidth()
+        if not campaign_selected_event and #upcoming > 0 then
+            campaign_selected_event = upcoming[1].event
+        end
+    end
+
+    imgui.Spacing()
+    imgui.TextColored(t.textDim, u8"Текст объявления для кампании:")
+    imgui.PushItemWidth(-1)
+    imgui.InputTextMultiline("##campaign_ad_text", campaign_ad_text, imgui.ImVec2(-1, 60))
+    imgui.PopItemWidth()
+
+    -- Подсказка из "Место проведения" выбранного ивента — так же, как в обычном списке объявлений выше
+    if campaign_selected_event and campaign_selected_event.location and campaign_selected_event.location ~= "" then
+        local currentText = u8:decode(campaign_ad_text.v)
+        local suggestedRaw = u8:decode(campaign_selected_event.location)
+        if currentText ~= suggestedRaw then
+            local faded = imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.55)
+            imgui.PushStyleColor(imgui.Col.Text, faded)
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 0.35))
+            if imgui.Button(campaign_selected_event.location .. u8"   —   Использовать как текст?##campaign_suggest", imgui.ImVec2(-1, 24)) then
+                local raw = suggestedRaw
+                if #raw > AD_TEXT_MAX then raw = raw:sub(1, AD_TEXT_MAX) end
+                campaign_ad_text.v = campaign_selected_event.location
+            end
+            imgui.PopStyleColor(3)
+        end
+    end
+
+    imgui.Spacing()
+    imgui.TextColored(t.textDim, u8"Норма объяв:")
+    imgui.SameLine()
+    imgui.PushItemWidth(80)
+    imgui.InputInt("##campaign_target", campaign_target_count)
+    imgui.PopItemWidth()
+    if imgui.IsItemHovered() then
+        imgui.SetTooltip(u8"Сколько объявлений нужно успеть отправить всего до начала ивента.")
+    end
+
+    imgui.Spacing()
+    imgui.TextColored(t.textDim, u8"Не отправлять раньше:")
+    imgui.SameLine()
+    imgui.PushItemWidth(80)
+    imgui.InputInt("##campaign_hour", campaign_window_hour)
+    imgui.PopItemWidth()
+    imgui.SameLine()
+    imgui.Text(":")
+    imgui.SameLine()
+    imgui.PushItemWidth(80)
+    imgui.InputInt("##campaign_minute", campaign_window_minute)
+    imgui.PopItemWidth()
+    if imgui.IsItemHovered() then
+        imgui.SetTooltip(u8(
+            "Раньше этого времени в день ивента кампания не начнёт слать\n" ..
+            "объявления — даже если нажать 'Начать' заранее.\n" ..
+            "Например 12:00 — не слать до полудня.\n" ..
+            "После этого момента скрипт сам распределит оставшиеся\n" ..
+            "объявления равномерно до начала ивента."
+        ))
+    end
+
+    imgui.Spacing()
+
+    if campaign_active.v then
+        imgui.TextColored(t.textDim, u8"Отправлено " .. campaign_sent_count .. u8" из " .. campaign_target_count.v)
+        if campaign_event_timestamp then
+            imgui.TextColored(t.textDim, u8"До ивента: " .. formatMMSS(campaign_event_timestamp - os.time()))
+        end
+        imgui.TextColored(t.textDim, u8"Следующая через: " .. formatMMSS(campaign_next_send_time - os.time()))
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.65, 0.20, 0.20, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
+        if imgui.Button(u8"Остановить кампанию##campaign_stop", imgui.ImVec2(220, 32)) then
+            stopCampaign()
+        end
+        imgui.PopStyleColor(2)
+    else
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
+        if imgui.Button(u8"Разрешить и начать кампанию##campaign_start", imgui.ImVec2(260, 32)) then
+            startCampaign()
+        end
+        imgui.PopStyleColor(2)
     end
 end
 
@@ -903,12 +1181,27 @@ local function fetchCalendarEvents()
             end
         end
 
-        if nextEvent then
+                if nextEvent then
             upcoming_event_name = nextEvent.summary
             upcoming_event_time = nextEvent.h and string.format("%02d:%02d", nextEvent.h, nextEvent.mi) or u8"весь день"
+
+            if nextEvent.h and not nextEvent.isAllDay then
+                local newTimestamp = os.time({
+                    year = nextEvent.y, month = nextEvent.mo, day = nextEvent.d,
+                    hour = nextEvent.h, min = nextEvent.mi, sec = 0,
+                })
+                if newTimestamp ~= upcoming_event_timestamp then
+                    event_notify_30_sent = false
+                    event_notify_10_sent = false
+                end
+                upcoming_event_timestamp = newTimestamp
+            else
+                upcoming_event_timestamp = nil -- ивент "весь день" — время начала не определено, уведомлять не о чем
+            end
         else
             upcoming_event_name = u8"Нет предстоящих ивентов"
             upcoming_event_time = "--:--"
+            upcoming_event_timestamp = nil
         end
 
     end)
@@ -1166,7 +1459,7 @@ local function drawHomeTab(t)
 
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.20, 0.20, 1.0))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.28, 0.28, 1.0))
-    if imgui.Button(fa.ICON_CROSSHAIRS .. "" .. u8" Кураторы##home_tracker", imgui.ImVec2(tileW, tileH)) then
+    if imgui.Button(fa.ICON_GAVEL .. "" .. u8" Кураторы##home_tracker", imgui.ImVec2(tileW, tileH)) then
         openTab("tracker", u8"Кураторы")
     end
     imgui.PopStyleColor(2)
@@ -1186,9 +1479,9 @@ local function drawHomeTab(t)
     imgui.SetCursorPosX(centerX - eventBarWidth / 2)
     imgui.BeginChild("HomeUpcomingEvent", imgui.ImVec2(eventBarWidth, 50), true)
         imgui.SetCursorPos(imgui.ImVec2(16, 14))
-        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Ближайший ивент: ")
-        imgui.SameLine(0, 4)
-        imgui.Text(upcoming_event_name .. u8"   |   Время: " .. upcoming_event_time)
+        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Ближайший ивент:")
+        imgui.SameLine(0, 6)
+        imgui.Text(upcoming_event_name .. u8"  |  Время: " .. upcoming_event_time)
     imgui.EndChild()
 end
 
@@ -1500,9 +1793,9 @@ local colorNames = {
     [98] = u8"#98 - Кремовый",
     [99] = u8"#99 - Бриллиантовый",
 }
-local color_list = {}
+local color_list = { u8"Нет" }
 for i = 0, 99 do
-    color_list[i+1] = colorNames[i]
+    color_list[i+2] = colorNames[i]
 end
 
 local weapon_list = {
@@ -1517,7 +1810,8 @@ local weapon_list = {
     u8"33 - Винтовка", u8"34 - Снайперка", u8"35 - РПГ-7",
     u8"36 - Гранатомёт", u8"37 - Огнемёт", u8"38 - Миниган", u8"39 - C4",
     u8"41 - Баллончик", u8"42 - Огнетушитель",
-    u8"43 - Фотоаппарат", u8"44 - ПНВ", u8"45 - Тепловизор", u8"46 - Парашют"
+    u8"43 - Фотоаппарат", u8"44 - ПНВ", u8"45 - Тепловизор", u8"46 - Парашют",
+    u8"Нет"
 }
 
 -- ============================================================
@@ -1538,14 +1832,15 @@ local function saveRoleTemplates()
         cfg.roles["role" .. i .. "_skin"]   = tostring(r.skinId)
         cfg.roles["role" .. i .. "_weapon"] = u8:decode(r.weaponLabel)
         cfg.roles["role" .. i .. "_color"]  = tostring(r.colorId)
+        cfg.roles["role" .. i .. "_armor"]  = r.armor and "1" or "0"
     end
     inicfg.save(cfg, ROLES_PATH)
     rolesIni = cfg
 end
 
-local function addRoleTemplate(nameUtf8, skinId, weaponLabelUtf8, colorId)
+local function addRoleTemplate(nameUtf8, skinId, weaponLabelUtf8, colorId, armor)
     customRoleTemplates[#customRoleTemplates + 1] = {
-        name = nameUtf8, skinId = skinId, weaponLabel = weaponLabelUtf8, colorId = colorId
+        name = nameUtf8, skinId = skinId, weaponLabel = weaponLabelUtf8, colorId = colorId, armor = armor or false
     }
     saveRoleTemplates()
 end
@@ -1562,19 +1857,63 @@ for i = 1, rolesCount do
     local sk = tonumber(rolesIni.roles["role" .. i .. "_skin"])
     local wp = rolesIni.roles["role" .. i .. "_weapon"]
     local cl = tonumber(rolesIni.roles["role" .. i .. "_color"])
+    local ar = rolesIni.roles["role" .. i .. "_armor"] == "1"
     if nm and sk and wp and cl then
         customRoleTemplates[#customRoleTemplates + 1] = {
-            name = u8(nm), skinId = sk, weaponLabel = u8(wp), colorId = cl
+            name = u8(nm), skinId = sk, weaponLabel = u8(wp), colorId = cl, armor = ar
         }
     end
 end
 
 -- ============================================================
---  Готовые шаблоны ролей
+--  Шаблоны ролей (подгружаются с GitHub)
 -- ============================================================
-local builtinRoleTemplates = {
-    { name = u8"Охранник", skinId = 285, weaponLabel = u8"24 - Desert Eagle", colorId = 15 },
-}
+local ROLES_GITHUB_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/actor-roles.json"
+
+builtinRoleTemplates = {}
+builtin_roles_loading = false
+
+local function fetchBuiltinRoleTemplates()
+    builtin_roles_loading = true
+    lua_thread.create(function()
+        local ok, response = pcall(requests.get, ROLES_GITHUB_URL, { timeout = 15 })
+        builtin_roles_loading = false
+
+        if not ok then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось загрузить готовые шаблоны ролей: ' .. tostring(response), -1)
+            return
+        end
+        if response.status_code ~= 200 then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}GitHub вернул ошибку ' .. tostring(response.status_code) .. ' при загрузке шаблонов ролей.', -1)
+            return
+        end
+
+        local data = cjson.decode(response.text)
+        if not data then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось разобрать roles.json (некорректный JSON).', -1)
+            return
+        end
+
+        local parsed = {}
+        for _, item in ipairs(data) do
+            if item.name and item.skinId and item.weaponLabel and item.colorId ~= nil then
+                parsed[#parsed + 1] = {
+                    name        = item.name,
+                    skinId      = item.skinId,
+                    weaponLabel = item.weaponLabel,
+                    colorId     = item.colorId,
+                    armor       = item.armor or false,
+                }
+            end
+        end
+
+        if #parsed > 0 then
+            builtinRoleTemplates = parsed
+        else
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}roles.json пустой или в неправильном формате — оставил старые шаблоны.', -1)
+        end
+    end)
+end
 
 local function sendRoleTemplate(tmpl)
     local ok, myId = sampGetPlayerIdByCharHandle(playerPed)
@@ -1582,9 +1921,13 @@ local function sendRoleTemplate(tmpl)
         sampAddChatMessage(u8"{FF6B6B}[TRPcomm] Не удалось определить свой ID.", -1)
         return
     end
-    local weaponCp1251 = u8:decode(tmpl.weaponLabel)
-    local msg = string.format("/rc Мой ID: %d | Скин: %d | Оружие: %s | Клист: %d",
-        myId, tmpl.skinId, weaponCp1251, tmpl.colorId)
+    local skinText   = (tmpl.skinId and tmpl.skinId >= 0) and tostring(tmpl.skinId) or "нет"
+    local weaponName = tmpl.weaponLabel:match("%- (.+)$") or tmpl.weaponLabel
+    local weaponText = u8:decode(weaponName)
+    local colorText  = (tmpl.colorId and tmpl.colorId >= 0) and tostring(tmpl.colorId) or "нет"
+    local armorText  = tmpl.armor and "да" or "нет"
+    local msg = string.format("/rc Мой ID: %d | Скин: %s | Оружие: %s | Клист: %s | Бронежилет: %s",
+        myId, skinText, weaponText, colorText, armorText)
     sampSendChat(msg)
 end
 
@@ -1650,8 +1993,10 @@ end
 -- отрисовка вкладки "Роли"
 -- ------------------------------------------------------------
 roles_new_name = imgui.ImBuffer("", 64)
+roles_new_no_skin = imgui.ImBool(false)
 roles_new_weapon_combo = imgui.ImInt(0)
 roles_new_color_combo = imgui.ImInt(0)
+roles_new_armor = imgui.ImBool(false)
 roles_delete_pending_idx = nil
 roles_edit_idx = nil
 roles_want_open_popup = false
@@ -1666,9 +2011,10 @@ local function drawBuiltinRoleRow(t, tmpl)
         imgui.BeginGroup()
             imgui.TextColored(t.text, tmpl.name)
             local weaponName = tmpl.weaponLabel:match("%- (.+)$") or tmpl.weaponLabel
-            local colorLabel = colorNames[tmpl.colorId] or ""
+            local colorLabel = (tmpl.colorId == -1) and u8"Нет" or (colorNames[tmpl.colorId] or "")
             local colorName  = colorLabel:match("%- (.+)$") or colorLabel
-            imgui.TextColored(t.textDim, u8"Оружие: " .. weaponName .. u8"  |  Цвет: " .. colorName)
+            local armorLabel = tmpl.armor and u8"да" or u8"нет"
+            imgui.TextColored(t.textDim, u8"Оружие: " .. weaponName .. u8"  |  Цвет: " .. colorName .. u8"  |  Броня: " .. armorLabel)
         imgui.EndGroup()
         imgui.SameLine(imgui.GetWindowWidth() - 100)
         if imgui.Button(u8"Выдать##builtin_" .. tmpl.name, imgui.ImVec2(90, 28)) then
@@ -1696,10 +2042,11 @@ local function drawCustomRoleRow(t, idx, tmpl)
             sendRoleTemplate(tmpl)
         end
         imgui.SameLine()
-        if imgui.Button(fa.ICON_PENCIL .. "##custom_edit_" .. idx, imgui.ImVec2(28, 28)) then
+                if imgui.Button(fa.ICON_PENCIL .. "##custom_edit_" .. idx, imgui.ImVec2(28, 28)) then
             roles_edit_idx = idx
             roles_new_name.v = tmpl.name
-            roleCreateSkinId.v = tmpl.skinId
+            roles_new_no_skin.v = (tmpl.skinId == -1)
+            roleCreateSkinId.v = (tmpl.skinId == -1) and 0 or tmpl.skinId
             roles_new_weapon_combo.v = 0
             for i, w in ipairs(weapon_list) do
                 if w == tmpl.weaponLabel then
@@ -1707,7 +2054,8 @@ local function drawCustomRoleRow(t, idx, tmpl)
                     break
                 end
             end
-            roles_new_color_combo.v = tmpl.colorId
+            roles_new_color_combo.v = (tmpl.colorId == -1) and 0 or (tmpl.colorId + 1)
+            roles_new_armor.v = tmpl.armor or false
             roles_want_open_popup = true
         end
         imgui.SameLine()
@@ -1735,7 +2083,7 @@ local function drawAddRolePopup(t)
         imgui.InputText("##new_role_name", roles_new_name)
         imgui.PopItemWidth()
 
-        imgui.Spacing()
+                imgui.Spacing()
         imgui.TextColored(t.textDim, u8"ID скина:")
         imgui.PushItemWidth(100)
         imgui.InputInt("##new_role_skin_id", roleCreateSkinId, 0, 0)
@@ -1745,11 +2093,14 @@ local function drawAddRolePopup(t)
             roleCatalogPage = 0
             imgui.OpenPopup("Каталог скинов##skin_catalog_popup")
         end
-        local previewTex = loadSkinTexture(roleCreateSkinId.v)
-        if previewTex then
-            imgui.SameLine()
-            imgui.Image(previewTex, imgui.ImVec2(28, 28))
+        if not roles_new_no_skin.v then
+            local previewTex = loadSkinTexture(roleCreateSkinId.v)
+            if previewTex then
+                imgui.SameLine()
+                imgui.Image(previewTex, imgui.ImVec2(28, 28))
+            end
         end
+        imgui.Checkbox(u8"Без скина##new_role_no_skin", roles_new_no_skin)
 
         imgui.Spacing()
         imgui.TextColored(t.textDim, u8"Оружие:")
@@ -1763,24 +2114,32 @@ local function drawAddRolePopup(t)
         imgui.Combo("##new_role_color", roles_new_color_combo, color_list)
         imgui.PopItemWidth()
 
+        imgui.Spacing()
+        imgui.Checkbox(u8"Бронежилет##new_role_armor", roles_new_armor)
+
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-        if imgui.Button(u8"Сохранить##save_new_role", imgui.ImVec2(120, 28)) then
+                if imgui.Button(u8"Сохранить##save_new_role", imgui.ImVec2(120, 28)) then
             if roles_new_name.v ~= "" then
+                local finalSkinId  = roles_new_no_skin.v and -1 or roleCreateSkinId.v
+                local finalColorId = (roles_new_color_combo.v == 0) and -1 or (roles_new_color_combo.v - 1)
+                local finalArmor   = roles_new_armor.v
                 if roles_edit_idx then
                     local tmpl = customRoleTemplates[roles_edit_idx]
                     tmpl.name        = roles_new_name.v
-                    tmpl.skinId      = roleCreateSkinId.v
+                    tmpl.skinId      = finalSkinId
                     tmpl.weaponLabel = weapon_list[roles_new_weapon_combo.v + 1]
-                    tmpl.colorId     = roles_new_color_combo.v
+                    tmpl.colorId     = finalColorId
+                    tmpl.armor       = finalArmor
                     saveRoleTemplates()
                     roles_edit_idx = nil
                 else
                     addRoleTemplate(
                         roles_new_name.v,
-                        roleCreateSkinId.v,
+                        finalSkinId,
                         weapon_list[roles_new_weapon_combo.v + 1],
-                        roles_new_color_combo.v
+                        finalColorId,
+                        finalArmor
                     )
                 end
                 roles_new_name.v = ""
@@ -1802,18 +2161,28 @@ end
 local function drawRolesTab(t)
     imgui.TextColored(t.accent, u8"Роли")
     imgui.SameLine(imgui.GetWindowWidth() - 150)
-    if imgui.Button(fa.ICON_PLUS .. u8"  Добавить##add_role", imgui.ImVec2(140, 26)) then
+        if imgui.Button(fa.ICON_PLUS .. u8"  Добавить##add_role", imgui.ImVec2(140, 26)) then
         roles_edit_idx = nil
         roles_new_name.v = ""
         roleCreateSkinId.v = 0
+        roles_new_no_skin.v = false
         roles_new_weapon_combo.v = 0
         roles_new_color_combo.v = 0
+        roles_new_armor.v = false
         imgui.OpenPopup("###add_role_popup")
     end
     imgui.Separator()
     imgui.Spacing()
 
     imgui.TextColored(t.accent, u8"Готовые шаблоны")
+    imgui.SameLine()
+    if builtin_roles_loading then
+        imgui.TextColored(t.textDim, u8"обновляю...")
+    else
+        if imgui.Button(fa.ICON_RANDOM .. "##refresh_builtin_roles", imgui.ImVec2(28, 22)) then
+            fetchBuiltinRoleTemplates()
+        end
+    end
     imgui.Spacing()
     for _, tmpl in ipairs(builtinRoleTemplates) do
         drawBuiltinRoleRow(t, tmpl)
@@ -1962,6 +2331,36 @@ imgui.Spacing(); imgui.Separator(); imgui.Spacing()
     imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Дополнительные настройки")
 
     if imgui.Checkbox(u8"Отправлять скриншоты документом (лучшее качество)", send_as_document) then
+        saveSettings()
+    end
+    
+    if imgui.Checkbox(u8"Отключить аксессуары игроков", acs_rem) then
+        saveSettings()
+        if acs_rem.v then
+            for k, v in ipairs(getAllChars()) do
+                local res, id = sampGetPlayerIdByCharHandle(v)
+                if v ~= 1 and res and not sampIsPlayerNpc(id) then deleteAllAcs(id) end
+            end
+        else
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Требуется перезагрузка зоны стрима (войдите в интерьер и выйдите)', -1)
+        end
+    end
+    
+    if imgui.Checkbox(u8"Отключить свои аксессуары", acs_rem_me) then
+        saveSettings()
+        if acs_rem_me.v then
+            local res, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
+            if res then deleteAllAcs(id) end
+        else
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Требуется снять и заново надеть все аксессуары', -1)
+        end
+    end
+    
+    if imgui.Checkbox(u8"Отключить модели бронежилетов", remove_armour) then
+        saveSettings()
+    end
+    
+    if imgui.Checkbox(u8"Убрать надпись gta-trinity.com", delete_textdraw) then
         saveSettings()
     end
 
@@ -2235,8 +2634,8 @@ local function sendGalleryReport(filesToSend, eventNameUtf8)
             ok = sendMediaGroupToTelegram(paths, caption)
         end
 
-        if ok then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Готово: отправлено {5B85C4}' .. #paths .. ' {FFFFFF}скрин(ов) одним альбомом.', -1)
+                if ok then
+            showToast('Готово: отправлено ' .. #paths .. ' скрин(ов) одним альбомом.')
             addReport(eventNameUtf8, filesToSend)
             gallery_selected = {}
         else
@@ -2675,10 +3074,10 @@ local function drawTrackerReportsTab(t)
 end
 
 local CURATOR_SECTIONS = {
-    u8"Сбор участников ивента",
-    u8"Автозаполнение кураторов на ивенте",
-    u8"Автозаполнение актёров на ивенте",
-    u8"Менеджер выдачи ролей актёрам",
+    fa.ICON_CROSSHAIRS .. u8" Сбор участников",
+    fa.ICON_USER .. u8" Кураторы (авто)",
+    fa.ICON_STAR .. u8" Актёры (авто)",
+    fa.ICON_SLIDERS .. u8" Менеджер ролей",
 }
 local curators_selected_section = 1
 
@@ -2795,24 +3194,21 @@ local function sendCuratorReport()
     local finalUrl = string.format("%s?event=%s&nicknames=%s",
         CURATOR_LIST_URL, encodeUrlComponent(u8(eventText)), encodeUrlComponent(u8(nicksString)))
 
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка отчёта по кураторам...', -1)
+        sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка отчёта по кураторам...', -1)
     downloadUrlToFile(finalUrl, "moonloader\\config\\trp_temp.txt", function(id, status)
         if status == 6 then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Данные по кураторам занесены в таблицу.', -1)
+            showToast('Данные по кураторам занесены в таблицу.')
             curator_captured = {}
         else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки отчёта по кураторам.', -1)
+
         end
     end)
 end
 
 local function drawCuratorsFillCuratorsSection(t)
-    imgui.TextColored(t.accent, u8"Автозаполнение кураторов")
+        imgui.TextColored(t.accent, fa.ICON_USER .. u8" Автозаполнение кураторов")
     imgui.Spacing()
 
-    if imgui.Button(fa.ICON_RANDOM .. u8" Обновить список кураторов##curator_list_refresh", imgui.ImVec2(230, 28)) then
-        if not curator_list_loading then updateCuratorList() end
-    end
     imgui.SameLine()
     imgui.TextColored(t.textDim, u8"В списке: " .. #curator_list)
 
@@ -2839,7 +3235,7 @@ local function drawCuratorsFillCuratorsSection(t)
             else
                 curator_active = true
                 curator_captured = {}
-                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Мониторинг кураторов запущен: ' .. nameText, -1)
+                showToast('Мониторинг кураторов запущен: ' .. nameText)
             end
         end
     end
@@ -2891,8 +3287,8 @@ local function sendActorsReport()
             return
         end
 
-        if response.status_code == 200 then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Данные по актёрам занесены в таблицу.', -1)
+                if response.status_code == 200 then
+            showToast('Данные по актёрам занесены в таблицу.')
             actors_captured = {}
         else
             sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сервер вернул ошибку ' .. tostring(response.status_code), -1)
@@ -2907,9 +3303,9 @@ local function startActorsCollection()
         return
     end
 
-    actors_active   = true
+        actors_active   = true
     actors_captured = {}
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Сбор актёров запущен: ' .. nameText, -1)
+    showToast('Сбор актёров запущен: ' .. nameText)
     sampSendChat("/rwave members")
 
     lua_thread.create(function()
@@ -2920,7 +3316,7 @@ local function startActorsCollection()
 end
 
 local function drawCuratorsFillActorsSection(t)
-    imgui.TextColored(t.accent, u8"Автозаполнение актёров")
+        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Автозаполнение актёров")
     imgui.Spacing()
 
     imgui.TextColored(t.textDim, u8"Название ивента:")
@@ -2950,8 +3346,95 @@ local function drawCuratorsFillActorsSection(t)
     end
 end
 
+-- ============================================================
+--  МЕНЕДЖЕР ВЫДАЧИ РОЛЕЙ АКТЁРАМ (пункт 4 в "Кураторах")
+-- ============================================================
+role_requests = {} -- { {id=числоStr, nick=, skin=, weapon=, weaponName=, color=}, ... }
+
+local function addOrUpdateRoleRequest(req)
+    for i, existing in ipairs(role_requests) do
+        if existing.id == req.id then
+            role_requests[i] = req
+            return
+        end
+    end
+    role_requests[#role_requests + 1] = req
+end
+
+local function removeRoleRequest(index)
+    table.remove(role_requests, index)
+end
+
+local function approveRoleRequest(index)
+    local req = role_requests[index]
+    if not req then return end
+    removeRoleRequest(index)
+
+    lua_thread.create(function()
+        if req.skin then
+            sampSendChat("/videoskin " .. req.id .. " " .. req.skin)
+            wait(500)
+        end
+        if req.color then
+            sampSendChat("/videocolor " .. req.id .. " " .. req.color)
+            wait(500)
+        end
+        if req.weapon then
+            sampSendChat("/vgun " .. req.id .. " " .. req.weapon)
+            wait(500)
+        end
+        if req.armor then
+            sampSendChat("/varm " .. req.id)
+        end
+    end)
+end
+
 local function drawCuratorsRoleManagerSection(t)
-    imgui.TextColored(t.textDim, u8"Раздел в разработке.")
+        imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Менеджер выдачи ролей актёрам")
+    imgui.Spacing()
+
+    if #role_requests == 0 then
+        imgui.TextColored(t.textDim, u8"Активных заявок нет.")
+        return
+    end
+
+        for i, req in ipairs(role_requests) do
+        imgui.PushID("role_req_" .. i)
+
+                local tex = req.skin and loadSkinTexture(tonumber(req.skin))
+        if tex then
+            imgui.Image(tex, imgui.ImVec2(48, 48))
+            imgui.SameLine()
+        end
+
+        imgui.BeginGroup()
+            imgui.Text(req.nick .. u8" (ID: " .. req.id .. ")")
+            local skinText   = req.skin or u8"нет"
+            local weaponText = req.weapon and (req.weapon .. " - " .. req.weaponName) or req.weaponName
+            local colorText  = req.color or u8"нет"
+            local armorText  = req.armor and u8"да" or u8"нет"
+            imgui.TextColored(t.textDim, u8"Скин: " .. skinText .. u8"  |  Оружие: " .. weaponText .. u8"  |  Цвет: " .. colorText .. u8"  |  Броня: " .. armorText)
+
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
+            if imgui.Button(fa.ICON_CHECK .. u8" Одобрить##approve", imgui.ImVec2(120, 28)) then
+                approveRoleRequest(i)
+            end
+            imgui.PopStyleColor(2)
+
+            imgui.SameLine()
+
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.65, 0.20, 0.20, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
+            if imgui.Button(fa.ICON_TIMES .. "##cancel", imgui.ImVec2(36, 28)) then
+                removeRoleRequest(i)
+            end
+            imgui.PopStyleColor(2)
+        imgui.EndGroup()
+
+        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+        imgui.PopID()
+    end
 end
 
 local function drawTrackerTab(t)
@@ -2960,7 +3443,7 @@ local function drawTrackerTab(t)
     imgui.Spacing()
 
     -- ------- левая колонка: список разделов -------
-    imgui.BeginChild("CuratorsList", imgui.ImVec2(220, 0), true)
+    imgui.BeginChild("CuratorsList", imgui.ImVec2(240, 0), true)
         for i, name in ipairs(CURATOR_SECTIONS) do
             local isActive = (curators_selected_section == i)
             local pushed = 0
@@ -3040,6 +3523,10 @@ drawGalleryTab = function(t)
                 if tex then
                     local avail = imgui.GetContentRegionAvail()
                     imgui.Image(tex, imgui.ImVec2(avail.x, avail.y))
+
+                    if imgui.IsItemHovered() then
+                        imgui.SetTooltip(u8"ЛКМ — открыть | Колёсико — выбрать | ПКМ — Действия")
+                    end
 
                     if imgui.IsItemClicked() then
                         gallery_preview_open = true
@@ -3256,6 +3743,9 @@ drawReportsTab = function(t)
             report_viewer_open = true
             report_viewer_idx = i
         end
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(u8"ЛКМ — открыть | Колёсико — удалить отчёт")
+        end
         if imgui.IsItemClicked(2) then
             deleteReport(i)
         end
@@ -3269,6 +3759,7 @@ end
 -- ============================================================
 
 function imgui.BeforeDrawFrame()
+    imgui.GetIO().FontGlobalScale = 1.0
     if fa_font == nil then
         local font_config = imgui.ImFontConfig()
         font_config.MergeMode = true
@@ -3431,22 +3922,36 @@ function imgui.OnDrawFrame()
         end
         curator_section_active_last_frame = curatorsSectionShouldBeVisible
 
-        imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
+                    imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
+            local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, roles = true }
+            local ACCESS_KEY_BY_KIND = { roles = "actors" }
+
+            if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
+                local accessKey = ACCESS_KEY_BY_KIND[activeTab.kind] or activeTab.kind
+                if access_lists[accessKey] == nil then
+                    imgui.TextColored(t.textDim, u8"Проверка доступа...")
+                elseif not hasAccess(accessKey) then
+                    imgui.Spacing()
+                    imgui.TextColored(t.textDim, u8"У вас нет доступа к этому разделу.")
+                    activeTab = nil
+                end
+            end
+
             if activeTab then
                 if activeTab.kind == "home" then
                     drawHomeTab(t)
                 elseif activeTab.kind == "notes" then
                     drawNotesTab(t)
-                elseif activeTab.kind == "roles" then
+                elseif activeTab.kind == "roles" and hasAccess("actors") then
                     drawRolesTab(t)
                 elseif activeTab.kind == "settings" then
                     drawSettingsTab(t)
-                elseif activeTab.kind == "photographer" then
+                elseif activeTab.kind == "photographer" and hasAccess("photographer") then
                     drawPhotographerTab(t)
-                elseif activeTab.kind == "tracker" then
+                elseif activeTab.kind == "tracker" and hasAccess("tracker") then
                     drawTrackerTab(t)
-                elseif activeTab.kind == "hr" then
+                elseif activeTab.kind == "hr" and hasAccess("hr") then
                     drawHRTab(t)
                 elseif activeTab.kind == "calendar" then
                     drawHRCalendarTab(t)
@@ -3472,9 +3977,9 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
-        if dialogId == 3410 and title:find("Отправка рекламы на радио") then
+                if dialogId == 3410 and title:find("Отправка рекламы на радио") then
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Объявление отправлено на модерацию.', -1)
+            showToast('Объявление отправлено на модерацию.')
             ad_pending = false
             ad_text.v = ""
             if ad_auto_send.v then
@@ -3487,6 +3992,33 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if dialogId == 45 and text and text:find("Ваше объявление") then
         sampSendDialogResponse(dialogId, 1, 65535, "")
         return false
+    end
+end
+
+sampev.onSetPlayerAttachedObject = function(id, index, create, object)
+    local ok, myId = sampGetPlayerIdByCharHandle(PLAYER_PED)
+    if ok then
+        if ((id == myId and acs_rem_me.v) or (id ~= myId and acs_rem.v)) and create then
+            return false
+        end
+    end
+end
+
+function onReceivePacket(id, bs) 
+    if id == 220 then
+        raknetBitStreamIgnoreBits(bs, 8)
+        local type = raknetBitStreamReadInt8(bs)
+        if type == 155 then
+            local playerId = raknetBitStreamReadInt16(bs)
+            local index = raknetBitStreamReadInt32(bs)
+            local create = raknetBitStreamReadBool(bs)
+            local ok, myId = sampGetPlayerIdByCharHandle(PLAYER_PED)
+            if ok then
+                if ((playerId == myId and acs_rem_me.v) or (playerId ~= myId and acs_rem.v)) and create then
+                    return false
+                end
+            end
+        end
     end
 end
 
@@ -3505,13 +4037,47 @@ sampev.onServerMessage = function(color, text)
         end
     end
 
-    if actors_active then
+        if actors_active then
         local clean = text:gsub("{%x%x%x%x%x%x}", "")
         local nick = clean:match("Ник%s+([%w_]+)")
         if nick then
             nick = nick:gsub("%.", "")
             actors_captured[#actors_captured + 1] = nick
             return false
+        end
+    end
+
+        do
+                local clean = text:gsub("{%x%x%x%x%x%x}", "")
+        local nick, pid, skinRaw, weaponRaw, colorRaw, armorRaw = clean:match(
+            "%[RC%] ([%w_]+): Мой ID: (%d+) | Скин: ([^|]+) | Оружие: ([^|]+) | Клист: ([^|]+) | Бронежилет: ([^|]+)"
+        )
+        if nick then
+            skinRaw   = skinRaw:match("^%s*(.-)%s*$")
+            weaponRaw = weaponRaw:match("^%s*(.-)%s*$")
+            colorRaw  = colorRaw:match("^%s*(.-)%s*$")
+            armorRaw  = armorRaw:match("^%s*(.-)%s*$")
+
+            local weaponUtf8 = u8(weaponRaw)
+            local weaponId, weaponName = nil, weaponUtf8
+            for _, w in ipairs(weapon_list) do
+                local wid, wname = w:match("^(%d+) %- (.+)$")
+                if wid and wname == weaponUtf8 then
+                    weaponId = wid
+                    break
+                end
+            end
+
+            addOrUpdateRoleRequest({
+                id = pid,
+                nick = nick,
+                skin = (skinRaw ~= "нет") and skinRaw or nil,
+                weapon = weaponId,
+                weaponName = weaponName,
+                color = (colorRaw ~= "нет") and colorRaw or nil,
+                armor = (armorRaw == "да"),
+            })
+            -- не возвращаем false — строка остаётся видна в обычном чате
         end
     end
 end
@@ -3526,6 +4092,11 @@ function main()
     clientName = sampGetPlayerNickname(my1id)
 
     checkForUpdates()
+    loadAllAccessLists()
+    fetchCalendarEvents()
+    fetchBuiltinRoleTemplates()
+
+    toast_font = renderCreateFont("Arial", 9, 1)
 
     sampAddChatMessage('{5B85C4}[TRPcomm Manager]{FFFFFF} Добро пожаловать на сервер, {5B85C4}' .. clientName .. '{FFFFFF}.', -1)
     sampAddChatMessage('{FFFFFF}Для активации скрипта используйте команду — {5B85C4}/trpcomm {FFFFFF}или {5B85C4}' .. hotkey_display.v .. '{FFFFFF}.', -1)
@@ -3534,22 +4105,92 @@ function main()
         main_window_state.v = not main_window_state.v
     end)
 
-    while true do
+        while true do
         wait(0)
         imgui.Process = main_window_state.v
+
+        if toast_timer > 0 then
+            toast_timer = toast_timer - 1
+            local sw, sh = getScreenResolution()
+
+            local alpha
+            if toast_timer > 135 then
+                alpha = (150 - toast_timer) / 15.0   -- появление
+            elseif toast_timer < 15 then
+                alpha = toast_timer / 15.0            -- исчезание
+            else
+                alpha = 1.0                           -- полная видимость
+            end
+            alpha = math.max(0.0, math.min(1.0, alpha))
+
+            local a_bg    = math.floor(alpha * 0xCC)
+            local a_full  = math.floor(alpha * 0xFF)
+
+            local col_bg     = a_bg   * 0x1000000 + 0x111111
+            local col_accent = a_full * 0x1000000 + 0x5B85C4 -- фирменный синий TRPcomm вместо золотого из trinity
+            local col_white  = a_full * 0x1000000 + 0xFFFFFF
+
+            renderDrawBox(sw - 330, sh - 80, 320, 55, col_bg)
+            renderDrawBox(sw - 330, sh - 80, 4, 55, col_accent)
+            renderFontDrawText(toast_font, "TRPcomm Manager", sw - 318, sh - 75, col_accent)
+            renderFontDrawText(toast_font, toast_text, sw - 318, sh - 58, col_white)
+        end
 
                 if tracker_active and os.time() ~= tracker_last_update then
             tracker_last_update = os.time()
             updateTrackerRadius()
         end
 
-        if curator_active and os.time() ~= curator_last_scan then
+                if curator_active and os.time() ~= curator_last_scan then
             curator_last_scan = os.time()
             scanForCurators()
         end
 
+        if upcoming_event_timestamp and os.time() ~= event_notify_last_check then
+            event_notify_last_check = os.time()
+            local secLeft = upcoming_event_timestamp - os.time()
+
+            if not event_notify_30_sent and secLeft <= 1800 and secLeft > 1795 then
+                event_notify_30_sent = true
+                toast_text = "До ивента «" .. u8:decode(upcoming_event_name) .. "» осталось 30 минут"
+                toast_timer = 150
+            elseif not event_notify_10_sent and secLeft <= 600 and secLeft > 595 then
+                event_notify_10_sent = true
+                toast_text = "До ивента «" .. u8:decode(upcoming_event_name) .. "» осталось 10 минут"
+                toast_timer = 150
+            end
+        end
+
         if ad_auto_send.v and not ad_pending and os.time() >= ad_next_send_time then
             triggerNextAdSend()
+        end
+        campaignTick()
+
+        local px, py, pz = getCharCoordinates(PLAYER_PED)
+        local result, object = findAllRandomObjectsInSphere(px, py, pz, 150.0, true)
+        if result and doesObjectExist(object) then
+            local modelId = getObjectModel(object)
+            if modelId > 371 or modelId < 331 then
+                if remove_armour.v then
+                    if modelId == 19142 or modelId == 19515 then setObjectVisible(object, false) end
+                else
+                    if modelId == 19142 or modelId == 19515 then setObjectVisible(object, true) end
+                end
+            end
+        end
+        
+        if delete_textdraw.v then
+            for a = 0, 2304 do 
+                if sampTextdrawIsExists(a) then 
+                    if sampTextdrawGetString(a) == 'gta-trinity.com' then sampTextdrawSetString(a, '') end
+                end
+            end
+        else
+            for a = 0, 2304 do 
+                if sampTextdrawIsExists(a) then 
+                    if sampTextdrawGetString(a) == '' then sampTextdrawSetString(a, 'gta-trinity.com') end
+                end
+            end
         end
 
         if not waiting_for_key and not waiting_for_key2 and not sampIsChatInputActive() and not sampIsDialogActive() then
@@ -3578,7 +4219,7 @@ function main()
                             sampSendChat(string.format("/video %s", tpPass))
                         end
                     else
-                        sampAddChatMessage(u8"{FF6B6B}[TRPcomm] Сначала укажи частоту рации в настройках.", -1)
+                        sampAddChatMessage("{FF6B6B}[TRPcomm] Сначала укажи частоту рации в настройках.", -1)
 
                     end
                 end
