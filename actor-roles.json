@@ -1,5 +1,6 @@
 [
     { "name": "Охрана",    "skinId": 71,  "weaponLabel": "3 - Дубинка", "colorId": 4, "armor": true },
     { "name": "Спасатель", "skinId": 97,  "weaponLabel": "0 - Нет",     "colorId": 5, "armor": false },
-    { "name": "Доктор",    "skinId": 274, "weaponLabel": "0 - Нет",     "colorId": 3, "armor": false }
+    { "name": "Доктор",    "skinId": 274, "weaponLabel": "0 - Нет",     "colorId": 3, "armor": false },
+    { "name": "Test",    "skinId": 123, "weaponLabel": "0 - Нет",     "colorId": 3, "armor": false }
 ]
