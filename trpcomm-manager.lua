@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  юбрннамнбкемхе
 -- ============================================================
-SCRIPT_VERSION = "1.6"
+SCRIPT_VERSION = "1.8"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
