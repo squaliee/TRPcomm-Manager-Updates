@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 1.0
+--  Актуальная версия: 1.9
 -- ============================================================
 
 imgui = require 'imgui'
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "1.8"
+SCRIPT_VERSION = "1.9"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -399,6 +399,7 @@ local defaultSettings = {
         acs_rem_me = "false",
         remove_armour = "false",
         delete_textdraw = "false",
+        notifications_enabled = "true",
     }
 }
 
@@ -423,6 +424,7 @@ else
         fw:write("acs_rem=false\n")
         fw:write("acs_rem_me=false\n")
         fw:write("remove_armour=false\n")
+        fw:write("notifications_enabled=true\n")
         fw:write("delete_textdraw=false\n")
         fw:close()
     end
@@ -499,6 +501,7 @@ acs_rem = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem))
 acs_rem_me = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem_me))
 remove_armour = imgui.ImBool(boolFromSetting(mainIni.settings.remove_armour))
 delete_textdraw = imgui.ImBool(boolFromSetting(mainIni.settings.delete_textdraw))
+notifications_enabled = imgui.ImBool(mainIni.settings.notifications_enabled == nil or boolFromSetting(mainIni.settings.notifications_enabled))
 
 local function deleteAllAcs(id)
     local bs = raknetNewBitStream()
@@ -539,6 +542,7 @@ local function saveSettings()
             acs_rem_me = tostring(acs_rem_me.v),
             remove_armour = tostring(remove_armour.v),
             delete_textdraw = tostring(delete_textdraw.v),
+            notifications_enabled = tostring(notifications_enabled.v),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -591,7 +595,7 @@ upcoming_event_name = u8"Пока не подключено"
 upcoming_event_time = "--:--"
 upcoming_event_timestamp = nil
 
--- Toast-уведомления (напоминания о скором начале ивента)
+-- Toast-уведомления (статусы: успех по кураторам/актёрам/рекламе и т.п.)
 toast_text = ""
 toast_timer = 0
 toast_font = nil
@@ -603,6 +607,14 @@ function showToast(text)
     toast_text = text
     toast_timer = 150
 end
+
+-- Крупная вертикальная карточка-напоминание о скором начале ивента (отдельно от обычных toast'ов)
+event_card_timer      = 0
+event_card_message    = "" -- нижняя строка: "Осталось 30 минут" / "Осталось 10 минут"
+event_card_font_title = nil
+event_card_font_name  = nil
+event_card_font_time  = nil
+event_card_logo_texture = nil
 
 local function loadLogoTexture()
     if trpcomm_logo_checked then return trpcomm_logo_texture end
@@ -2364,6 +2376,10 @@ imgui.Spacing(); imgui.Separator(); imgui.Spacing()
         saveSettings()
     end
 
+    if imgui.Checkbox(u8"Показывать уведомления в углу экрана", notifications_enabled) then
+        saveSettings()
+    end
+
     imgui.Spacing()
     if imgui.Button(u8"Сохранить##radio_save", imgui.ImVec2(150, 28)) then
         saveSettings()
@@ -2775,7 +2791,16 @@ local function formatDuration(sec)
     return string.format("%02d:%02d", m, s)
 end
 
--- дёргается раз в секунду из main(), работает даже если вкладка сейчас закрыта
+local function sampColorToImVec4(argb)
+    argb = argb or -1
+    if argb < 0 then argb = argb + 0x100000000 end -- на случай знакового int32
+    argb = argb % 0x1000000 -- отбрасываем альфа-байт
+    local r = math.floor(argb / 0x10000) % 0x100
+    local g = math.floor(argb / 0x100) % 0x100
+    local b = argb % 0x100
+    return imgui.ImVec4(r / 255.0, g / 255.0, b / 255.0, 1.0)
+end
+
 local function updateTrackerRadius()
     local myX, myY, myZ = getCharCoordinates(playerPed)
     local seenNow = {}
@@ -2859,10 +2884,22 @@ local function drawTrackerRadiusTab(t)
             displaySec = displaySec + (os.time() - entry.lastTick)
         end
         imgui.BeginChild("tp_" .. pid, imgui.ImVec2(0, 32), true)
-            local statusColor = entry.inRadius and t.accent or t.textDim
-            imgui.TextColored(statusColor, entry.nickname .. u8" (ID " .. pid .. u8")")
+            local nameColor = sampColorToImVec4(sampGetPlayerColor(pid))
+            imgui.TextColored(nameColor, entry.nickname .. u8" (ID " .. pid .. u8")")
             imgui.SameLine(imgui.GetWindowWidth() - 70)
-            imgui.Text(formatDuration(displaySec))
+            local timeColor = entry.inRadius and t.accent or t.textDim
+            imgui.TextColored(timeColor, formatDuration(displaySec))
+
+            if imgui.BeginPopupContextWindow() then
+                if imgui.MenuItem(fa.ICON_STICKY_NOTE .. u8" Скопировать никнейм") then
+                    imgui.SetClipboardText(entry.nickname)
+                end
+                imgui.Separator()
+                if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить из списка") then
+                    tracker_players[pid] = nil
+                end
+                imgui.EndPopup()
+            end
         imgui.EndChild()
         imgui.Spacing()
     end
@@ -3002,50 +3039,37 @@ local function drawTrackerCreateReportForm(t)
 end
 
 -- ---------- Окно просмотра отчёта ----------
-local tracker_report_viewer_open = false
 local tracker_report_viewer_idx = nil
 
-local function drawTrackerReportViewer(t)
-    if not tracker_report_viewer_open or not tracker_report_viewer_idx then return end
-    local r = trackerReports[tracker_report_viewer_idx]
-    if not r then tracker_report_viewer_open = false; return end
-
-    local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.5, sh * 0.6), imgui.Cond.Always)
-    imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
-
-    pushThemeColors()
-    pushThemeRounding()
-
-    local open = imgui.ImBool(true)
-    imgui.Begin(r.event .. "##tracker_report_viewer", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then tracker_report_viewer_open = false end
-
-    imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
-    imgui.Separator()
-    imgui.Spacing()
-
-    imgui.BeginChild("TrackerReportPlayers", imgui.ImVec2(0, 0), false)
-        if #r.players == 0 then
-            imgui.TextColored(t.textDim, u8"Список пуст.")
-        end
-        for i, p in ipairs(r.players) do
-            imgui.BeginChild("trp_" .. i, imgui.ImVec2(0, 32), true)
-                imgui.Text(p.nickname)
-                imgui.SameLine(imgui.GetWindowWidth() - 70)
-                imgui.Text(formatDuration(p.seconds))
-            imgui.EndChild()
-            imgui.Spacing()
-        end
-    imgui.EndChild()
-
-    imgui.End()
-    imgui.PopStyleVar(THEME_ROUNDING_COUNT)
-    imgui.PopStyleColor(THEME_COLOR_COUNT)
-end
-
 local function drawTrackerReportsTab(t)
+    if tracker_report_viewer_idx then
+        local r = trackerReports[tracker_report_viewer_idx]
+        if not r then
+            tracker_report_viewer_idx = nil
+        else
+            if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад##tracker_report_back", imgui.ImVec2(110, 28)) then
+                tracker_report_viewer_idx = nil
+            end
+            imgui.Spacing()
+            imgui.TextColored(t.accent, r.event)
+            imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
+            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+            if #r.players == 0 then
+                imgui.TextColored(t.textDim, u8"Список пуст.")
+            end
+            for i, p in ipairs(r.players) do
+                imgui.BeginChild("trp_" .. i, imgui.ImVec2(0, 32), true)
+                    imgui.Text(p.nickname)
+                    imgui.SameLine(imgui.GetWindowWidth() - 70)
+                    imgui.Text(formatDuration(p.seconds))
+                imgui.EndChild()
+                imgui.Spacing()
+            end
+            return
+        end
+    end
+
     if imgui.Button(fa.ICON_BULLHORN .. u8" Создать отчёт##tracker_create_report", imgui.ImVec2(180, 32)) then
         tracker_report_form_open = true
     end
@@ -3062,7 +3086,6 @@ local function drawTrackerReportsTab(t)
         imgui.PushID("tracker_report_" .. i)
         local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time)
         if imgui.Button(label, imgui.ImVec2(-1, 32)) then
-            tracker_report_viewer_open = true
             tracker_report_viewer_idx = i
         end
         if imgui.IsItemClicked(2) then
@@ -3350,6 +3373,8 @@ end
 --  МЕНЕДЖЕР ВЫДАЧИ РОЛЕЙ АКТЁРАМ (пункт 4 в "Кураторах")
 -- ============================================================
 role_requests = {} -- { {id=числоStr, nick=, skin=, weapon=, weaponName=, color=}, ... }
+role_approve_distance_error = false -- флаг "сервер только что написал 'вы слишком далеко'"
+role_approve_cooldown_until = 0     -- os.clock(), до какого момента кнопки "Одобрить" серые
 
 local function addOrUpdateRoleRequest(req)
     for i, existing in ipairs(role_requests) do
@@ -3365,12 +3390,24 @@ local function removeRoleRequest(index)
     table.remove(role_requests, index)
 end
 
+local function removeRoleRequestByRef(req)
+    for i, r in ipairs(role_requests) do
+        if r == req then
+            table.remove(role_requests, i)
+            return
+        end
+    end
+end
+
 local function approveRoleRequest(index)
     local req = role_requests[index]
     if not req then return end
-    removeRoleRequest(index)
+
+    role_approve_cooldown_until = os.clock() + 2
 
     lua_thread.create(function()
+        role_approve_distance_error = false
+
         if req.skin then
             sampSendChat("/videoskin " .. req.id .. " " .. req.skin)
             wait(500)
@@ -3385,6 +3422,13 @@ local function approveRoleRequest(index)
         end
         if req.armor then
             sampSendChat("/varm " .. req.id)
+            wait(500)
+        end
+
+        if role_approve_distance_error then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось выдать роль ' .. req.nick .. ' {FFFFFF}— слишком далеко. Подойди ближе и одобри заявку ещё раз.', -1)
+        else
+            removeRoleRequestByRef(req)
         end
     end)
 end
@@ -3415,9 +3459,15 @@ local function drawCuratorsRoleManagerSection(t)
             local armorText  = req.armor and u8"да" or u8"нет"
             imgui.TextColored(t.textDim, u8"Скин: " .. skinText .. u8"  |  Оружие: " .. weaponText .. u8"  |  Цвет: " .. colorText .. u8"  |  Броня: " .. armorText)
 
-            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
-            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
-            if imgui.Button(fa.ICON_CHECK .. u8" Одобрить##approve", imgui.ImVec2(120, 28)) then
+            local onCooldown = os.clock() < role_approve_cooldown_until
+            if onCooldown then
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
+            else
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
+            end
+            if imgui.Button(fa.ICON_CHECK .. u8" Одобрить##approve", imgui.ImVec2(120, 28)) and not onCooldown then
                 approveRoleRequest(i)
             end
             imgui.PopStyleColor(2)
@@ -3670,63 +3720,50 @@ for i = 1, reportsCount do
 end
 
 -- ---------- Окно просмотра отчёта ----------
-report_viewer_open = false
 report_viewer_idx = nil
 
-local function drawReportViewer(t)
-    if not report_viewer_open or not report_viewer_idx then return end
-    local r = reports[report_viewer_idx]
-    if not r then report_viewer_open = false; return end
-
-    local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.6, sh * 0.7), imgui.Cond.Always)
-    imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
-
-    pushThemeColors()
-    pushThemeRounding()
-
-    local open = imgui.ImBool(true)
-    imgui.Begin(r.event .. "##report_viewer", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then report_viewer_open = false end
-
-    imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
-    imgui.Separator()
-    imgui.Spacing()
-
-    imgui.BeginChild("ReportViewerGrid", imgui.ImVec2(0, 0), false)
-        local gridAvail = imgui.GetContentRegionAvail()
-        local gap = 8
-        local cardW = (gridAvail.x - gap * 3) / 4
-        local col = 0
-        for i, filename in ipairs(r.files) do
-            imgui.PushID(i)
-            local tex = loadGalleryTexture(filename)
-            imgui.BeginChild("rcard", imgui.ImVec2(cardW, 100), true)
-                if tex then
-                    local avail = imgui.GetContentRegionAvail()
-                    imgui.Image(tex, imgui.ImVec2(avail.x, avail.y))
-                    if imgui.IsItemClicked() then
-                        gallery_preview_open = true
-                        gallery_preview_file = filename
-                    end
-                else
-                    imgui.SetCursorPos(imgui.ImVec2(10, 40))
-                    imgui.TextColored(t.textDim, u8"нет файла")
-                end
-            imgui.EndChild()
-            imgui.PopID()
-            col = col + 1
-            if col < 4 then imgui.SameLine(0, gap) else col = 0 end
-        end
-    imgui.EndChild()
-
-    imgui.End()
-    imgui.PopStyleVar(THEME_ROUNDING_COUNT)
-    imgui.PopStyleColor(THEME_COLOR_COUNT)
-end
-
 drawReportsTab = function(t)
+    if report_viewer_idx then
+        local r = reports[report_viewer_idx]
+        if not r then
+            report_viewer_idx = nil
+        else
+            if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад##report_back", imgui.ImVec2(110, 28)) then
+                report_viewer_idx = nil
+            end
+            imgui.Spacing()
+            imgui.TextColored(t.accent, r.event)
+            imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
+            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+            local gridAvail = imgui.GetContentRegionAvail()
+            local gap = 8
+            local cardW = (gridAvail.x - gap * 3) / 4
+            local col = 0
+            for i, filename in ipairs(r.files) do
+                imgui.PushID(i)
+                local tex = loadGalleryTexture(filename)
+                imgui.BeginChild("rcard", imgui.ImVec2(cardW, 100), true)
+                    if tex then
+                        local avail = imgui.GetContentRegionAvail()
+                        imgui.Image(tex, imgui.ImVec2(avail.x, avail.y))
+                        if imgui.IsItemClicked() then
+                            gallery_preview_open = true
+                            gallery_preview_file = filename
+                        end
+                    else
+                        imgui.SetCursorPos(imgui.ImVec2(10, 40))
+                        imgui.TextColored(t.textDim, u8"нет файла")
+                    end
+                imgui.EndChild()
+                imgui.PopID()
+                col = col + 1
+                if col < 4 then imgui.SameLine(0, gap) else col = 0 end
+            end
+            return
+        end
+    end
+
     imgui.TextColored(t.textDim, u8"История отправленных отчётов:")
     imgui.Spacing()
 
@@ -3740,7 +3777,6 @@ drawReportsTab = function(t)
         imgui.PushID("report_" .. i)
         local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time)
         if imgui.Button(label, imgui.ImVec2(-1, 32)) then
-            report_viewer_open = true
             report_viewer_idx = i
         end
         if imgui.IsItemHovered() then
@@ -3812,7 +3848,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPcomm MANAGER | Актуальная версия: 1.0")
+        imgui.TextColored(t.accent, u8 "TRPcomm MANAGER | Актуальная версия: 1.9")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -3965,9 +4001,7 @@ function imgui.OnDrawFrame()
 
     drawGalleryPreview(t)
     drawGallerySendReportForm(t)
-    drawReportViewer(t)
     drawTrackerCreateReportForm(t)
-    drawTrackerReportViewer(t)
     drawAdAddForm(t)
 end
 
@@ -4023,6 +4057,10 @@ function onReceivePacket(id, bs)
 end
 
 sampev.onServerMessage = function(color, text)
+    if text:find("Вы находитесь слишком далеко от игрока") then
+        role_approve_distance_error = true
+    end
+
     if ad_pending then
         if text:find("Одно из ваших объявлений уже находится в очереди на модерацию") then
             sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Одно из объявлений уже в очереди на модерацию.', -1)
@@ -4097,6 +4135,10 @@ function main()
     fetchBuiltinRoleTemplates()
 
     toast_font = renderCreateFont("Arial", 9, 1)
+    event_card_font_title = renderCreateFont("Arial", 10, 1)
+    event_card_font_name  = renderCreateFont("Arial", 13, 1)
+    event_card_font_time  = renderCreateFont("Arial", 11, 1)
+    event_card_logo_texture = renderLoadTextureFromFile(getWorkingDirectory() .. "\\resource\\TRPcomm Manager\\images\\trpcomm-logo.png")
 
     sampAddChatMessage('{5B85C4}[TRPcomm Manager]{FFFFFF} Добро пожаловать на сервер, {5B85C4}' .. clientName .. '{FFFFFF}.', -1)
     sampAddChatMessage('{FFFFFF}Для активации скрипта используйте команду — {5B85C4}/trpcomm {FFFFFF}или {5B85C4}' .. hotkey_display.v .. '{FFFFFF}.', -1)
@@ -4105,11 +4147,16 @@ function main()
         main_window_state.v = not main_window_state.v
     end)
 
+        sampRegisterChatCommand('trpcard', function()
+        event_card_message = "Осталось 30 минут"
+        event_card_timer = 210
+    end)
+
         while true do
         wait(0)
         imgui.Process = main_window_state.v
 
-        if toast_timer > 0 then
+        if notifications_enabled.v and toast_timer > 0 then
             toast_timer = toast_timer - 1
             local sw, sh = getScreenResolution()
 
@@ -4136,6 +4183,45 @@ function main()
             renderFontDrawText(toast_font, toast_text, sw - 318, sh - 58, col_white)
         end
 
+        if notifications_enabled.v and event_card_timer > 0 then
+            event_card_timer = event_card_timer - 1
+            local sw, sh = getScreenResolution()
+
+            local cardW, cardH = 280, 88
+            local SLIDE_IN, SLIDE_OUT, TOTAL = 15, 15, 210
+
+            -- p: 0 = карточка на месте, 1 = полностью за экраном справа (только этим двигаем, без fade)
+            local p = 0.0
+            local elapsed = TOTAL - event_card_timer
+            if elapsed <= SLIDE_IN then
+                local t = elapsed / SLIDE_IN
+                p = 1.0 - (1.0 - (1.0 - t) ^ 3)
+            elseif event_card_timer <= SLIDE_OUT then
+                local t = (SLIDE_OUT - event_card_timer) / SLIDE_OUT
+                p = t ^ 3
+            end
+
+            local x0 = (sw - cardW - 20) + p * (cardW + 40)
+            local y0 = sh - cardH - 20
+
+            local col_bg     = 0xD8 * 0x1000000 + 0x15151B
+            local col_accent = 0xFF * 0x1000000 + 0x5B85C4
+            local col_white  = 0xFF * 0x1000000 + 0xFFFFFF
+            local col_dim    = 0xFF * 0x1000000 + 0x9A9AA5
+
+            renderDrawBox(x0, y0, cardW, cardH, col_bg)
+            renderDrawBox(x0, y0 + cardH - 2, cardW, 2, col_accent)
+
+            if event_card_logo_texture then
+                renderDrawTexture(event_card_logo_texture, x0 + 14, y0 + (cardH - 44) / 2, 44, 44, 0.0, col_white)
+            end
+
+            local textX = x0 + 14 + 44 + 14
+            renderFontDrawText(event_card_font_name, u8:decode(upcoming_event_name), textX, y0 + 14, col_white)
+            renderFontDrawText(event_card_font_time, "Начало: " .. upcoming_event_time, textX, y0 + 36, col_dim)
+            renderFontDrawText(event_card_font_time, event_card_message, textX, y0 + 58, col_accent)
+        end
+
                 if tracker_active and os.time() ~= tracker_last_update then
             tracker_last_update = os.time()
             updateTrackerRadius()
@@ -4152,12 +4238,12 @@ function main()
 
             if not event_notify_30_sent and secLeft <= 1800 and secLeft > 1795 then
                 event_notify_30_sent = true
-                toast_text = "До ивента «" .. u8:decode(upcoming_event_name) .. "» осталось 30 минут"
-                toast_timer = 150
+                event_card_message = "Осталось 30 минут"
+                event_card_timer = 210 -- ~3.5 сек
             elseif not event_notify_10_sent and secLeft <= 600 and secLeft > 595 then
                 event_notify_10_sent = true
-                toast_text = "До ивента «" .. u8:decode(upcoming_event_name) .. "» осталось 10 минут"
-                toast_timer = 150
+                event_card_message = "Осталось 10 минут"
+                event_card_timer = 210
             end
         end
 
