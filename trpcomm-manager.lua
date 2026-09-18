@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.0
+--  Актуальная версия: 2.0b
 -- ============================================================
 
 imgui = require 'imgui'
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.0"
+SCRIPT_VERSION = "2.0b"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -652,9 +652,13 @@ local AD_CITIES = {
     { code = "lv", name = u8"Las Venturas" },
 }
 ad_city_idx = imgui.ImInt(0)
+ad_multi_city = imgui.ImBool(false)
+ad_city_rotation_idx = 0
 ad_text = imgui.ImBuffer("", AD_TEXT_MAX)
 ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
 ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
+ad_news_confirm_until = 0 -- os.time(), до какого момента автожмём попап "без модерации" (появляется ПОСЛЕ ad_pending=false)
+ad_debug_window = 0 -- временно, для диагностики
 
 local function formatMMSS(sec)
     if sec < 0 then sec = 0 end
@@ -709,6 +713,7 @@ end
 
 -- ---------- Форма добавления объявления ----------
 local ad_add_form_open = false
+local ad_edit_idx = nil
 local ad_new_text = imgui.ImBuffer("", AD_TEXT_MAX)
 
 local function drawAdAddForm(t)
@@ -721,10 +726,11 @@ local function drawAdAddForm(t)
     pushThemeColors()
     pushThemeRounding()
 
+    local isEdit = ad_edit_idx ~= nil
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"Новое объявление##ad_add_form", open,
+    imgui.Begin((isEdit and u8"Изменить объявление" or u8"Новое объявление") .. "##ad_add_form", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then ad_add_form_open = false end
+    if not open.v then ad_add_form_open = false; ad_edit_idx = nil end
 
     imgui.TextColored(t.textDim, u8"Текст (до " .. AD_TEXT_MAX .. u8" символов):")
     imgui.PushItemWidth(-1)
@@ -733,18 +739,24 @@ local function drawAdAddForm(t)
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    if imgui.Button(u8"Добавить##ad_add_confirm", imgui.ImVec2(140, 30)) then
+    if imgui.Button((isEdit and u8"Сохранить" or u8"Добавить") .. "##ad_add_confirm", imgui.ImVec2(140, 30)) then
         local raw = u8:decode(ad_new_text.v)
         if raw ~= "" then
-            ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
+            if isEdit then
+                ads_list[ad_edit_idx].text = raw
+            else
+                ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
+            end
             saveAdsList()
             ad_new_text.v = ""
             ad_add_form_open = false
+            ad_edit_idx = nil
         end
     end
     imgui.SameLine()
     if imgui.Button(u8"Отмена##ad_add_cancel", imgui.ImVec2(120, 30)) then
         ad_add_form_open = false
+        ad_edit_idx = nil
     end
 
     imgui.End()
@@ -761,7 +773,14 @@ ad_rotation_idx = 0
 local function sendAdNow(textRaw)
     ad_pending_text = textRaw
     ad_pending = true
-    local city = AD_CITIES[ad_city_idx.v + 1].code
+    ad_debug_window = os.time() + 15 -- временно, для диагностики текстдрава "без модерации"
+    local city
+    if ad_multi_city.v then
+        city = AD_CITIES[(ad_city_rotation_idx % #AD_CITIES) + 1].code
+        ad_city_rotation_idx = ad_city_rotation_idx + 1
+    else
+        city = AD_CITIES[ad_city_idx.v + 1].code
+    end
     sampSendChat("/sms radio" .. city)
 end
 
@@ -862,6 +881,8 @@ local function drawHRAdsTab(t)
     imgui.TextColored(t.accent, u8"Список объявлений")
     imgui.SameLine(imgui.GetWindowWidth() - 140)
     if imgui.Button(u8"+ Добавить##ad_add_open", imgui.ImVec2(130, 26)) then
+        ad_edit_idx = nil
+        ad_new_text.v = ""
         ad_add_form_open = true
     end
     imgui.Spacing()
@@ -903,31 +924,39 @@ local function drawHRAdsTab(t)
     for i, ad in ipairs(ads_list) do
         imgui.PushID("ad_" .. i)
 
-        local en = imgui.ImBool(ad.enabled)
-        if imgui.Checkbox("##ad_enabled", en) then
-            ad.enabled = en.v
-            saveAdsList()
-        end
-        imgui.SameLine()
+        local previewRaw = ad.text:sub(1, 60)
+        if #ad.text > 60 then previewRaw = previewRaw .. "..." end
+        local label = u8(previewRaw) .. "  (" .. (ad.sentCount or 0) .. ")" .. (ad.enabled and "" or u8"  [выкл]")
 
-        local previewRaw = ad.text:sub(1, 40)
-        if #ad.text > 40 then previewRaw = previewRaw .. "..." end
-        if imgui.Button(u8(previewRaw) .. "##ad_row_send", imgui.ImVec2(300, 28)) then
+        if not ad.enabled then imgui.PushStyleColor(imgui.Col.Text, t.textDim) end
+        if imgui.Button(label .. "##ad_row", imgui.ImVec2(-1, 30)) then
             if not ad_pending then
                 sendAdNow(ad.text)
             end
         end
+        if not ad.enabled then imgui.PopStyleColor() end
+
         if imgui.IsItemHovered() then
-            imgui.SetTooltip(u8"ЛКМ — Отправить объявление | Колёсико — Удалить объявление")
+            imgui.SetTooltip(u8"ЛКМ — отправить сейчас | ПКМ — ещё действия")
         end
-        if imgui.IsItemClicked(2) then
-            deleteAdIdx = i
-        end
-        imgui.SameLine()
-        imgui.TextColored(t.textDim, "(" .. (ad.sentCount or 0) .. ")")
-        imgui.SameLine()
-        if imgui.Button(fa.ICON_TIMES .. "##ad_delete", imgui.ImVec2(28, 28)) then
-            deleteAdIdx = i
+
+        if imgui.BeginPopupContextItem("##ad_ctx") then
+            imgui.TextColored(t.textDim, u8"Отправлено: " .. (ad.sentCount or 0) .. u8" раз")
+            imgui.Separator()
+            if imgui.MenuItem(ad.enabled and (fa.ICON_TIMES .. u8" Выключить") or (fa.ICON_CHECK .. u8" Включить")) then
+                ad.enabled = not ad.enabled
+                saveAdsList()
+            end
+            if imgui.MenuItem(fa.ICON_PENCIL .. u8" Изменить") then
+                ad_edit_idx = i
+                ad_new_text.v = u8(ad.text)
+                ad_add_form_open = true
+            end
+            imgui.Separator()
+            if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить") then
+                deleteAdIdx = i
+            end
+            imgui.EndPopup()
         end
 
         imgui.PopID()
@@ -950,11 +979,16 @@ local function drawHRAdsTab(t)
 
     imgui.Spacing()
     imgui.TextColored(t.textDim, u8"Город:")
-    local cityNames = {}
-    for _, c in ipairs(AD_CITIES) do cityNames[#cityNames + 1] = c.name end
-    imgui.PushItemWidth(200)
-    imgui.Combo("##ad_city", ad_city_idx, cityNames)
-    imgui.PopItemWidth()
+    if ad_multi_city.v then
+        imgui.TextColored(t.textDim, u8"— по очереди во все города —")
+    else
+        local cityNames = {}
+        for _, c in ipairs(AD_CITIES) do cityNames[#cityNames + 1] = c.name end
+        imgui.PushItemWidth(200)
+        imgui.Combo("##ad_city", ad_city_idx, cityNames)
+        imgui.PopItemWidth()
+    end
+    imgui.Checkbox(u8"Отправлять по очереди во все города", ad_multi_city)
 
     imgui.Spacing()
 
@@ -978,7 +1012,7 @@ local function drawHRAdsTab(t)
 
     if imgui.Checkbox(u8"Включить автоотправку всех объявлений из списка", ad_auto_send) then
         if ad_auto_send.v then
-            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
+            ad_next_send_time = os.time()
         end
     end
 
@@ -1196,15 +1230,32 @@ local function fetchCalendarEvents()
             return
         end
 
+        local function cleanEventDescription(desc)
+            if not desc or desc == "" then return desc end
+            desc = desc:gsub("<[Bb][Rr]%s*/?>", "\n")   -- <br>, <br/>, <br /> -> перенос строки
+            desc = desc:gsub("</[Pp]>", "\n")
+            desc = desc:gsub("</[Dd][Ii][Vv]>", "\n")
+            desc = desc:gsub("<[^>]+>", "")
+            desc = desc:gsub("&nbsp;", " ")
+            desc = desc:gsub("&amp;", "&")
+            desc = desc:gsub("&lt;", "<")
+            desc = desc:gsub("&gt;", ">")
+            desc = desc:gsub("&quot;", '"')
+            desc = desc:gsub("&#39;", "'")
+            desc = desc:gsub("\n\n\n+", "\n\n")
+            desc = desc:gsub("^%s+", ""):gsub("%s+$", "")
+            return desc
+        end
+
         calendar_events = {}
         for _, item in ipairs(data.items) do
-            -- summary/description/location приходят от Google уже в UTF-8 — оборачивать в u8() НЕ нужно
+
             local startRaw = item.start and (item.start.dateTime or item.start.date)
             local isAllDay = item.start and item.start.date ~= nil
             local y, mo, d, h, mi = parseISODateTime(startRaw)
             calendar_events[#calendar_events + 1] = {
                 summary     = (item.summary and item.summary ~= "") and item.summary or u8"Без названия",
-                description = item.description,
+                description = cleanEventDescription(item.description),
                 location    = item.location,
                 y = y, mo = mo, d = d, h = h, mi = mi,
                 isAllDay = isAllDay,
@@ -3949,7 +4000,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.0")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.0b")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4106,6 +4157,20 @@ function imgui.OnDrawFrame()
     drawAdAddForm(t)
 end
 
+sampev.onShowTextDraw = function(id, data)
+    if ad_debug_window and os.time() <= ad_debug_window and data.text and data.text ~= "" then
+        sampAddChatMessage('{FFAA00}[DEBUG] td id=' .. tostring(id) .. ' text=' .. tostring(data.text), -1)
+    end
+
+    if os.time() <= ad_news_confirm_until and data.text and data.text:find("сотрудником новостного агентства") then
+        lua_thread.create(function()
+            setVirtualKeyDown(0x0D, true)
+            wait(150)
+            setVirtualKeyDown(0x0D, false)
+        end)
+    end
+end
+
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if ad_pending then
         if title and title:find("без модерации") then
@@ -4117,11 +4182,12 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
-                if dialogId == 3410 and title:find("Отправка рекламы на радио") then
+            if dialogId == 3410 and title:find("Отправка рекламы на радио") then
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
             showToast('Объявление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
             ad_pending = false
+            ad_news_confirm_until = os.time() + 5
             ad_text.v = ""
             if ad_auto_send.v then
                 ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
@@ -4179,6 +4245,13 @@ sampev.onServerMessage = function(color, text)
                 local secs = tonumber(text:match("через (%d+)"))
                 ad_next_send_time = os.time() + (secs and (secs + 2) or 60)
             end
+        elseif text:find("Ваш мобильный телефон выключен") then
+            ad_pending = false
+            if ad_auto_send.v then
+                ad_auto_send.v = false
+                saveSettings()
+            end
+            showToast("Телефон выключен — отправка объявлений невозможна. Автоотправка остановлена.")
         end
     end
 
