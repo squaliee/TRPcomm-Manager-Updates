@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.1
+--  Актуальная версия: 2.2
 -- ============================================================
 
 imgui = require 'imgui'
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.1"
+SCRIPT_VERSION = "2.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -306,6 +306,196 @@ local themes = {
         text       = imgui.ImVec4(0.95, 0.95, 0.95, 1.00),
         textDim    = imgui.ImVec4(0.60, 0.60, 0.60, 1.00),
     },
+
+    -- 6. Киберпанк (Глубокий темный фон с неоново-розовыми и циановыми акцентами)
+    {
+        name       = u8"Киберпанк",
+        windowBg   = imgui.ImVec4(0.05, 0.04, 0.07, 0.97),
+        titleBg    = imgui.ImVec4(0.55, 0.10, 0.40, 1.00),
+        panelBg    = imgui.ImVec4(0.09, 0.07, 0.12, 1.00),
+        button     = imgui.ImVec4(0.55, 0.10, 0.40, 1.00),
+        buttonHov  = imgui.ImVec4(0.70, 0.15, 0.55, 1.00),
+        buttonAct  = imgui.ImVec4(0.40, 0.05, 0.30, 1.00),
+        header     = imgui.ImVec4(0.55, 0.10, 0.40, 1.00),
+        headerHov  = imgui.ImVec4(0.70, 0.15, 0.55, 1.00),
+        headerAct  = imgui.ImVec4(0.40, 0.05, 0.30, 1.00),
+        frameBg    = imgui.ImVec4(0.12, 0.09, 0.16, 1.00),
+        border     = imgui.ImVec4(0.70, 0.20, 0.55, 0.45),
+        accent     = imgui.ImVec4(0.10, 0.90, 0.90, 1.00),
+        text       = imgui.ImVec4(0.95, 0.92, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.60, 0.50, 0.75, 1.00),
+    },
+
+    -- 7. Бирюзовая (Морская бездна, темный сине-зеленый)
+    {
+        name       = u8"Бирюзовая",
+        windowBg   = imgui.ImVec4(0.03, 0.06, 0.07, 0.97),
+        titleBg    = imgui.ImVec4(0.10, 0.40, 0.45, 1.00),
+        panelBg    = imgui.ImVec4(0.06, 0.10, 0.12, 1.00),
+        button     = imgui.ImVec4(0.10, 0.40, 0.45, 1.00),
+        buttonHov  = imgui.ImVec4(0.15, 0.55, 0.60, 1.00),
+        buttonAct  = imgui.ImVec4(0.05, 0.30, 0.35, 1.00),
+        header     = imgui.ImVec4(0.10, 0.40, 0.45, 1.00),
+        headerHov  = imgui.ImVec4(0.15, 0.55, 0.60, 1.00),
+        headerAct  = imgui.ImVec4(0.05, 0.30, 0.35, 1.00),
+        frameBg    = imgui.ImVec4(0.08, 0.14, 0.16, 1.00),
+        border     = imgui.ImVec4(0.20, 0.60, 0.65, 0.45),
+        accent     = imgui.ImVec4(0.25, 0.85, 0.90, 1.00),
+        text       = imgui.ImVec4(0.90, 0.98, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.50, 0.70, 0.75, 1.00),
+    },
+
+    -- 8. Золотая (Премиальная, почти черный фон с приглушенным золотом)
+    {
+        name       = u8"Золотая",
+        windowBg   = imgui.ImVec4(0.07, 0.07, 0.07, 0.98),
+        titleBg    = imgui.ImVec4(0.45, 0.35, 0.10, 1.00),
+        panelBg    = imgui.ImVec4(0.10, 0.10, 0.10, 1.00),
+        button     = imgui.ImVec4(0.45, 0.35, 0.10, 1.00),
+        buttonHov  = imgui.ImVec4(0.60, 0.45, 0.15, 1.00),
+        buttonAct  = imgui.ImVec4(0.35, 0.25, 0.05, 1.00),
+        header     = imgui.ImVec4(0.45, 0.35, 0.10, 1.00),
+        headerHov  = imgui.ImVec4(0.60, 0.45, 0.15, 1.00),
+        headerAct  = imgui.ImVec4(0.35, 0.25, 0.05, 1.00),
+        frameBg    = imgui.ImVec4(0.13, 0.13, 0.13, 1.00),
+        border     = imgui.ImVec4(0.65, 0.50, 0.15, 0.40),
+        accent     = imgui.ImVec4(0.90, 0.70, 0.20, 1.00),
+        text       = imgui.ImVec4(0.98, 0.95, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.65, 0.60, 0.50, 1.00),
+    },
+
+    -- 9. Токсичная (Матовый черный с кислотно-зелеными элементами)
+    {
+        name       = u8"Токсичная",
+        windowBg   = imgui.ImVec4(0.04, 0.04, 0.04, 0.97),
+        titleBg    = imgui.ImVec4(0.30, 0.50, 0.10, 1.00),
+        panelBg    = imgui.ImVec4(0.08, 0.08, 0.08, 1.00),
+        button     = imgui.ImVec4(0.30, 0.50, 0.10, 1.00),
+        buttonHov  = imgui.ImVec4(0.40, 0.65, 0.15, 1.00),
+        buttonAct  = imgui.ImVec4(0.20, 0.35, 0.05, 1.00),
+        header     = imgui.ImVec4(0.30, 0.50, 0.10, 1.00),
+        headerHov  = imgui.ImVec4(0.40, 0.65, 0.15, 1.00),
+        headerAct  = imgui.ImVec4(0.20, 0.35, 0.05, 1.00),
+        frameBg    = imgui.ImVec4(0.12, 0.12, 0.12, 1.00),
+        border     = imgui.ImVec4(0.45, 0.75, 0.15, 0.40),
+        accent     = imgui.ImVec4(0.65, 0.95, 0.20, 1.00),
+        text       = imgui.ImVec4(0.90, 1.00, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.55, 0.70, 0.55, 1.00),
+    },
+
+    -- 10. Бордовая (Благородный винный оттенок, темнее и холоднее красной)
+    {
+        name       = u8"Бордовая",
+        windowBg   = imgui.ImVec4(0.07, 0.04, 0.05, 0.97),
+        titleBg    = imgui.ImVec4(0.35, 0.10, 0.15, 1.00),
+        panelBg    = imgui.ImVec4(0.11, 0.07, 0.08, 1.00),
+        button     = imgui.ImVec4(0.35, 0.10, 0.15, 1.00),
+        buttonHov  = imgui.ImVec4(0.45, 0.15, 0.22, 1.00),
+        buttonAct  = imgui.ImVec4(0.25, 0.05, 0.10, 1.00),
+        header     = imgui.ImVec4(0.35, 0.10, 0.15, 1.00),
+        headerHov  = imgui.ImVec4(0.45, 0.15, 0.22, 1.00),
+        headerAct  = imgui.ImVec4(0.25, 0.05, 0.10, 1.00),
+        frameBg    = imgui.ImVec4(0.15, 0.09, 0.11, 1.00),
+        border     = imgui.ImVec4(0.50, 0.15, 0.25, 0.45),
+        accent     = imgui.ImVec4(0.80, 0.25, 0.35, 1.00),
+        text       = imgui.ImVec4(0.98, 0.90, 0.92, 1.00),
+        textDim    = imgui.ImVec4(0.70, 0.50, 0.55, 1.00),
+    },
+
+    -- 11. Терминал (Абсолютно черный фон, хакерский зеленый)
+    {
+        name       = u8"Терминал",
+        windowBg   = imgui.ImVec4(0.02, 0.02, 0.02, 0.98),
+        titleBg    = imgui.ImVec4(0.05, 0.25, 0.10, 1.00),
+        panelBg    = imgui.ImVec4(0.05, 0.05, 0.05, 1.00),
+        button     = imgui.ImVec4(0.05, 0.25, 0.10, 1.00),
+        buttonHov  = imgui.ImVec4(0.10, 0.35, 0.15, 1.00),
+        buttonAct  = imgui.ImVec4(0.02, 0.15, 0.05, 1.00),
+        header     = imgui.ImVec4(0.05, 0.25, 0.10, 1.00),
+        headerHov  = imgui.ImVec4(0.10, 0.35, 0.15, 1.00),
+        headerAct  = imgui.ImVec4(0.02, 0.15, 0.05, 1.00),
+        frameBg    = imgui.ImVec4(0.08, 0.08, 0.08, 1.00),
+        border     = imgui.ImVec4(0.15, 0.45, 0.20, 0.50),
+        accent     = imgui.ImVec4(0.20, 0.85, 0.30, 1.00),
+        text       = imgui.ImVec4(0.70, 1.00, 0.70, 1.00),
+        textDim    = imgui.ImVec4(0.40, 0.65, 0.40, 1.00),
+    },
+
+    -- 12. Ретровейв (Смесь темного индиго и мадженты)
+    {
+        name       = u8"Ретровейв",
+        windowBg   = imgui.ImVec4(0.06, 0.03, 0.10, 0.97),
+        titleBg    = imgui.ImVec4(0.45, 0.15, 0.60, 1.00),
+        panelBg    = imgui.ImVec4(0.10, 0.05, 0.15, 1.00),
+        button     = imgui.ImVec4(0.45, 0.15, 0.60, 1.00),
+        buttonHov  = imgui.ImVec4(0.60, 0.20, 0.75, 1.00),
+        buttonAct  = imgui.ImVec4(0.30, 0.10, 0.45, 1.00),
+        header     = imgui.ImVec4(0.45, 0.15, 0.60, 1.00),
+        headerHov  = imgui.ImVec4(0.60, 0.20, 0.75, 1.00),
+        headerAct  = imgui.ImVec4(0.30, 0.10, 0.45, 1.00),
+        frameBg    = imgui.ImVec4(0.14, 0.08, 0.20, 1.00),
+        border     = imgui.ImVec4(0.65, 0.25, 0.85, 0.45),
+        accent     = imgui.ImVec4(0.95, 0.35, 0.75, 1.00),
+        text       = imgui.ImVec4(0.95, 0.90, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.65, 0.50, 0.80, 1.00),
+    },
+
+    -- 13. Кофейная (Мягкие оттенки темного шоколада и латте)
+    {
+        name       = u8"Кофейная",
+        windowBg   = imgui.ImVec4(0.08, 0.06, 0.05, 0.97),
+        titleBg    = imgui.ImVec4(0.30, 0.20, 0.15, 1.00),
+        panelBg    = imgui.ImVec4(0.12, 0.10, 0.09, 1.00),
+        button     = imgui.ImVec4(0.30, 0.20, 0.15, 1.00),
+        buttonHov  = imgui.ImVec4(0.40, 0.28, 0.22, 1.00),
+        buttonAct  = imgui.ImVec4(0.20, 0.12, 0.08, 1.00),
+        header     = imgui.ImVec4(0.30, 0.20, 0.15, 1.00),
+        headerHov  = imgui.ImVec4(0.40, 0.28, 0.22, 1.00),
+        headerAct  = imgui.ImVec4(0.20, 0.12, 0.08, 1.00),
+        frameBg    = imgui.ImVec4(0.16, 0.13, 0.11, 1.00),
+        border     = imgui.ImVec4(0.45, 0.35, 0.25, 0.45),
+        accent     = imgui.ImVec4(0.70, 0.50, 0.35, 1.00),
+        text       = imgui.ImVec4(0.95, 0.92, 0.88, 1.00),
+        textDim    = imgui.ImVec4(0.65, 0.60, 0.55, 1.00),
+    },
+
+    -- 14. Сапфировая (Глубокий синий, более насыщенный и контрастный чем стандартная)
+    {
+        name       = u8"Сапфировая",
+        windowBg   = imgui.ImVec4(0.02, 0.03, 0.06, 0.97),
+        titleBg    = imgui.ImVec4(0.10, 0.20, 0.50, 1.00),
+        panelBg    = imgui.ImVec4(0.05, 0.07, 0.12, 1.00),
+        button     = imgui.ImVec4(0.10, 0.20, 0.50, 1.00),
+        buttonHov  = imgui.ImVec4(0.15, 0.30, 0.70, 1.00),
+        buttonAct  = imgui.ImVec4(0.05, 0.10, 0.35, 1.00),
+        header     = imgui.ImVec4(0.10, 0.20, 0.50, 1.00),
+        headerHov  = imgui.ImVec4(0.15, 0.30, 0.70, 1.00),
+        headerAct  = imgui.ImVec4(0.05, 0.10, 0.35, 1.00),
+        frameBg    = imgui.ImVec4(0.07, 0.10, 0.18, 1.00),
+        border     = imgui.ImVec4(0.25, 0.40, 0.80, 0.45),
+        accent     = imgui.ImVec4(0.35, 0.55, 0.95, 1.00),
+        text       = imgui.ImVec4(0.90, 0.95, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.55, 0.65, 0.85, 1.00),
+    },
+
+    -- 15. Ледяная (Угольно-серый фон со строгими холодно-голубыми элементами)
+    {
+        name       = u8"Ледяная",
+        windowBg   = imgui.ImVec4(0.05, 0.06, 0.07, 0.97),
+        titleBg    = imgui.ImVec4(0.15, 0.20, 0.25, 1.00),
+        panelBg    = imgui.ImVec4(0.08, 0.09, 0.10, 1.00),
+        button     = imgui.ImVec4(0.15, 0.20, 0.25, 1.00),
+        buttonHov  = imgui.ImVec4(0.20, 0.28, 0.35, 1.00),
+        buttonAct  = imgui.ImVec4(0.10, 0.14, 0.18, 1.00),
+        header     = imgui.ImVec4(0.15, 0.20, 0.25, 1.00),
+        headerHov  = imgui.ImVec4(0.20, 0.28, 0.35, 1.00),
+        headerAct  = imgui.ImVec4(0.10, 0.14, 0.18, 1.00),
+        frameBg    = imgui.ImVec4(0.11, 0.13, 0.15, 1.00),
+        border     = imgui.ImVec4(0.30, 0.40, 0.50, 0.45),
+        accent     = imgui.ImVec4(0.40, 0.60, 0.80, 1.00),
+        text       = imgui.ImVec4(0.92, 0.96, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.60, 0.65, 0.70, 1.00),
+    }
 }
 
 currentThemeIdx = 1
@@ -545,7 +735,10 @@ local function saveSettings()
             delete_textdraw = tostring(delete_textdraw.v),
             notifications_enabled = tostring(notifications_enabled.v),
             ad_interval_minutes = tostring(ad_interval_minutes.v),
-            ad_city_idx = tostring(ad_city_idx.v),
+            ad_city_ls = tostring(ad_city_ls.v),
+            ad_city_sf = tostring(ad_city_sf.v),
+            ad_city_lv = tostring(ad_city_lv.v),
+            ad_city_all = tostring(ad_city_all.v),
             campaign_ad_text = u8:decode(campaign_ad_text.v),
             campaign_sent_count = tostring(campaign_sent_count),
         }
@@ -648,16 +841,33 @@ end
 -- ============================================================
 --  РЕКЛАМНЫЙ ОТДЕЛ: Объявления
 -- ============================================================
-AD_TEXT_MAX = 120 -- лимит символов
+AD_TEXT_MAX = 98 -- лимит символов
 
 local AD_CITIES = {
     { code = "ls", name = u8"Los Santos" },
     { code = "sf", name = u8"San Fierro" },
     { code = "lv", name = u8"Las Venturas" },
 }
-ad_city_idx = imgui.ImInt(tonumber(mainIni.settings.ad_city_idx) or 0)
-ad_multi_city = imgui.ImBool(false)
-ad_city_rotation_idx = 0
+ad_city_ls  = imgui.ImBool(boolFromSetting(mainIni.settings.ad_city_ls or "true"))
+ad_city_sf  = imgui.ImBool(boolFromSetting(mainIni.settings.ad_city_sf or "false"))
+ad_city_lv  = imgui.ImBool(boolFromSetting(mainIni.settings.ad_city_lv or "false"))
+ad_city_all = imgui.ImBool(boolFromSetting(mainIni.settings.ad_city_all or "false"))
+
+ad_pending_cities   = {} -- очередь кодов городов на текущую отправку
+ad_pending_city_pos = 0
+
+local function getSelectedCityCodes()
+    if ad_city_all.v then
+        local codes = {}
+        for _, c in ipairs(AD_CITIES) do codes[#codes + 1] = c.code end
+        return codes
+    end
+    local codes = {}
+    if ad_city_ls.v then codes[#codes + 1] = "ls" end
+    if ad_city_sf.v then codes[#codes + 1] = "sf" end
+    if ad_city_lv.v then codes[#codes + 1] = "lv" end
+    return codes
+end
 -- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
 ad_interval_minutes = imgui.ImInt(tonumber(mainIni.settings.ad_interval_minutes) or 30)
@@ -665,7 +875,6 @@ ad_text = imgui.ImBuffer("", AD_TEXT_MAX)
 ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
 ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
 ad_news_confirm_until = 0 -- os.time(), до какого момента автожмём попап "без модерации" (появляется ПОСЛЕ ad_pending=false)
-ad_debug_window = 0 -- временно, для диагностики
 
 local function formatMMSS(sec)
     if sec < 0 then sec = 0 end
@@ -800,6 +1009,21 @@ local function drawAdAddForm(t)
     imgui.InputTextMultiline("##ad_new_text", ad_new_text, imgui.ImVec2(-1, 90))
     imgui.PopItemWidth()
 
+    if imgui.IsItemActive() then
+        local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56) -- Ctrl + V
+        if ctrlVDown and not ad_new_text_ctrlv_was_down then
+            local clip = getClipboardText()
+            if clip and clip ~= "" then
+                local text = clip
+                if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
+                ad_new_text.v = u8(text)
+            end
+        end
+        ad_new_text_ctrlv_was_down = ctrlVDown
+    else
+        ad_new_text_ctrlv_was_down = false
+    end
+
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
     if imgui.Button((isEdit and u8"Сохранить" or u8"Добавить") .. "##ad_add_confirm", imgui.ImVec2(140, 30)) then
@@ -832,20 +1056,30 @@ ad_auto_send = imgui.ImBool(false)
 ad_next_send_time = 0
 ad_rotation_idx = 0
 
+local function sendToNextPendingCity()
+    ad_pending_city_pos = ad_pending_city_pos + 1
+    local cityCode = ad_pending_cities[ad_pending_city_pos]
+    if not cityCode then
+        ad_pending = false
+        return
+    end
+    ad_pending = true
+    ad_debug_window = os.time() + 15
+    sampSendChat("/sms radio" .. cityCode)
+end
+
 local function sendAdNow(textRaw, source, eventLabel)
+    local cities = getSelectedCityCodes()
+    if #cities == 0 then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Выбери хотя бы один город для отправки.', -1)
+        return
+    end
     ad_pending_text = textRaw
     ad_pending_source = source or "manual"
     ad_pending_event_label = eventLabel
-    ad_pending = true
-    ad_debug_window = os.time() + 15
-    local city
-    if ad_multi_city.v then
-        city = AD_CITIES[(ad_city_rotation_idx % #AD_CITIES) + 1].code
-        ad_city_rotation_idx = ad_city_rotation_idx + 1
-    else
-        city = AD_CITIES[ad_city_idx.v + 1].code
-    end
-    sampSendChat("/sms radio" .. city)
+    ad_pending_cities = cities
+    ad_pending_city_pos = 0
+    sendToNextPendingCity()
 end
 
 local function incrementAdSentCount(textRaw)
@@ -989,11 +1223,10 @@ local function drawHRAdsTab(t)
     for i, ad in ipairs(ads_list) do
         imgui.PushID("ad_" .. i)
 
-        local previewRaw = ad.text:sub(1, 60)
-        if #ad.text > 60 then previewRaw = previewRaw .. "..." end
-        local label = u8(previewRaw) .. (ad.enabled and "" or u8"  [выкл]")
+        local label = u8(ad.text) .. (ad.enabled and "" or u8"  [выкл]")
 
-        if not ad.enabled then imgui.PushStyleColor(imgui.Col.Text, t.textDim) end
+        local dimmedGrey = imgui.ImVec4(0.55, 0.55, 0.58, 0.55)
+        if not ad.enabled then imgui.PushStyleColor(imgui.Col.Text, dimmedGrey) end
         if imgui.Button(label .. "##ad_row", imgui.ImVec2(-1, 30)) then
             if not ad_pending then
                 sendAdNow(ad.text, "manual")
@@ -1043,19 +1276,21 @@ local function drawHRAdsTab(t)
     imgui.PopItemWidth()
 
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Город:")
-    if ad_multi_city.v then
-        imgui.TextColored(t.textDim, u8"— по очереди во все города —")
-    else
-        local cityNames = {}
-        for _, c in ipairs(AD_CITIES) do cityNames[#cityNames + 1] = c.name end
-        imgui.PushItemWidth(200)
-        if imgui.Combo("##ad_city", ad_city_idx, cityNames) then
-            saveSettings()
-        end
-        imgui.PopItemWidth()
+    imgui.TextColored(t.textDim, u8"Город(-а):")
+
+    if ad_city_all.v then
+        imgui.TextColored(t.textDim, u8"(выбрано \"все три\" — отдельные галочки ниже игнорируются)")
     end
-    imgui.Checkbox(u8"Отправлять по очереди во все города", ad_multi_city)
+    if imgui.Checkbox(u8"Los Santos##ad_city_ls", ad_city_ls) then saveSettings() end
+    imgui.SameLine()
+    if imgui.Checkbox(u8"San Fierro##ad_city_sf", ad_city_sf) then saveSettings() end
+    imgui.SameLine()
+    if imgui.Checkbox(u8"Las Venturas##ad_city_lv", ad_city_lv) then saveSettings() end
+
+    imgui.Spacing()
+    if imgui.Checkbox(u8"Отправлять во все три города", ad_city_all) then
+        saveSettings()
+    end
 
     imgui.Spacing()
 
@@ -1276,9 +1511,7 @@ local function drawCampaignHistoryTab(t)
             imgui.TextColored(t.accent, entry.eventLabel)
             imgui.SameLine()
         end
-        local preview = entry.text:sub(1, 50)
-        if #entry.text > 50 then preview = preview .. "..." end
-        imgui.TextColored(t.text, u8(preview))
+        imgui.TextColored(t.text, u8(entry.text))
         imgui.PopID()
     end
 end
@@ -1656,14 +1889,16 @@ local function drawAnalyticsHistoryTab(t)
     imgui.TextColored(t.textDim, u8"Последние " .. #ad_history_log .. u8" из " .. AD_HISTORY_LIMIT .. u8" (лимит)")
     imgui.Spacing()
 
+    local sourceLabels = { manual = u8"Вручную", queue = u8"Очередь", campaign = u8"Кампания" }
+
     for i = #ad_history_log, 1, -1 do
         local entry = ad_history_log[i]
         imgui.PushID("analytics_hist_" .. i)
         imgui.TextColored(t.textDim, os.date("%d.%m %H:%M", entry.ts))
         imgui.SameLine()
-        local preview = entry.text:sub(1, 60)
-        if #entry.text > 60 then preview = preview .. "..." end
-        imgui.TextColored(t.text, u8(preview))
+        imgui.TextColored(t.accent, "[" .. (sourceLabels[entry.source] or entry.source or "?") .. "]")
+        imgui.SameLine()
+        imgui.TextColored(t.text, u8(entry.text))
         imgui.PopID()
     end
 end
@@ -3653,10 +3888,15 @@ local function sendCuratorReport()
     local finalUrl = string.format("%s?event=%s&nicknames=%s",
         CURATOR_LIST_URL, encodeUrlComponent(u8(eventText)), encodeUrlComponent(u8(nicksString)))
 
+    local attendeesSnapshot = {}
+    for _, nick in ipairs(curator_captured) do attendeesSnapshot[#attendeesSnapshot + 1] = nick end
+    local eventNameForReport = u8(eventText)
+
         sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка отчёта по кураторам...', -1)
     downloadUrlToFile(finalUrl, "moonloader\\config\\trp_temp.txt", function(id, status)
         if status == 6 then
             showToast('Данные по кураторам занесены в таблицу.')
+            addCuratorFillReport(eventNameForReport, attendeesSnapshot)
             curator_captured = {}
         else
 
@@ -3664,10 +3904,127 @@ local function sendCuratorReport()
     end)
 end
 
-local function drawCuratorsFillCuratorsSection(t)
-        imgui.TextColored(t.accent, fa.ICON_USER .. u8" Автозаполнение кураторов")
+-- ============================================================
+--  ОТЧЁТЫ АВТОЗАПОЛНЕНИЯ КУРАТОРОВ: хранение
+--  moonloader\config\TRPcomm Manager Config\curator_fill_reports\index.ini
+-- ============================================================
+CURATOR_FILL_REPORTS_INDEX_PATH = "moonloader\\config\\TRPcomm Manager Config\\curator_fill_reports\\index.ini"
+
+local defaultCuratorFillReportsIndex = { reports = { count = "0" } }
+ensureIniFile(CURATOR_FILL_REPORTS_INDEX_PATH, "reports", { "count=0" })
+local curatorFillReportsIndexIni = inicfg.load(defaultCuratorFillReportsIndex, CURATOR_FILL_REPORTS_INDEX_PATH) or defaultCuratorFillReportsIndex
+curatorFillReports = {} -- { {id=, event=(u8), time=os.time(), attendees={nickname, ...}}, ... }
+
+local function saveCuratorFillReportsIndex()
+    local cfg = { reports = { count = tostring(#curatorFillReports) } }
+    for i, r in ipairs(curatorFillReports) do
+        cfg.reports["report" .. i .. "_id"]        = r.id
+        cfg.reports["report" .. i .. "_event"]     = u8:decode(r.event)
+        cfg.reports["report" .. i .. "_time"]      = tostring(r.time)
+        cfg.reports["report" .. i .. "_attendees"] = table.concat(r.attendees, "|")
+    end
+    inicfg.save(cfg, CURATOR_FILL_REPORTS_INDEX_PATH)
+    curatorFillReportsIndexIni = cfg
+end
+
+local function addCuratorFillReport(eventNameUtf8, attendees)
+    curatorFillReports[#curatorFillReports + 1] = {
+        id = "curator_fill_report_" .. os.time() .. "_" .. tostring(math.random(1000, 9999)),
+        event = eventNameUtf8,
+        time = os.time(),
+        attendees = attendees,
+    }
+    saveCuratorFillReportsIndex()
+end
+
+local function deleteCuratorFillReport(idx)
+    if not curatorFillReports[idx] then return end
+    table.remove(curatorFillReports, idx)
+    saveCuratorFillReportsIndex()
+end
+
+do
+    local cnt = tonumber(curatorFillReportsIndexIni.reports.count) or 0
+    for i = 1, cnt do
+        local id           = curatorFillReportsIndexIni.reports["report" .. i .. "_id"]
+        local eventRaw     = curatorFillReportsIndexIni.reports["report" .. i .. "_event"]
+        local timeRaw      = curatorFillReportsIndexIni.reports["report" .. i .. "_time"]
+        local attendeesRaw = curatorFillReportsIndexIni.reports["report" .. i .. "_attendees"]
+        if id then
+            local attendees = {}
+            if attendeesRaw and attendeesRaw ~= "" then
+                for nick in attendeesRaw:gmatch("[^|]+") do
+                    attendees[#attendees + 1] = nick
+                end
+            end
+            curatorFillReports[#curatorFillReports + 1] = {
+                id = id,
+                event = u8(eventRaw or ""),
+                time = tonumber(timeRaw) or 0,
+                attendees = attendees,
+            }
+        end
+    end
+end
+
+local curator_fill_report_viewer_idx = nil
+
+local function drawCuratorFillReportsTab(t)
+    if curator_fill_report_viewer_idx then
+        local r = curatorFillReports[curator_fill_report_viewer_idx]
+        if not r then
+            curator_fill_report_viewer_idx = nil
+        else
+            if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад##curator_fill_report_back", imgui.ImVec2(110, 28)) then
+                curator_fill_report_viewer_idx = nil
+            end
+            imgui.Spacing()
+            imgui.TextColored(t.accent, r.event)
+            imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
+            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+            if #r.attendees == 0 then
+                imgui.TextColored(t.textDim, u8"Список пуст.")
+            end
+            for i, nick in ipairs(r.attendees) do
+                imgui.BeginChild("cfr_" .. i, imgui.ImVec2(0, 32), true)
+                    imgui.Text(i .. ". " .. nick)
+                imgui.EndChild()
+                imgui.Spacing()
+            end
+            return
+        end
+    end
+
+    imgui.TextColored(t.textDim, u8"История отчётов по кураторам:")
     imgui.Spacing()
 
+    if #curatorFillReports == 0 then
+        imgui.TextColored(t.textDim, u8"Отчётов пока нет.")
+        return
+    end
+
+    for i = #curatorFillReports, 1, -1 do
+        local r = curatorFillReports[i]
+        imgui.PushID("curator_fill_report_" .. i)
+        local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time) .. u8"   |   " .. #r.attendees .. u8" чел."
+        if imgui.Button(label, imgui.ImVec2(-1, 32)) then
+            curator_fill_report_viewer_idx = i
+        end
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(u8"ЛКМ — открыть | Колёсико — удалить отчёт")
+        end
+        if imgui.IsItemClicked(2) then
+            deleteCuratorFillReport(i)
+        end
+        imgui.PopID()
+        imgui.Spacing()
+    end
+end
+
+curator_fill_subtab = "fill" -- "fill" | "reports"
+
+local function drawCuratorFillMainTab(t)
     imgui.SameLine()
     imgui.TextColored(t.textDim, u8"В списке: " .. #curator_list)
 
@@ -3711,8 +4068,45 @@ local function drawCuratorsFillCuratorsSection(t)
     end
 end
 
+local function drawCuratorsFillCuratorsSection(t)
+    imgui.TextColored(t.accent, fa.ICON_USER .. u8" Автозаполнение кураторов")
+    imgui.Spacing()
+
+    local pushed = 0
+    if curator_fill_subtab == "fill" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"Автозаполнение##curator_fill_sub_fill", imgui.ImVec2(150, 30)) then
+        curator_fill_subtab = "fill"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.SameLine()
+
+    pushed = 0
+    if curator_fill_subtab == "reports" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"Отчётность##curator_fill_sub_reports", imgui.ImVec2(140, 30)) then
+        curator_fill_subtab = "reports"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    if curator_fill_subtab == "fill" then
+        drawCuratorFillMainTab(t)
+    else
+        drawCuratorFillReportsTab(t)
+    end
+end
+
 -- ============================================================
---  КУРАТОРЫ: автозаполнение посещаемости актёров (пункт 3)
+--  КУРАТОРЫ: автозаполнение посещаемости актёров
 -- ============================================================
 local ACTORS_GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzAeXxqpPiaK70P9OqI0EgdpzoM0skt-84xiYzLR8Sp5cLLfZMwRsssx4APiaq2pca1eQ/exec"
 
@@ -4288,7 +4682,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.1")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.2")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4445,13 +4839,6 @@ function imgui.OnDrawFrame()
     drawAdAddForm(t)
 end
 
-sampev.onShowTextDraw = function(id, data)
-    if ad_debug_window and os.time() <= ad_debug_window and data.text and data.text ~= "" then
-        sampAddChatMessage('{FFAA00}[DEBUG-TD] id=' .. tostring(id) .. ' text=' .. tostring(data.text), -1)
-    end
-
-end
-
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if dialogId == 3412 and title and title:find("без модерации") then
         sampSendDialogResponse(dialogId, 1, 0, "")
@@ -4468,12 +4855,16 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             showToast('Объявление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
             logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
-            ad_pending = false
             ad_news_confirm_until = os.time() + 5
             ad_text.v = ""
-            if ad_auto_send.v then
-                ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
-            end
+
+            lua_thread.create(function()
+                wait(500) -- небольшая пауза перед следующим городом
+                sendToNextPendingCity()
+                if not ad_pending and ad_auto_send.v then
+                    ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
+                end
+            end)
             return false
         end
     end
