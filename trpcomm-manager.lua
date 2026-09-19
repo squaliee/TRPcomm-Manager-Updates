@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.0b
+--  Актуальная версия: 2.1
 -- ============================================================
 
 imgui = require 'imgui'
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.0b"
+SCRIPT_VERSION = "2.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -544,6 +544,10 @@ local function saveSettings()
             remove_armour = tostring(remove_armour.v),
             delete_textdraw = tostring(delete_textdraw.v),
             notifications_enabled = tostring(notifications_enabled.v),
+            ad_interval_minutes = tostring(ad_interval_minutes.v),
+            ad_city_idx = tostring(ad_city_idx.v),
+            campaign_ad_text = u8:decode(campaign_ad_text.v),
+            campaign_sent_count = tostring(campaign_sent_count),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -651,9 +655,12 @@ local AD_CITIES = {
     { code = "sf", name = u8"San Fierro" },
     { code = "lv", name = u8"Las Venturas" },
 }
-ad_city_idx = imgui.ImInt(0)
+ad_city_idx = imgui.ImInt(tonumber(mainIni.settings.ad_city_idx) or 0)
 ad_multi_city = imgui.ImBool(false)
 ad_city_rotation_idx = 0
+-- ---------- Автоотправка по очереди ----------
+ad_auto_send = imgui.ImBool(false)
+ad_interval_minutes = imgui.ImInt(tonumber(mainIni.settings.ad_interval_minutes) or 30)
 ad_text = imgui.ImBuffer("", AD_TEXT_MAX)
 ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
 ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
@@ -707,6 +714,62 @@ do
         local sentCountRaw = adsIndexIni.ads["ad" .. i .. "_sentcount"]
         if text then
             ads_list[#ads_list + 1] = { text = text, enabled = boolFromSetting(enabledRaw), sentCount = tonumber(sentCountRaw) or 0 }
+        end
+    end
+end
+
+-- ============================================================
+--  ИСТОРИЯ ОТПРАВОК (журнал последних AD_HISTORY_LIMIT записей)
+-- ============================================================
+AD_HISTORY_LIMIT = 300
+local AD_HISTORY_PATH = "moonloader\\config\\TRPcomm Manager Config\\ad-history.ini"
+
+do
+    local f = io.open(AD_HISTORY_PATH, "r")
+    if f then
+        f:close()
+    else
+        local fw = io.open(AD_HISTORY_PATH, "w")
+        if fw then
+            fw:write("[history]\ncount=0\n")
+            fw:close()
+        end
+    end
+end
+
+local defaultHistoryIndex = { history = { count = "0" } }
+local historyIndexIni = inicfg.load(defaultHistoryIndex, AD_HISTORY_PATH) or defaultHistoryIndex
+ad_history_log = {} -- { {ts=number, text=(CP1251), source="manual"|"queue"|"campaign", eventLabel=(UTF8|nil)}, ... }, новые в конце
+
+local function saveAdHistory()
+    local cfg = { history = { count = tostring(#ad_history_log) } }
+    for i, entry in ipairs(ad_history_log) do
+        cfg.history["h" .. i .. "_ts"]     = tostring(entry.ts)
+        cfg.history["h" .. i .. "_text"]   = entry.text
+        cfg.history["h" .. i .. "_source"] = entry.source or "manual"
+        cfg.history["h" .. i .. "_event"]  = entry.eventLabel or ""
+    end
+    inicfg.save(cfg, AD_HISTORY_PATH)
+    historyIndexIni = cfg
+end
+
+local function logAdHistory(textRaw, source, eventLabel)
+    ad_history_log[#ad_history_log + 1] = { ts = os.time(), text = textRaw, source = source or "manual", eventLabel = eventLabel }
+    while #ad_history_log > AD_HISTORY_LIMIT do
+        table.remove(ad_history_log, 1) -- убираем самую старую запись
+    end
+    saveAdHistory()
+end
+
+do
+    local historyCount = tonumber(historyIndexIni.history.count) or 0
+    for i = 1, historyCount do
+        local ts     = tonumber(historyIndexIni.history["h" .. i .. "_ts"])
+        local text   = historyIndexIni.history["h" .. i .. "_text"]
+        local source = historyIndexIni.history["h" .. i .. "_source"]
+        local ev     = historyIndexIni.history["h" .. i .. "_event"]
+        if ts and text then
+            ad_history_log[#ad_history_log + 1] = { ts = ts, text = text, source = source or "manual", eventLabel = (ev ~= "" and ev or nil) }
         end
     end
 end
@@ -766,14 +829,15 @@ end
 
 -- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
-ad_interval_minutes = imgui.ImInt(30)
 ad_next_send_time = 0
 ad_rotation_idx = 0
 
-local function sendAdNow(textRaw)
+local function sendAdNow(textRaw, source, eventLabel)
     ad_pending_text = textRaw
+    ad_pending_source = source or "manual"
+    ad_pending_event_label = eventLabel
     ad_pending = true
-    ad_debug_window = os.time() + 15 -- временно, для диагностики текстдрава "без модерации"
+    ad_debug_window = os.time() + 15
     local city
     if ad_multi_city.v then
         city = AD_CITIES[(ad_city_rotation_idx % #AD_CITIES) + 1].code
@@ -802,7 +866,7 @@ local function triggerNextAdSend()
         local ad = ads_list[idx]
         if ad.enabled then
             ad_rotation_idx = idx
-            sendAdNow(ad.text)
+            sendAdNow(ad.text, "queue")
             return
         end
     end
@@ -813,10 +877,10 @@ campaign_active           = imgui.ImBool(false)
 campaign_target_count     = imgui.ImInt(20)
 campaign_window_hour      = imgui.ImInt(12)
 campaign_window_minute    = imgui.ImInt(0)
-campaign_ad_text          = imgui.ImBuffer("", AD_TEXT_MAX)
+campaign_ad_text          = imgui.ImBuffer(u8(mainIni.settings.campaign_ad_text or ""), AD_TEXT_MAX)
 campaign_selected_event   = nil   -- ссылка на выбранное событие из calendar_events
 campaign_event_timestamp  = nil
-campaign_sent_count       = 0
+campaign_sent_count       = tonumber(mainIni.settings.campaign_sent_count) or 0
 campaign_next_send_time   = 0
 
 local function getUpcomingTimedEvents()
@@ -849,7 +913,6 @@ local function startCampaign()
     campaign_event_timestamp = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
     local windowStart = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = campaign_window_hour.v, min = campaign_window_minute.v, sec = 0 })
 
-    campaign_sent_count     = 0
     campaign_next_send_time = math.max(os.time(), windowStart)
     campaign_active.v       = true
 end
@@ -867,8 +930,10 @@ local function campaignTick()
         return
     end
 
-    sendAdNow(u8:decode(campaign_ad_text.v))
+    local eventLabel = campaign_selected_event and campaign_selected_event.summary or nil
+    sendAdNow(u8:decode(campaign_ad_text.v), "campaign", eventLabel)
     campaign_sent_count = campaign_sent_count + 1
+    saveSettings()
 
     local remainingSeconds = math.max(campaign_event_timestamp - os.time(), 1)
     local remainingQuota   = math.max(campaign_target_count.v - campaign_sent_count, 1)
@@ -926,12 +991,12 @@ local function drawHRAdsTab(t)
 
         local previewRaw = ad.text:sub(1, 60)
         if #ad.text > 60 then previewRaw = previewRaw .. "..." end
-        local label = u8(previewRaw) .. "  (" .. (ad.sentCount or 0) .. ")" .. (ad.enabled and "" or u8"  [выкл]")
+        local label = u8(previewRaw) .. (ad.enabled and "" or u8"  [выкл]")
 
         if not ad.enabled then imgui.PushStyleColor(imgui.Col.Text, t.textDim) end
         if imgui.Button(label .. "##ad_row", imgui.ImVec2(-1, 30)) then
             if not ad_pending then
-                sendAdNow(ad.text)
+                sendAdNow(ad.text, "manual")
             end
         end
         if not ad.enabled then imgui.PopStyleColor() end
@@ -985,7 +1050,9 @@ local function drawHRAdsTab(t)
         local cityNames = {}
         for _, c in ipairs(AD_CITIES) do cityNames[#cityNames + 1] = c.name end
         imgui.PushItemWidth(200)
-        imgui.Combo("##ad_city", ad_city_idx, cityNames)
+        if imgui.Combo("##ad_city", ad_city_idx, cityNames) then
+            saveSettings()
+        end
         imgui.PopItemWidth()
     end
     imgui.Checkbox(u8"Отправлять по очереди во все города", ad_multi_city)
@@ -1000,7 +1067,7 @@ local function drawHRAdsTab(t)
             if textRaw == "" then
                 sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления.', -1)
             else
-                sendAdNow(textRaw)
+                sendAdNow(textRaw, "manual")
             end
         end
     end
@@ -1030,6 +1097,7 @@ local function drawHRAdsTab(t)
         end
         if imgui.Button(minutes .. u8" мин##ad_interval_" .. minutes, imgui.ImVec2(70, 28)) then
             ad_interval_minutes.v = minutes
+            saveSettings()
             if ad_auto_send.v then
                 ad_next_send_time = os.time() + (minutes * 60)
             end
@@ -1043,10 +1111,7 @@ local function drawHRAdsTab(t)
     end
 end
 
-local function drawHRCampaignTab(t)
-    imgui.TextColored(t.accent, u8"Кампания к ивенту")
-    imgui.Spacing()
-
+local function drawCampaignSettingsTab(t)
     imgui.TextColored(t.textDim, u8"Ивент:")
     local upcoming = getUpcomingTimedEvents()
     local eventLabels = {}
@@ -1144,6 +1209,131 @@ local function drawHRCampaignTab(t)
             startCampaign()
         end
         imgui.PopStyleColor(2)
+    end
+end
+
+local function getCampaignHistory()
+    local list = {}
+    for _, entry in ipairs(ad_history_log) do
+        if entry.source == "campaign" then
+            list[#list + 1] = entry
+        end
+    end
+    return list
+end
+
+local function drawCampaignListTab(t)
+    local campaignEntries = getCampaignHistory()
+    if #campaignEntries == 0 then
+        imgui.TextColored(t.textDim, u8"Пока не отправлено ни одного объявления по кампании.")
+        return
+    end
+
+    -- группируем по (текст + ивент), считаем количество
+    local groups = {}
+    local order = {}
+    for _, entry in ipairs(campaignEntries) do
+        local key = (entry.eventLabel or "") .. "||" .. entry.text
+        if not groups[key] then
+            groups[key] = { text = entry.text, eventLabel = entry.eventLabel, count = 0 }
+            order[#order + 1] = key
+        end
+        groups[key].count = groups[key].count + 1
+    end
+
+    table.sort(order, function(a, b) return groups[a].count > groups[b].count end)
+
+    for i, key in ipairs(order) do
+        local g = groups[key]
+        imgui.PushID("campaign_list_" .. i)
+        if g.eventLabel then
+            imgui.TextColored(t.accent, g.eventLabel)
+            imgui.SameLine()
+        end
+        local preview = g.text:sub(1, 60)
+        if #g.text > 60 then preview = preview .. "..." end
+        imgui.TextColored(t.text, u8(preview))
+        imgui.SameLine(imgui.GetWindowWidth() - 90)
+        imgui.TextColored(t.accent, tostring(g.count) .. u8" раз")
+        imgui.PopID()
+        imgui.Spacing()
+    end
+end
+
+local function drawCampaignHistoryTab(t)
+    local campaignEntries = getCampaignHistory()
+    if #campaignEntries == 0 then
+        imgui.TextColored(t.textDim, u8"История кампаний пуста.")
+        return
+    end
+
+    for i = #campaignEntries, 1, -1 do
+        local entry = campaignEntries[i]
+        imgui.PushID("campaign_hist_" .. i)
+        imgui.TextColored(t.textDim, os.date("%d.%m %H:%M", entry.ts))
+        imgui.SameLine()
+        if entry.eventLabel then
+            imgui.TextColored(t.accent, entry.eventLabel)
+            imgui.SameLine()
+        end
+        local preview = entry.text:sub(1, 50)
+        if #entry.text > 50 then preview = preview .. "..." end
+        imgui.TextColored(t.text, u8(preview))
+        imgui.PopID()
+    end
+end
+
+campaign_subtab = "settings" -- "settings" | "list" | "history"
+
+local function drawHRCampaignTab(t)
+    imgui.TextColored(t.accent, u8"Кампания к ивенту")
+    imgui.Spacing()
+
+    local pushed = 0
+    if campaign_subtab == "settings" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"Кампания##campaign_sub_settings", imgui.ImVec2(120, 28)) then
+        campaign_subtab = "settings"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.SameLine()
+
+    pushed = 0
+    if campaign_subtab == "list" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"Список для ивента##campaign_sub_list", imgui.ImVec2(160, 28)) then
+        campaign_subtab = "list"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.SameLine()
+
+    pushed = 0
+    if campaign_subtab == "history" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"История для ивента##campaign_sub_history", imgui.ImVec2(170, 28)) then
+        campaign_subtab = "history"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    if campaign_subtab == "settings" then
+        drawCampaignSettingsTab(t)
+    elseif campaign_subtab == "list" then
+        drawCampaignListTab(t)
+    else
+        drawCampaignHistoryTab(t)
     end
 end
 
@@ -1421,10 +1611,7 @@ local function drawHRCalendarTab(t)
     end
 end
 
-local function drawHRAnalyticsTab(t)
-    imgui.TextColored(t.accent, u8"Аналитика по объявлениям")
-    imgui.Spacing()
-
+local function getAdsStatsSummary()
     local totalSent = 0
     local topAd, topCount = nil, 0
     for _, ad in ipairs(ads_list) do
@@ -1435,29 +1622,60 @@ local function drawHRAnalyticsTab(t)
             topAd = ad
         end
     end
+    return totalSent, topAd, topCount
+end
 
-    imgui.TextColored(t.textDim, u8"Всего отправлено объявлений: ")
-    imgui.SameLine()
-    imgui.TextColored(t.accent, tostring(totalSent))
-
-    if topAd then
-        imgui.TextColored(t.textDim, u8"Самое частое: ")
-        imgui.SameLine()
-        local topPreview = topAd.text:sub(1, 50)
-        if #topAd.text > 50 then topPreview = topPreview .. "..." end
-        imgui.TextColored(t.accent, u8(topPreview) .. " (" .. topCount .. ")")
-    end
-
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"По каждому объявлению:")
-    imgui.Spacing()
-
+local function drawAnalyticsListTab(t)
     if #ads_list == 0 then
         imgui.TextColored(t.textDim, u8"Список объявлений пуст.")
         return
     end
 
-    -- сортируем по убыванию количества отправок, не трогая сам ads_list
+    local sorted = {}
+    for _, ad in ipairs(ads_list) do sorted[#sorted + 1] = ad end
+    table.sort(sorted, function(a, b) return (a.sentCount or 0) > (b.sentCount or 0) end)
+
+    for i, ad in ipairs(sorted) do
+        imgui.PushID("analytics_list_" .. i)
+        local preview = ad.text:sub(1, 70)
+        if #ad.text > 70 then preview = preview .. "..." end
+        imgui.TextColored(ad.enabled and t.text or t.textDim, u8(preview))
+        imgui.SameLine(imgui.GetWindowWidth() - 90)
+        imgui.TextColored(t.accent, tostring(ad.sentCount or 0) .. u8" раз")
+        imgui.PopID()
+        imgui.Spacing()
+    end
+end
+
+local function drawAnalyticsHistoryTab(t)
+    if #ad_history_log == 0 then
+        imgui.TextColored(t.textDim, u8"История пуста — пока не отправлено ни одного объявления.")
+        return
+    end
+
+    imgui.TextColored(t.textDim, u8"Последние " .. #ad_history_log .. u8" из " .. AD_HISTORY_LIMIT .. u8" (лимит)")
+    imgui.Spacing()
+
+    for i = #ad_history_log, 1, -1 do
+        local entry = ad_history_log[i]
+        imgui.PushID("analytics_hist_" .. i)
+        imgui.TextColored(t.textDim, os.date("%d.%m %H:%M", entry.ts))
+        imgui.SameLine()
+        local preview = entry.text:sub(1, 60)
+        if #entry.text > 60 then preview = preview .. "..." end
+        imgui.TextColored(t.text, u8(preview))
+        imgui.PopID()
+    end
+end
+
+local function drawAnalyticsChartTab(t)
+    local totalSent, topAd, topCount = getAdsStatsSummary()
+
+    if #ads_list == 0 or totalSent == 0 then
+        imgui.TextColored(t.textDim, u8"Пока нечего показывать на графике.")
+        return
+    end
+
     local sorted = {}
     for _, ad in ipairs(ads_list) do sorted[#sorted + 1] = ad end
     table.sort(sorted, function(a, b) return (a.sentCount or 0) > (b.sentCount or 0) end)
@@ -1467,7 +1685,7 @@ local function drawHRAnalyticsTab(t)
     local barHeight = 18
 
     for i, ad in ipairs(sorted) do
-        imgui.PushID("analytics_ad_" .. i)
+        imgui.PushID("analytics_chart_" .. i)
 
         local preview = ad.text:sub(1, 40)
         if #ad.text > 40 then preview = preview .. "..." end
@@ -1484,6 +1702,75 @@ local function drawHRAnalyticsTab(t)
 
         imgui.PopID()
         imgui.Spacing()
+    end
+end
+
+analytics_subtab = "list" -- "list" | "history" | "chart"
+
+local function drawHRAnalyticsTab(t)
+    imgui.TextColored(t.accent, u8"Аналитика по объявлениям")
+    imgui.Spacing()
+
+    local totalSent, topAd, topCount = getAdsStatsSummary()
+    imgui.TextColored(t.textDim, u8"Всего отправлено объявлений: ")
+    imgui.SameLine()
+    imgui.TextColored(t.accent, tostring(totalSent))
+
+    if topAd then
+        imgui.TextColored(t.textDim, u8"Самое частое: ")
+        imgui.SameLine()
+        local topPreview = topAd.text:sub(1, 50)
+        if #topAd.text > 50 then topPreview = topPreview .. "..." end
+        imgui.TextColored(t.accent, u8(topPreview) .. " (" .. topCount .. ")")
+    end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    local pushed = 0
+    if analytics_subtab == "list" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"Список##analytics_sub_list", imgui.ImVec2(120, 28)) then
+        analytics_subtab = "list"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.SameLine()
+
+    pushed = 0
+    if analytics_subtab == "history" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"История##analytics_sub_history", imgui.ImVec2(120, 28)) then
+        analytics_subtab = "history"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.SameLine()
+
+    pushed = 0
+    if analytics_subtab == "chart" then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(u8"График##analytics_sub_chart", imgui.ImVec2(120, 28)) then
+        analytics_subtab = "chart"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    if analytics_subtab == "list" then
+        drawAnalyticsListTab(t)
+    elseif analytics_subtab == "history" then
+        drawAnalyticsHistoryTab(t)
+    else
+        drawAnalyticsChartTab(t)
     end
 end
 
@@ -2478,17 +2765,23 @@ local function drawSettingsTab(t)
     imgui.TextColored(t.accent, fa.ICON_WRENCH .. u8" Рация")
     imgui.TextColored(t.textDim, u8"Частота рации:")
     imgui.PushItemWidth(200)
-    imgui.InputText("##radio_freq", radio_freq)
+    if imgui.InputText("##radio_freq", radio_freq) then
+        saveSettings()
+    end
     imgui.PopItemWidth()
 
     imgui.TextColored(t.textDim, u8"Пароль рации:")
     imgui.PushItemWidth(200)
-    imgui.InputText("##radio_pass", radio_pass)
+    if imgui.InputText("##radio_pass", radio_pass) then
+        saveSettings()
+    end
     imgui.PopItemWidth()
 
     imgui.TextColored(t.textDim, u8"Пароль к телепорту:")
     imgui.PushItemWidth(200)
-    imgui.InputText("##teleport_pass", teleport_pass)
+    if imgui.InputText("##teleport_pass", teleport_pass) then
+        saveSettings()
+    end
     imgui.PopItemWidth()
 
 imgui.Spacing(); imgui.Separator(); imgui.Spacing()
@@ -2525,11 +2818,6 @@ imgui.Spacing(); imgui.Separator(); imgui.Spacing()
     end
 
     if imgui.Checkbox(u8"Показывать экранные уведомления в углу экрана", notifications_enabled) then
-        saveSettings()
-    end
-
-    imgui.Spacing()
-    if imgui.Button(u8"Сохранить##radio_save", imgui.ImVec2(150, 28)) then
         saveSettings()
     end
 end
@@ -4000,7 +4288,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.0b")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.1")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4159,25 +4447,18 @@ end
 
 sampev.onShowTextDraw = function(id, data)
     if ad_debug_window and os.time() <= ad_debug_window and data.text and data.text ~= "" then
-        sampAddChatMessage('{FFAA00}[DEBUG] td id=' .. tostring(id) .. ' text=' .. tostring(data.text), -1)
+        sampAddChatMessage('{FFAA00}[DEBUG-TD] id=' .. tostring(id) .. ' text=' .. tostring(data.text), -1)
     end
 
-    if os.time() <= ad_news_confirm_until and data.text and data.text:find("сотрудником новостного агентства") then
-        lua_thread.create(function()
-            setVirtualKeyDown(0x0D, true)
-            wait(150)
-            setVirtualKeyDown(0x0D, false)
-        end)
-    end
 end
 
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
-    if ad_pending then
-        if title and title:find("без модерации") then
-            sampSendDialogResponse(dialogId, 1, 0, "")
-            return false
-        end
+    if dialogId == 3412 and title and title:find("без модерации") then
+        sampSendDialogResponse(dialogId, 1, 0, "")
+        return false
+    end
 
+    if ad_pending then
         if dialogId == 3409 and title:find("Создание объявления") then
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
@@ -4186,6 +4467,7 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
             showToast('Объявление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
+            logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
             ad_pending = false
             ad_news_confirm_until = os.time() + 5
             ad_text.v = ""
