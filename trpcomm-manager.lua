@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.2
+--  Актуальная версия: 2.3
 -- ============================================================
 
 imgui = require 'imgui'
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.2"
+SCRIPT_VERSION = "2.3"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -841,7 +841,8 @@ end
 -- ============================================================
 --  РЕКЛАМНЫЙ ОТДЕЛ: Объявления
 -- ============================================================
-AD_TEXT_MAX = 98 -- лимит символов
+AD_TEXT_MAX = 119 -- лимит символов (реальных, проверенных на сервере)
+AD_TEXT_BUFFER_SIZE = AD_TEXT_MAX * 3 -- запас байт для буфера ввода: кириллица в UTF-8 занимает 2 байта на символ
 
 local AD_CITIES = {
     { code = "ls", name = u8"Los Santos" },
@@ -871,7 +872,7 @@ end
 -- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
 ad_interval_minutes = imgui.ImInt(tonumber(mainIni.settings.ad_interval_minutes) or 30)
-ad_text = imgui.ImBuffer("", AD_TEXT_MAX)
+ad_text = imgui.ImBuffer("", AD_TEXT_BUFFER_SIZE)
 ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
 ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
 ad_news_confirm_until = 0 -- os.time(), до какого момента автожмём попап "без модерации" (появляется ПОСЛЕ ad_pending=false)
@@ -986,7 +987,7 @@ end
 -- ---------- Форма добавления объявления ----------
 local ad_add_form_open = false
 local ad_edit_idx = nil
-local ad_new_text = imgui.ImBuffer("", AD_TEXT_MAX)
+local ad_new_text = imgui.ImBuffer("", AD_TEXT_BUFFER_SIZE)
 
 local function drawAdAddForm(t)
     if not ad_add_form_open then return end
@@ -1111,7 +1112,7 @@ campaign_active           = imgui.ImBool(false)
 campaign_target_count     = imgui.ImInt(20)
 campaign_window_hour      = imgui.ImInt(12)
 campaign_window_minute    = imgui.ImInt(0)
-campaign_ad_text          = imgui.ImBuffer(u8(mainIni.settings.campaign_ad_text or ""), AD_TEXT_MAX)
+campaign_ad_text          = imgui.ImBuffer(u8(mainIni.settings.campaign_ad_text or ""), AD_TEXT_BUFFER_SIZE)
 campaign_selected_event   = nil   -- ссылка на выбранное событие из calendar_events
 campaign_event_timestamp  = nil
 campaign_sent_count       = tonumber(mainIni.settings.campaign_sent_count) or 0
@@ -4682,7 +4683,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.2")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.3")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
