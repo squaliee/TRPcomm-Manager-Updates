@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | јвтор: Ѕогдан Ќоминов
---  јктуальна€ верси€: 2.3
+--  јктуальна€ верси€: 2.4
 -- ============================================================
 
 imgui = require 'imgui'
@@ -21,7 +21,7 @@ cjson = require 'cjson.safe'
 
 GCAL_ID = "e750c65e6ebd96513d62dca03f7b23a0746137364a24d4daba502a4e555756bc@group.calendar.google.com"
 GCAL_API_KEY = "AIzaSyBtsyCi9A0ikrclVl919OfPC2z5rlaHZs4"
-TG_BOT_TOKEN = "8515415643:AAEOzuIFq1gJdWeRY27Ux4ItbdHzI9UOUEI"
+TG_BOT_TOKEN = "text"
 TG_CHAT_ID = "-1003174705842"
 TG_THREAD_ID = "9"
 
@@ -68,7 +68,7 @@ end
 -- ============================================================
 --  ј¬“ќќЅЌќ¬Ћ≈Ќ»≈
 -- ============================================================
-SCRIPT_VERSION = "2.3"
+SCRIPT_VERSION = "2.4"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -1057,6 +1057,11 @@ ad_auto_send = imgui.ImBool(false)
 ad_next_send_time = 0
 ad_rotation_idx = 0
 
+ad_pending_deadline    = 0     -- os.time(); если не сдвинетс€ за 2 сек Ч сторож сбросит ожидание
+ad_awaiting_next_city  = false -- ждЄм ли ещЄ попап "без модерации" перед следующим городом
+ad_next_city_at        = 0     -- запасной срок, если попап так и не пришЄл
+ad_city_retry_count    = 0     -- сколько раз подр€д повторили один и тот же город
+
 local function sendToNextPendingCity()
     ad_pending_city_pos = ad_pending_city_pos + 1
     local cityCode = ad_pending_cities[ad_pending_city_pos]
@@ -1064,9 +1069,39 @@ local function sendToNextPendingCity()
         ad_pending = false
         return
     end
+    ad_city_retry_count = 0
     ad_pending = true
-    ad_debug_window = os.time() + 15
+    ad_pending_deadline = os.time() + 2
     sampSendChat("/sms radio" .. cityCode)
+end
+
+local function retryCurrentCity()
+    local cityCode = ad_pending_cities[ad_pending_city_pos]
+    if not cityCode then
+        ad_pending = false
+        return
+    end
+    ad_city_retry_count = ad_city_retry_count + 1
+    if ad_city_retry_count > 5 then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ќе удалось отправить в город после нескольких попыток, пропускаю его.', -1)
+        sendToNextPendingCity()
+        return
+    end
+    ad_pending = true
+    ad_pending_deadline = os.time() + 2
+    sampSendChat("/sms radio" .. cityCode)
+end
+
+local function advanceAfterNewsPopup()
+    if not ad_awaiting_next_city then return end
+    ad_awaiting_next_city = false
+    lua_thread.create(function()
+        wait(300)
+        sendToNextPendingCity()
+        if not ad_pending and ad_auto_send.v then
+            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
+        end
+    end)
 end
 
 local function sendAdNow(textRaw, source, eventLabel)
@@ -1147,6 +1182,14 @@ local function startCampaign()
     local ev = campaign_selected_event
     campaign_event_timestamp = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
     local windowStart = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = campaign_window_hour.v, min = campaign_window_minute.v, sec = 0 })
+
+    -- сбрасываем счЄтчик, только если это Ќќ¬џ… ивент, а не продолжение того же после релога
+    local eventKey = ev.summary .. "|" .. tostring(campaign_event_timestamp)
+    if mainIni.settings.campaign_event_key ~= eventKey then
+        campaign_sent_count = 0
+        saveSettings() -- запишет и новый campaign_event_key, и обнулЄнный счЄтчик
+    end
+    mainIni.settings.campaign_event_key = eventKey
 
     campaign_next_send_time = math.max(os.time(), windowStart)
     campaign_active.v       = true
@@ -1276,6 +1319,21 @@ local function drawHRAdsTab(t)
     imgui.InputTextMultiline("##ad_text", ad_text, imgui.ImVec2(-1, 80))
     imgui.PopItemWidth()
 
+    if imgui.IsItemActive() then
+        local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56)
+        if ctrlVDown and not ad_text_ctrlv_was_down then
+            local clip = getClipboardText()
+            if clip and clip ~= "" then
+                local text = clip
+                if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
+                ad_text.v = u8(text)
+            end
+        end
+        ad_text_ctrlv_was_down = ctrlVDown
+    else
+        ad_text_ctrlv_was_down = false
+    end
+
     imgui.Spacing()
     imgui.TextColored(t.textDim, u8"√ород(-а):")
 
@@ -1373,6 +1431,21 @@ local function drawCampaignSettingsTab(t)
     imgui.PushItemWidth(-1)
     imgui.InputTextMultiline("##campaign_ad_text", campaign_ad_text, imgui.ImVec2(-1, 60))
     imgui.PopItemWidth()
+
+    if imgui.IsItemActive() then
+        local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56)
+        if ctrlVDown and not campaign_ad_text_ctrlv_was_down then
+            local clip = getClipboardText()
+            if clip and clip ~= "" then
+                local text = clip
+                if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
+                campaign_ad_text.v = u8(text)
+            end
+        end
+        campaign_ad_text_ctrlv_was_down = ctrlVDown
+    else
+        campaign_ad_text_ctrlv_was_down = false
+    end
 
     -- ѕодсказка из "ћесто проведени€" выбранного ивента Ч так же, как в обычном списке объ€влений выше
     if campaign_selected_event and campaign_selected_event.location and campaign_selected_event.location ~= "" then
@@ -4683,7 +4756,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | јктуальна€ верси€: 2.3")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | јктуальна€ верси€: 2.4")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4843,29 +4916,26 @@ end
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if dialogId == 3412 and title and title:find("без модерации") then
         sampSendDialogResponse(dialogId, 1, 0, "")
+        advanceAfterNewsPopup()
         return false
     end
 
     if ad_pending then
         if dialogId == 3409 and title:find("—оздание объ€влени€") then
+            ad_pending_deadline = os.time() + 2 -- диалог реально пошЄл, продлеваем срок сторожа
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
             if dialogId == 3410 and title:find("ќтправка рекламы на радио") then
+            ad_pending_deadline = os.time() + 2
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
             showToast('ќбъ€вление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
             logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
-            ad_news_confirm_until = os.time() + 5
             ad_text.v = ""
 
-            lua_thread.create(function()
-                wait(500) -- небольша€ пауза перед следующим городом
-                sendToNextPendingCity()
-                if not ad_pending and ad_auto_send.v then
-                    ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
-                end
-            end)
+            ad_awaiting_next_city = true
+            ad_next_city_at = os.time() + 2 -- запасной срок, если попап "без модерации" вообще не по€витс€
             return false
         end
     end
@@ -4910,15 +4980,15 @@ sampev.onServerMessage = function(color, text)
 
     if ad_pending then
         if text:find("ќдно из ваших объ€влений уже находитс€ в очереди на модерацию") then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}ќдно из объ€влений уже в очереди на модерацию.', -1)
-            ad_pending = false
+            lua_thread.create(function()
+                wait(1500)
+                retryCurrentCity()
+            end)
         elseif text:find("Ќельз€ отправл€ть рекламу на радио слишком часто") then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}—лишком часто Ч подожди немного и попробуй снова.', -1)
-            ad_pending = false
-            if ad_auto_send.v then
-                local secs = tonumber(text:match("через (%d+)"))
-                ad_next_send_time = os.time() + (secs and (secs + 2) or 60)
-            end
+            lua_thread.create(function()
+                wait(1500)
+                retryCurrentCity()
+            end)
         elseif text:find("¬аш мобильный телефон выключен") then
             ad_pending = false
             if ad_auto_send.v then
@@ -5009,6 +5079,15 @@ function main()
         while true do
         wait(0)
         imgui.Process = main_window_state.v
+
+        if ad_pending and ad_pending_deadline > 0 and os.time() > ad_pending_deadline then
+            ad_pending = false
+            ad_pending_deadline = 0
+            notify('{FFAA00}[TRPcomm] {FFFFFF}ќжидание диалогов сервера прервано Ч ответа не было.', -1)
+        end
+        if ad_awaiting_next_city and os.time() > ad_next_city_at then
+            advanceAfterNewsPopup()
+        end
 
         if notifications_enabled.v and toast_timer > 0 then
             toast_timer = toast_timer - 1
