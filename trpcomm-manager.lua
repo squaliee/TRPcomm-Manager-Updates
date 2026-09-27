@@ -27,38 +27,40 @@ TG_THREAD_ID = "9"
 -- ============================================================
 --  ДОСТУПЫ К РАЗДЕЛАМ
 -- ============================================================
-local ACCESS_ALL_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/access_all.txt"
+local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
 local ACCESS_SECTIONS = { "photographer", "tracker", "hr", "actors" }
+local ACCESS_FILE_NAMES = {
+    photographer = "access_photographers",
+    tracker      = "access_curators",
+    hr           = "access_advertising",
+    actors       = "access_actors",
+}
 
 access_lists = {} -- access_lists["photographer"] = {"Nick_One", "Nick_Two"} ; nil = ещё не загружен
+access_lists_loading = {} -- access_lists_loading["photographer"] = true, пока запрос не завершится
 
-local function loadAllAccessLists()
+local function loadAccessList(sectionKey)
     lua_thread.create(function()
-        local url = ACCESS_ALL_URL .. "?cb=" .. os.time()
+        local fileName = ACCESS_FILE_NAMES[sectionKey]
+        local url = ACCESS_BASE_URL .. fileName .. ".txt?cb=" .. os.time()
         local ok, response = pcall(requests.get, url, { timeout = 15 })
         if not ok or response.status_code ~= 200 then
-            for _, key in ipairs(ACCESS_SECTIONS) do
-                access_lists[key] = access_lists[key] or {} -- безопасный дефолт: доступа ни у кого нет
-            end
+            access_lists[sectionKey] = {} -- не удалось загрузить — безопасный дефолт: доступа ни у кого нет
             return
         end
 
-        local parsed = {}
-        for line in response.text:gmatch("[^\r\n]+") do
-            local sectionKey, namesRaw = line:match("^(%a+):%s*(.*)$")
-            if sectionKey then
-                local list = {}
-                for nick in namesRaw:gmatch("[^,%s]+") do
-                    list[#list + 1] = nick
-                end
-                parsed[sectionKey] = list
-            end
+        local list = {}
+        for nick in response.text:gmatch("[^,%s]+") do
+            list[#list + 1] = nick
         end
-
-        for _, key in ipairs(ACCESS_SECTIONS) do
-            access_lists[key] = parsed[key] or {}
-        end
+        access_lists[sectionKey] = list
     end)
+end
+
+local function loadAllAccessLists()
+    for _, key in ipairs(ACCESS_SECTIONS) do
+        loadAccessList(key)
+    end
 end
 
 local function hasAccess(sectionKey)
@@ -73,7 +75,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.5"
+SCRIPT_VERSION = "2.6"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -2988,6 +2990,14 @@ local function drawSettingsTab(t)
     imgui.Separator()
     imgui.Spacing()
 
+    imgui.TextColored(t.textDim, u8"Версия: " .. SCRIPT_VERSION)
+    imgui.SameLine()
+    if imgui.Button(u8"Проверить обновления##check_updates_btn", imgui.ImVec2(180, 26)) then
+        checkForUpdates()
+    end
+
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
     -- ---------- Бинд на открытие меню ----------
     imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8" Открытие меню")
     imgui.TextColored(t.textDim, u8"Текущая комбинация:")
@@ -4773,7 +4783,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.5")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.6")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4883,7 +4893,7 @@ function imgui.OnDrawFrame()
         end
         curator_section_active_last_frame = curatorsSectionShouldBeVisible
 
-                    imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
+        imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
             local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, roles = true }
             local ACCESS_KEY_BY_KIND = { roles = "actors" }
@@ -4891,6 +4901,10 @@ function imgui.OnDrawFrame()
             if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
                 local accessKey = ACCESS_KEY_BY_KIND[activeTab.kind] or activeTab.kind
                 if access_lists[accessKey] == nil then
+                    if not access_lists_loading[accessKey] then
+                        access_lists_loading[accessKey] = true
+                        loadAccessList(accessKey)
+                    end
                     imgui.TextColored(t.textDim, u8"Проверка доступа...")
                 elseif not hasAccess(accessKey) then
                     imgui.Spacing()
@@ -5069,9 +5083,6 @@ function main()
 
     local result, my1id = sampGetPlayerIdByCharHandle(PLAYER_PED)
     clientName = sampGetPlayerNickname(my1id)
-
-    checkForUpdates()
-    loadAllAccessLists()
 
     lua_thread.create(function()
         wait(3000)
