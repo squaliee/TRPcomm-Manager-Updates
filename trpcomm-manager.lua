@@ -1,6 +1,5 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.4
 -- ============================================================
 
 imgui = require 'imgui'
@@ -28,32 +27,38 @@ TG_THREAD_ID = "9"
 -- ============================================================
 --  ДОСТУПЫ К РАЗДЕЛАМ
 -- ============================================================
-local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
+local ACCESS_ALL_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/access_all.txt"
 local ACCESS_SECTIONS = { "photographer", "tracker", "hr", "actors" }
 
 access_lists = {} -- access_lists["photographer"] = {"Nick_One", "Nick_Two"} ; nil = ещё не загружен
 
-local function loadAccessList(sectionKey)
+local function loadAllAccessLists()
     lua_thread.create(function()
-        local url = ACCESS_BASE_URL .. "access_" .. sectionKey .. ".txt?cb=" .. os.time()
+        local url = ACCESS_ALL_URL .. "?cb=" .. os.time()
         local ok, response = pcall(requests.get, url, { timeout = 15 })
         if not ok or response.status_code ~= 200 then
-            access_lists[sectionKey] = {} -- не удалось загрузить — безопасный дефолт: доступа ни у кого нет
+            for _, key in ipairs(ACCESS_SECTIONS) do
+                access_lists[key] = access_lists[key] or {} -- безопасный дефолт: доступа ни у кого нет
+            end
             return
         end
 
-        local list = {}
-        for nick in response.text:gmatch("[^,%s]+") do
-            list[#list + 1] = nick
+        local parsed = {}
+        for line in response.text:gmatch("[^\r\n]+") do
+            local sectionKey, namesRaw = line:match("^(%a+):%s*(.*)$")
+            if sectionKey then
+                local list = {}
+                for nick in namesRaw:gmatch("[^,%s]+") do
+                    list[#list + 1] = nick
+                end
+                parsed[sectionKey] = list
+            end
         end
-        access_lists[sectionKey] = list
-    end)
-end
 
-local function loadAllAccessLists()
-    for _, key in ipairs(ACCESS_SECTIONS) do
-        loadAccessList(key)
-    end
+        for _, key in ipairs(ACCESS_SECTIONS) do
+            access_lists[key] = parsed[key] or {}
+        end
+    end)
 end
 
 local function hasAccess(sectionKey)
@@ -68,7 +73,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.4"
+SCRIPT_VERSION = "2.5"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -741,6 +746,7 @@ local function saveSettings()
             ad_city_all = tostring(ad_city_all.v),
             campaign_ad_text = u8:decode(campaign_ad_text.v),
             campaign_sent_count = tostring(campaign_sent_count),
+            campaign_event_key = mainIni.settings.campaign_event_key or "",
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -1031,6 +1037,9 @@ local function drawAdAddForm(t)
         local raw = u8:decode(ad_new_text.v)
         if raw ~= "" then
             if isEdit then
+                if ads_list[ad_edit_idx].text ~= raw then
+                    ads_list[ad_edit_idx].sentCount = 0 -- текст поменялся — это по сути новое объявление, счётчик не переносим
+                end
                 ads_list[ad_edit_idx].text = raw
             else
                 ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
@@ -2339,17 +2348,19 @@ local function deleteNote(idx)
 end
 
 -- загружаем список заметок при первом запуске
-local notesCount = tonumber(notesIndexIni.notes.count) or 0
-for i = 1, notesCount do
-    local id    = notesIndexIni.notes["note" .. i .. "_id"]
-    local title = notesIndexIni.notes["note" .. i .. "_title"]
-    if id then
-        local content = loadNoteContentFromDisk(id)
-        notes[#notes + 1] = {
-            id = id,
-            title = u8(title or ("Заметка " .. i)),
-            buffer = imgui.ImBuffer(content, 16384),
-        }
+do
+    local notesCount = tonumber(notesIndexIni.notes.count) or 0
+    for i = 1, notesCount do
+        local id    = notesIndexIni.notes["note" .. i .. "_id"]
+        local title = notesIndexIni.notes["note" .. i .. "_title"]
+        if id then
+            local content = loadNoteContentFromDisk(id)
+            notes[#notes + 1] = {
+                id = id,
+                title = u8(title or ("Заметка " .. i)),
+                buffer = imgui.ImBuffer(content, 16384),
+            }
+        end
     end
 end
 if #notes == 0 then
@@ -2611,17 +2622,19 @@ local function deleteRoleTemplate(idx)
 end
 
 -- загружаем сохранённые кастомные шаблоны при старте
-local rolesCount = tonumber(rolesIni.roles.count) or 0
-for i = 1, rolesCount do
-    local nm = rolesIni.roles["role" .. i .. "_name"]
-    local sk = tonumber(rolesIni.roles["role" .. i .. "_skin"])
-    local wp = rolesIni.roles["role" .. i .. "_weapon"]
-    local cl = tonumber(rolesIni.roles["role" .. i .. "_color"])
-    local ar = rolesIni.roles["role" .. i .. "_armor"] == "1"
-    if nm and sk and wp and cl then
-        customRoleTemplates[#customRoleTemplates + 1] = {
-            name = u8(nm), skinId = sk, weaponLabel = u8(wp), colorId = cl, armor = ar
-        }
+do
+    local rolesCount = tonumber(rolesIni.roles.count) or 0
+    for i = 1, rolesCount do
+        local nm = rolesIni.roles["role" .. i .. "_name"]
+        local sk = tonumber(rolesIni.roles["role" .. i .. "_skin"])
+        local wp = rolesIni.roles["role" .. i .. "_weapon"]
+        local cl = tonumber(rolesIni.roles["role" .. i .. "_color"])
+        local ar = rolesIni.roles["role" .. i .. "_armor"] == "1"
+        if nm and sk and wp and cl then
+            customRoleTemplates[#customRoleTemplates + 1] = {
+                name = u8(nm), skinId = sk, weaponLabel = u8(wp), colorId = cl, armor = ar
+            }
+        end
     end
 end
 
@@ -3695,28 +3708,30 @@ local function deleteTrackerReport(idx)
 end
 
 -- загружаем список при первом запуске
-local trackerReportsCount = tonumber(trackerReportsIndexIni.reports.count) or 0
-for i = 1, trackerReportsCount do
-    local id        = trackerReportsIndexIni.reports["report" .. i .. "_id"]
-    local eventRaw  = trackerReportsIndexIni.reports["report" .. i .. "_event"]
-    local timeRaw   = trackerReportsIndexIni.reports["report" .. i .. "_time"]
-    local playersRaw = trackerReportsIndexIni.reports["report" .. i .. "_players"]
-    if id then
-        local players = {}
-        if playersRaw and playersRaw ~= "" then
-            for chunk in playersRaw:gmatch("[^|]+") do
-                local nick, sec = chunk:match("^(.-):(%d+)$")
-                if nick then
-                    players[#players + 1] = { nickname = nick, seconds = tonumber(sec) or 0 }
+do
+    local trackerReportsCount = tonumber(trackerReportsIndexIni.reports.count) or 0
+    for i = 1, trackerReportsCount do
+        local id        = trackerReportsIndexIni.reports["report" .. i .. "_id"]
+        local eventRaw  = trackerReportsIndexIni.reports["report" .. i .. "_event"]
+        local timeRaw   = trackerReportsIndexIni.reports["report" .. i .. "_time"]
+        local playersRaw = trackerReportsIndexIni.reports["report" .. i .. "_players"]
+        if id then
+            local players = {}
+            if playersRaw and playersRaw ~= "" then
+                for chunk in playersRaw:gmatch("[^|]+") do
+                    local nick, sec = chunk:match("^(.-):(%d+)$")
+                    if nick then
+                        players[#players + 1] = { nickname = nick, seconds = tonumber(sec) or 0 }
+                    end
                 end
             end
+            trackerReports[#trackerReports + 1] = {
+                id = id,
+                event = u8(eventRaw or ""),
+                time = tonumber(timeRaw) or 0,
+                players = players,
+            }
         end
-        trackerReports[#trackerReports + 1] = {
-            id = id,
-            event = u8(eventRaw or ""),
-            time = tonumber(timeRaw) or 0,
-            players = players,
-        }
     end
 end
 
@@ -4605,25 +4620,27 @@ local function deleteReport(idx)
 end
 
 -- загружаем список отчётов при первом запуске
-local reportsCount = tonumber(reportsIndexIni.reports.count) or 0
-for i = 1, reportsCount do
-    local id       = reportsIndexIni.reports["report" .. i .. "_id"]
-    local eventRaw = reportsIndexIni.reports["report" .. i .. "_event"]
-    local timeRaw  = reportsIndexIni.reports["report" .. i .. "_time"]
-    local filesRaw = reportsIndexIni.reports["report" .. i .. "_files"]
-    if id then
-        local files = {}
-        if filesRaw and filesRaw ~= "" then
-            for fname in filesRaw:gmatch("[^|]+") do
-                files[#files + 1] = fname
+do
+    local reportsCount = tonumber(reportsIndexIni.reports.count) or 0
+    for i = 1, reportsCount do
+        local id       = reportsIndexIni.reports["report" .. i .. "_id"]
+        local eventRaw = reportsIndexIni.reports["report" .. i .. "_event"]
+        local timeRaw  = reportsIndexIni.reports["report" .. i .. "_time"]
+        local filesRaw = reportsIndexIni.reports["report" .. i .. "_files"]
+        if id then
+            local files = {}
+            if filesRaw and filesRaw ~= "" then
+                for fname in filesRaw:gmatch("[^|]+") do
+                    files[#files + 1] = fname
+                end
             end
+            reports[#reports + 1] = {
+                id = id,
+                event = u8(eventRaw or ""),
+                time = tonumber(timeRaw) or 0,
+                files = files,
+            }
         end
-        reports[#reports + 1] = {
-            id = id,
-            event = u8(eventRaw or ""),
-            time = tonumber(timeRaw) or 0,
-            files = files,
-        }
     end
 end
 
@@ -4756,7 +4773,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.4")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.5")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -5055,8 +5072,12 @@ function main()
 
     checkForUpdates()
     loadAllAccessLists()
-    fetchCalendarEvents()
-    fetchBuiltinRoleTemplates()
+
+    lua_thread.create(function()
+        wait(3000)
+        fetchCalendarEvents()
+        fetchBuiltinRoleTemplates()
+    end)
 
     toast_font = renderCreateFont("Arial", 9, 1)
     event_card_font_title = renderCreateFont("Arial", 10, 1)
