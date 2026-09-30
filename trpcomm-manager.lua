@@ -1,5 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
+--  Актуальная версия: 2.5
 -- ============================================================
 
 imgui = require 'imgui'
@@ -28,21 +29,13 @@ TG_THREAD_ID = "9"
 --  ДОСТУПЫ К РАЗДЕЛАМ
 -- ============================================================
 local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
-local ACCESS_SECTIONS = { "photographer", "tracker", "hr", "actors" }
-local ACCESS_FILE_NAMES = {
-    photographer = "access_photographers",
-    tracker      = "access_curators",
-    hr           = "access_advertising",
-    actors       = "access_actors",
-}
+local ACCESS_SECTIONS = { "photographers", "curators", "hr", "actors" }
 
 access_lists = {} -- access_lists["photographer"] = {"Nick_One", "Nick_Two"} ; nil = ещё не загружен
-access_lists_loading = {} -- access_lists_loading["photographer"] = true, пока запрос не завершится
 
 local function loadAccessList(sectionKey)
     lua_thread.create(function()
-        local fileName = ACCESS_FILE_NAMES[sectionKey]
-        local url = ACCESS_BASE_URL .. fileName .. ".txt?cb=" .. os.time()
+        local url = ACCESS_BASE_URL .. "access_" .. sectionKey .. ".txt?cb=" .. os.time()
         local ok, response = pcall(requests.get, url, { timeout = 15 })
         if not ok or response.status_code ~= 200 then
             access_lists[sectionKey] = {} -- не удалось загрузить — безопасный дефолт: доступа ни у кого нет
@@ -75,7 +68,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.6"
+SCRIPT_VERSION = "2.5"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -630,6 +623,12 @@ end
 
 local mainIni = inicfg.load(defaultSettings, CONFIG_PATH) or defaultSettings
 
+ad_interval_minutes = imgui.ImInt(30)
+ad_city_ls  = imgui.ImBool(true)
+ad_city_sf  = imgui.ImBool(false)
+ad_city_lv  = imgui.ImBool(false)
+ad_city_all = imgui.ImBool(false)
+
 if not doesDirectoryExist(NOTES_DIR) then createDirectory(NOTES_DIR) end
 if not doesDirectoryExist(REPORTS_DIR) then createDirectory(REPORTS_DIR) end
 if not doesDirectoryExist(TRACKER_REPORTS_DIR) then createDirectory(TRACKER_REPORTS_DIR) end
@@ -746,9 +745,6 @@ local function saveSettings()
             ad_city_sf = tostring(ad_city_sf.v),
             ad_city_lv = tostring(ad_city_lv.v),
             ad_city_all = tostring(ad_city_all.v),
-            campaign_ad_text = u8:decode(campaign_ad_text.v),
-            campaign_sent_count = tostring(campaign_sent_count),
-            campaign_event_key = mainIni.settings.campaign_event_key or "",
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -821,6 +817,17 @@ event_card_font_title = nil
 event_card_font_name  = nil
 event_card_font_time  = nil
 event_card_logo_texture = nil
+
+local function truncateToWidth(font, text, maxWidth)
+    if renderGetFontDrawTextLength(font, text) <= maxWidth then
+        return text
+    end
+    local ellipsis = "..."
+    while #text > 0 and renderGetFontDrawTextLength(font, text .. ellipsis) > maxWidth do
+        text = text:sub(1, -2)
+    end
+    return text .. ellipsis
+end
 
 local function loadLogoTexture()
     if trpcomm_logo_checked then return trpcomm_logo_texture end
@@ -1039,9 +1046,6 @@ local function drawAdAddForm(t)
         local raw = u8:decode(ad_new_text.v)
         if raw ~= "" then
             if isEdit then
-                if ads_list[ad_edit_idx].text ~= raw then
-                    ads_list[ad_edit_idx].sentCount = 0 -- текст поменялся — это по сути новое объявление, счётчик не переносим
-                end
                 ads_list[ad_edit_idx].text = raw
             else
                 ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
@@ -1078,11 +1082,12 @@ local function sendToNextPendingCity()
     local cityCode = ad_pending_cities[ad_pending_city_pos]
     if not cityCode then
         ad_pending = false
+        ad_pending_deadline = 0
         return
     end
     ad_city_retry_count = 0
     ad_pending = true
-    ad_pending_deadline = os.time() + 2
+    ad_pending_deadline = os.time() + 4
     sampSendChat("/sms radio" .. cityCode)
 end
 
@@ -1106,6 +1111,7 @@ end
 local function advanceAfterNewsPopup()
     if not ad_awaiting_next_city then return end
     ad_awaiting_next_city = false
+    ad_pending_deadline = 0
     lua_thread.create(function()
         wait(300)
         sendToNextPendingCity()
@@ -1142,6 +1148,7 @@ end
 
 local function triggerNextAdSend()
     if #ads_list == 0 then return end
+    ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
     for i = 1, #ads_list do
         local idx = ((ad_rotation_idx + i - 1) % #ads_list) + 1
         local ad = ads_list[idx]
@@ -1153,83 +1160,7 @@ local function triggerNextAdSend()
     end
 end
 
--- ---------- Кампания к ивенту (норма объяв до начала, с ускорением по мере приближения) ----------
-campaign_active           = imgui.ImBool(false)
-campaign_target_count     = imgui.ImInt(20)
-campaign_window_hour      = imgui.ImInt(12)
-campaign_window_minute    = imgui.ImInt(0)
-campaign_ad_text          = imgui.ImBuffer(u8(mainIni.settings.campaign_ad_text or ""), AD_TEXT_BUFFER_SIZE)
-campaign_selected_event   = nil   -- ссылка на выбранное событие из calendar_events
-campaign_event_timestamp  = nil
-campaign_sent_count       = tonumber(mainIni.settings.campaign_sent_count) or 0
-campaign_next_send_time   = 0
-
-local function getUpcomingTimedEvents()
-    local list = {}
-    local nowTime = os.time()
-    for _, ev in ipairs(calendar_events) do
-        if ev.y and ev.h and not ev.isAllDay then
-            local ts = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
-            if ts >= nowTime then
-                list[#list + 1] = { event = ev, timestamp = ts }
-            end
-        end
-    end
-    table.sort(list, function(a, b) return a.timestamp < b.timestamp end)
-    return list
-end
-
-local function startCampaign()
-    if not campaign_selected_event then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала выбери ивент для кампании.', -1)
-        return
-    end
-    local textRaw = u8:decode(campaign_ad_text.v)
-    if textRaw == "" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления для кампании.', -1)
-        return
-    end
-
-    local ev = campaign_selected_event
-    campaign_event_timestamp = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = ev.h, min = ev.mi, sec = 0 })
-    local windowStart = os.time({ year = ev.y, month = ev.mo, day = ev.d, hour = campaign_window_hour.v, min = campaign_window_minute.v, sec = 0 })
-
-    -- сбрасываем счётчик, только если это НОВЫЙ ивент, а не продолжение того же после релога
-    local eventKey = ev.summary .. "|" .. tostring(campaign_event_timestamp)
-    if mainIni.settings.campaign_event_key ~= eventKey then
-        campaign_sent_count = 0
-        saveSettings() -- запишет и новый campaign_event_key, и обнулённый счётчик
-    end
-    mainIni.settings.campaign_event_key = eventKey
-
-    campaign_next_send_time = math.max(os.time(), windowStart)
-    campaign_active.v       = true
-end
-
-local function stopCampaign()
-    campaign_active.v = false
-end
-
-local function campaignTick()
-    if not campaign_active.v or ad_pending then return end
-    if os.time() < campaign_next_send_time then return end
-
-    if campaign_sent_count >= campaign_target_count.v or os.time() >= campaign_event_timestamp then
-        stopCampaign()
-        return
-    end
-
-    local eventLabel = campaign_selected_event and campaign_selected_event.summary or nil
-    sendAdNow(u8:decode(campaign_ad_text.v), "campaign", eventLabel)
-    campaign_sent_count = campaign_sent_count + 1
-    saveSettings()
-
-    local remainingSeconds = math.max(campaign_event_timestamp - os.time(), 1)
-    local remainingQuota   = math.max(campaign_target_count.v - campaign_sent_count, 1)
-    campaign_next_send_time = os.time() + math.floor(remainingSeconds / remainingQuota)
-end
-
-local hr_subtab = "ads" -- "ads" | "messages" | "campaign"
+local hr_subtab = "ads" -- "ads" | "messages"
 
 local function drawHRAdsTab(t)
     imgui.TextColored(t.accent, u8"Список объявлений")
@@ -1348,14 +1279,13 @@ local function drawHRAdsTab(t)
     imgui.Spacing()
     imgui.TextColored(t.textDim, u8"Город(-а):")
 
-    if ad_city_all.v then
-        imgui.TextColored(t.textDim, u8"(выбрано \"все три\" — отдельные галочки ниже игнорируются)")
+    if not ad_city_all.v then
+        if imgui.Checkbox(u8"Los Santos##ad_city_ls", ad_city_ls) then saveSettings() end
+        imgui.SameLine()
+        if imgui.Checkbox(u8"San Fierro##ad_city_sf", ad_city_sf) then saveSettings() end
+        imgui.SameLine()
+        if imgui.Checkbox(u8"Las Venturas##ad_city_lv", ad_city_lv) then saveSettings() end
     end
-    if imgui.Checkbox(u8"Los Santos##ad_city_ls", ad_city_ls) then saveSettings() end
-    imgui.SameLine()
-    if imgui.Checkbox(u8"San Fierro##ad_city_sf", ad_city_sf) then saveSettings() end
-    imgui.SameLine()
-    if imgui.Checkbox(u8"Las Venturas##ad_city_lv", ad_city_lv) then saveSettings() end
 
     imgui.Spacing()
     if imgui.Checkbox(u8"Отправлять во все три города", ad_city_all) then
@@ -1413,245 +1343,6 @@ local function drawHRAdsTab(t)
 
         if ad_auto_send.v then
         imgui.TextColored(t.textDim, u8"Следующая отправка через: " .. formatMMSS(ad_next_send_time - os.time()))
-    end
-end
-
-local function drawCampaignSettingsTab(t)
-    imgui.TextColored(t.textDim, u8"Ивент:")
-    local upcoming = getUpcomingTimedEvents()
-    local eventLabels = {}
-    for _, item in ipairs(upcoming) do
-        eventLabels[#eventLabels + 1] = u8(os.date("%d.%m %H:%M", item.timestamp)) .. " - " .. item.event.summary
-    end
-    if #eventLabels == 0 then
-        imgui.TextColored(t.textDim, u8"Нет предстоящих ивентов с указанным временем.")
-    else
-        campaign_event_combo_idx = campaign_event_combo_idx or imgui.ImInt(0)
-        imgui.PushItemWidth(-1)
-        if imgui.Combo("##campaign_event", campaign_event_combo_idx, eventLabels) then
-            campaign_selected_event = upcoming[campaign_event_combo_idx.v + 1].event
-        end
-        imgui.PopItemWidth()
-        if not campaign_selected_event and #upcoming > 0 then
-            campaign_selected_event = upcoming[1].event
-        end
-    end
-
-    imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Текст объявления для кампании:")
-    imgui.PushItemWidth(-1)
-    imgui.InputTextMultiline("##campaign_ad_text", campaign_ad_text, imgui.ImVec2(-1, 60))
-    imgui.PopItemWidth()
-
-    if imgui.IsItemActive() then
-        local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56)
-        if ctrlVDown and not campaign_ad_text_ctrlv_was_down then
-            local clip = getClipboardText()
-            if clip and clip ~= "" then
-                local text = clip
-                if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
-                campaign_ad_text.v = u8(text)
-            end
-        end
-        campaign_ad_text_ctrlv_was_down = ctrlVDown
-    else
-        campaign_ad_text_ctrlv_was_down = false
-    end
-
-    -- Подсказка из "Место проведения" выбранного ивента — так же, как в обычном списке объявлений выше
-    if campaign_selected_event and campaign_selected_event.location and campaign_selected_event.location ~= "" then
-        local currentText = u8:decode(campaign_ad_text.v)
-        local suggestedRaw = u8:decode(campaign_selected_event.location)
-        if currentText ~= suggestedRaw then
-            local faded = imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.55)
-            imgui.PushStyleColor(imgui.Col.Text, faded)
-            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
-            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 0.35))
-            if imgui.Button(campaign_selected_event.location .. u8"   —   Использовать как текст?##campaign_suggest", imgui.ImVec2(-1, 24)) then
-                local raw = suggestedRaw
-                if #raw > AD_TEXT_MAX then raw = raw:sub(1, AD_TEXT_MAX) end
-                campaign_ad_text.v = campaign_selected_event.location
-            end
-            imgui.PopStyleColor(3)
-        end
-    end
-
-    imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Норма объяв:")
-    imgui.SameLine()
-    imgui.PushItemWidth(80)
-    imgui.InputInt("##campaign_target", campaign_target_count)
-    imgui.PopItemWidth()
-    if imgui.IsItemHovered() then
-        imgui.SetTooltip(u8"Сколько объявлений нужно успеть отправить всего до начала ивента.")
-    end
-
-    imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Не отправлять раньше:")
-    imgui.SameLine()
-    imgui.PushItemWidth(80)
-    imgui.InputInt("##campaign_hour", campaign_window_hour)
-    imgui.PopItemWidth()
-    imgui.SameLine()
-    imgui.Text(":")
-    imgui.SameLine()
-    imgui.PushItemWidth(80)
-    imgui.InputInt("##campaign_minute", campaign_window_minute)
-    imgui.PopItemWidth()
-    if imgui.IsItemHovered() then
-        imgui.SetTooltip(u8(
-            "Раньше этого времени в день ивента кампания не начнёт слать\n" ..
-            "объявления — даже если нажать 'Начать' заранее.\n" ..
-            "Например 12:00 — не слать до полудня.\n" ..
-            "После этого момента скрипт сам распределит оставшиеся\n" ..
-            "объявления равномерно до начала ивента."
-        ))
-    end
-
-    imgui.Spacing()
-
-    if campaign_active.v then
-        imgui.TextColored(t.textDim, u8"Отправлено " .. campaign_sent_count .. u8" из " .. campaign_target_count.v)
-        if campaign_event_timestamp then
-            imgui.TextColored(t.textDim, u8"До ивента: " .. formatMMSS(campaign_event_timestamp - os.time()))
-        end
-        imgui.TextColored(t.textDim, u8"Следующая через: " .. formatMMSS(campaign_next_send_time - os.time()))
-        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.65, 0.20, 0.20, 1.0))
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
-        if imgui.Button(u8"Остановить кампанию##campaign_stop", imgui.ImVec2(220, 32)) then
-            stopCampaign()
-        end
-        imgui.PopStyleColor(2)
-    else
-        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
-        if imgui.Button(u8"Разрешить и начать кампанию##campaign_start", imgui.ImVec2(260, 32)) then
-            startCampaign()
-        end
-        imgui.PopStyleColor(2)
-    end
-end
-
-local function getCampaignHistory()
-    local list = {}
-    for _, entry in ipairs(ad_history_log) do
-        if entry.source == "campaign" then
-            list[#list + 1] = entry
-        end
-    end
-    return list
-end
-
-local function drawCampaignListTab(t)
-    local campaignEntries = getCampaignHistory()
-    if #campaignEntries == 0 then
-        imgui.TextColored(t.textDim, u8"Пока не отправлено ни одного объявления по кампании.")
-        return
-    end
-
-    -- группируем по (текст + ивент), считаем количество
-    local groups = {}
-    local order = {}
-    for _, entry in ipairs(campaignEntries) do
-        local key = (entry.eventLabel or "") .. "||" .. entry.text
-        if not groups[key] then
-            groups[key] = { text = entry.text, eventLabel = entry.eventLabel, count = 0 }
-            order[#order + 1] = key
-        end
-        groups[key].count = groups[key].count + 1
-    end
-
-    table.sort(order, function(a, b) return groups[a].count > groups[b].count end)
-
-    for i, key in ipairs(order) do
-        local g = groups[key]
-        imgui.PushID("campaign_list_" .. i)
-        if g.eventLabel then
-            imgui.TextColored(t.accent, g.eventLabel)
-            imgui.SameLine()
-        end
-        local preview = g.text:sub(1, 60)
-        if #g.text > 60 then preview = preview .. "..." end
-        imgui.TextColored(t.text, u8(preview))
-        imgui.SameLine(imgui.GetWindowWidth() - 90)
-        imgui.TextColored(t.accent, tostring(g.count) .. u8" раз")
-        imgui.PopID()
-        imgui.Spacing()
-    end
-end
-
-local function drawCampaignHistoryTab(t)
-    local campaignEntries = getCampaignHistory()
-    if #campaignEntries == 0 then
-        imgui.TextColored(t.textDim, u8"История кампаний пуста.")
-        return
-    end
-
-    for i = #campaignEntries, 1, -1 do
-        local entry = campaignEntries[i]
-        imgui.PushID("campaign_hist_" .. i)
-        imgui.TextColored(t.textDim, os.date("%d.%m %H:%M", entry.ts))
-        imgui.SameLine()
-        if entry.eventLabel then
-            imgui.TextColored(t.accent, entry.eventLabel)
-            imgui.SameLine()
-        end
-        imgui.TextColored(t.text, u8(entry.text))
-        imgui.PopID()
-    end
-end
-
-campaign_subtab = "settings" -- "settings" | "list" | "history"
-
-local function drawHRCampaignTab(t)
-    imgui.TextColored(t.accent, u8"Кампания к ивенту")
-    imgui.Spacing()
-
-    local pushed = 0
-    if campaign_subtab == "settings" then
-        imgui.PushStyleColor(imgui.Col.Button, t.accent)
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
-        pushed = 2
-    end
-    if imgui.Button(u8"Кампания##campaign_sub_settings", imgui.ImVec2(120, 28)) then
-        campaign_subtab = "settings"
-    end
-    if pushed > 0 then imgui.PopStyleColor(pushed) end
-
-    imgui.SameLine()
-
-    pushed = 0
-    if campaign_subtab == "list" then
-        imgui.PushStyleColor(imgui.Col.Button, t.accent)
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
-        pushed = 2
-    end
-    if imgui.Button(u8"Список для ивента##campaign_sub_list", imgui.ImVec2(160, 28)) then
-        campaign_subtab = "list"
-    end
-    if pushed > 0 then imgui.PopStyleColor(pushed) end
-
-    imgui.SameLine()
-
-    pushed = 0
-    if campaign_subtab == "history" then
-        imgui.PushStyleColor(imgui.Col.Button, t.accent)
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
-        pushed = 2
-    end
-    if imgui.Button(u8"История для ивента##campaign_sub_history", imgui.ImVec2(170, 28)) then
-        campaign_subtab = "history"
-    end
-    if pushed > 0 then imgui.PopStyleColor(pushed) end
-
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    if campaign_subtab == "settings" then
-        drawCampaignSettingsTab(t)
-    elseif campaign_subtab == "list" then
-        drawCampaignListTab(t)
-    else
-        drawCampaignHistoryTab(t)
     end
 end
 
@@ -2112,19 +1803,6 @@ local function drawHRTab(t)
     imgui.SameLine()
 
     pushed = 0
-    if hr_subtab == "campaign" then
-        imgui.PushStyleColor(imgui.Col.Button, t.accent)
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
-        pushed = 2
-    end
-    if imgui.Button(u8"Кампания объявлений##hr_sub_campaign", imgui.ImVec2(180, 30)) then
-        hr_subtab = "campaign"
-    end
-    if pushed > 0 then imgui.PopStyleColor(pushed) end
-
-    imgui.SameLine()
-
-    pushed = 0
     if hr_subtab == "analytics" then
         imgui.PushStyleColor(imgui.Col.Button, t.accent)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
@@ -2141,8 +1819,6 @@ local function drawHRTab(t)
         drawHRAdsTab(t)
     elseif hr_subtab == "messages" then
         drawHRMessagesTab(t)
-    elseif hr_subtab == "campaign" then
-        drawHRCampaignTab(t)
     else
         drawHRAnalyticsTab(t)
     end
@@ -2989,14 +2665,6 @@ local function drawSettingsTab(t)
     imgui.TextColored(t.accent, u8"НАСТРОЙКИ")
     imgui.Separator()
     imgui.Spacing()
-
-    imgui.TextColored(t.textDim, u8"Версия: " .. SCRIPT_VERSION)
-    imgui.SameLine()
-    if imgui.Button(u8"Проверить обновления##check_updates_btn", imgui.ImVec2(180, 26)) then
-        checkForUpdates()
-    end
-
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
     -- ---------- Бинд на открытие меню ----------
     imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8" Открытие меню")
@@ -4783,7 +4451,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.6")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.5")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4893,7 +4561,7 @@ function imgui.OnDrawFrame()
         end
         curator_section_active_last_frame = curatorsSectionShouldBeVisible
 
-        imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
+                    imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
             local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, roles = true }
             local ACCESS_KEY_BY_KIND = { roles = "actors" }
@@ -4901,10 +4569,6 @@ function imgui.OnDrawFrame()
             if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
                 local accessKey = ACCESS_KEY_BY_KIND[activeTab.kind] or activeTab.kind
                 if access_lists[accessKey] == nil then
-                    if not access_lists_loading[accessKey] then
-                        access_lists_loading[accessKey] = true
-                        loadAccessList(accessKey)
-                    end
                     imgui.TextColored(t.textDim, u8"Проверка доступа...")
                 elseif not hasAccess(accessKey) then
                     imgui.Spacing()
@@ -4945,6 +4609,10 @@ function imgui.OnDrawFrame()
 end
 
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
+    if ad_pending then
+
+    end
+
     if dialogId == 3412 and title and title:find("без модерации") then
         sampSendDialogResponse(dialogId, 1, 0, "")
         advanceAfterNewsPopup()
@@ -4958,7 +4626,7 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             return false
         end
             if dialogId == 3410 and title:find("Отправка рекламы на радио") then
-            ad_pending_deadline = os.time() + 2
+            ad_pending_deadline = 0
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
             showToast('Объявление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
@@ -4966,12 +4634,12 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             ad_text.v = ""
 
             ad_awaiting_next_city = true
-            ad_next_city_at = os.time() + 2 -- запасной срок, если попап "без модерации" вообще не появится
+            ad_next_city_at = os.time() + 3
             return false
         end
     end
 
-    if dialogId == 45 and text and text:find("Ваше объявление") then
+    if dialogId == 45 and text and (text:find("Ваше объявление") or text:find("уже находится в очереди на модерацию")) then
         sampSendDialogResponse(dialogId, 1, 65535, "")
         return false
     end
@@ -5004,6 +4672,14 @@ function onReceivePacket(id, bs)
     end
 end
 
+local function parseRetrySeconds(text)
+    local min = text:match("через (%d+) мин")
+    if min then return tonumber(min) * 60 end
+    local sec = text:match("через (%d+) сек")
+    if sec then return tonumber(sec) end
+    return nil
+end
+
 sampev.onServerMessage = function(color, text)
     if text:find("Вы находитесь слишком далеко от игрока") then
         role_approve_distance_error = true
@@ -5011,13 +4687,18 @@ sampev.onServerMessage = function(color, text)
 
     if ad_pending then
         if text:find("Одно из ваших объявлений уже находится в очереди на модерацию") then
-            lua_thread.create(function()
-                wait(1500)
-                retryCurrentCity()
-            end)
+            ad_pending = false
+            ad_pending_deadline = 0
+            if ad_auto_send.v then
+                ad_auto_send.v = false
+                saveSettings()
+            end
+            showToast("Предыдущее объявление ещё не прошло модерацию. Автоотправка остановлена — включи вручную, когда очередь освободится.")
         elseif text:find("Нельзя отправлять рекламу на радио слишком часто") then
+            local waitSec = parseRetrySeconds(text) or 60
+            ad_pending_deadline = 0
             lua_thread.create(function()
-                wait(1500)
+                wait((waitSec + 2) * 1000)
                 retryCurrentCity()
             end)
         elseif text:find("Ваш мобильный телефон выключен") then
@@ -5084,11 +4765,10 @@ function main()
     local result, my1id = sampGetPlayerIdByCharHandle(PLAYER_PED)
     clientName = sampGetPlayerNickname(my1id)
 
-    lua_thread.create(function()
-        wait(3000)
-        fetchCalendarEvents()
-        fetchBuiltinRoleTemplates()
-    end)
+    checkForUpdates()
+    loadAllAccessLists()
+    fetchCalendarEvents()
+    fetchBuiltinRoleTemplates()
 
     toast_font = renderCreateFont("Arial", 9, 1)
     event_card_font_title = renderCreateFont("Arial", 10, 1)
@@ -5112,10 +4792,10 @@ function main()
         wait(0)
         imgui.Process = main_window_state.v
 
-        if ad_pending and ad_pending_deadline > 0 and os.time() > ad_pending_deadline then
+        if ad_pending and not ad_awaiting_next_city and ad_pending_deadline > 0 and os.time() > ad_pending_deadline then
             ad_pending = false
             ad_pending_deadline = 0
-            notify('{FFAA00}[TRPcomm] {FFFFFF}Ожидание диалогов сервера прервано — ответа не было.', -1)
+            sampAddChatMessage('{FFAA00}[TRPcomm] {FFFFFF}Ожидание диалогов сервера прервано — ответа не было.', -1)
         end
         if ad_awaiting_next_city and os.time() > ad_next_city_at then
             advanceAfterNewsPopup()
@@ -5182,7 +4862,8 @@ function main()
             end
 
             local textX = x0 + 14 + 44 + 14
-            renderFontDrawText(event_card_font_name, u8:decode(upcoming_event_name), textX, y0 + 14, col_white)
+            local nameFitted = truncateToWidth(event_card_font_name, u8:decode(upcoming_event_name), cardW - (textX - x0) - 12)
+            renderFontDrawText(event_card_font_name, nameFitted, textX, y0 + 14, col_white)
             renderFontDrawText(event_card_font_time, "Начало: " .. upcoming_event_time, textX, y0 + 36, col_dim)
             renderFontDrawText(event_card_font_time, event_card_message, textX, y0 + 58, col_accent)
         end
@@ -5215,7 +4896,6 @@ function main()
         if ad_auto_send.v and not ad_pending and os.time() >= ad_next_send_time then
             triggerNextAdSend()
         end
-        campaignTick()
 
         local px, py, pz = getCharCoordinates(PLAYER_PED)
         local result, object = findAllRandomObjectsInSphere(px, py, pz, 150.0, true)
