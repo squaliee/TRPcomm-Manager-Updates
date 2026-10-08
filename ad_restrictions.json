@@ -1,0 +1,13 @@
+{
+  "auto_send_disabled": false,
+  "disabled_intervals": {
+    "1": false,
+    "3": false,
+    "5": false,
+    "20": false,
+    "30": false,
+    "60": false
+  },
+  "updated_by": "None",
+  "updated_at": 0
+}
