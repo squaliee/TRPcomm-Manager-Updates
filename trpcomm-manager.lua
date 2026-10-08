@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.5
+--  Актуальная версия: 2.8
 -- ============================================================
 
 imgui = require 'imgui'
@@ -18,6 +18,7 @@ inicfg = require 'inicfg'
 sampev = require 'samp.events'
 requests = require 'requests'
 cjson = require 'cjson.safe'
+base64 = require 'base64'
 
 GCAL_ID = "e750c65e6ebd96513d62dca03f7b23a0746137364a24d4daba502a4e555756bc@group.calendar.google.com"
 GCAL_API_KEY = "AIzaSyBtsyCi9A0ikrclVl919OfPC2z5rlaHZs4"
@@ -30,15 +31,31 @@ TG_THREAD_ID = "9"
 -- ============================================================
 local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
 local ACCESS_SECTIONS = { "photographers", "curators", "hr", "actors" }
+local ACCESS_FILENAME_OVERRIDES = { hr = "access_advertising.txt" }
 
-access_lists = {} -- access_lists["photographer"] = {"Nick_One", "Nick_Two"} ; nil = ещё не загружен
+local ACCESS_KEY_ALIASES = {
+    roles = "actors",
+    actors = "actors",
+    photographer = "photographers",
+    photographers = "photographers",
+    tracker = "curators",
+    curators = "curators",
+    hr = "hr",
+    advertising = "hr",
+}
+
+access_lists = {} -- access_lists["photographers"] = {"Nick_One", ...} ; nil = ещё не загружен
 
 local function loadAccessList(sectionKey)
     lua_thread.create(function()
-        local url = ACCESS_BASE_URL .. "access_" .. sectionKey .. ".txt?cb=" .. os.time()
+        local filename = ACCESS_FILENAME_OVERRIDES[sectionKey] or ("access_" .. sectionKey .. ".txt")
+        local url = ACCESS_BASE_URL .. filename .. "?cb=" .. os.time()
         local ok, response = pcall(requests.get, url, { timeout = 15 })
         if not ok or response.status_code ~= 200 then
-            access_lists[sectionKey] = {} -- не удалось загрузить — безопасный дефолт: доступа ни у кого нет
+            access_lists[sectionKey] = {}
+            if sectionKey == "photographers" then access_lists["photographer"] = {} end
+            if sectionKey == "curators" then access_lists["tracker"] = {} end
+            if sectionKey == "actors" then access_lists["roles"] = {} end
             return
         end
 
@@ -47,6 +64,9 @@ local function loadAccessList(sectionKey)
             list[#list + 1] = nick
         end
         access_lists[sectionKey] = list
+        if sectionKey == "photographers" then access_lists["photographer"] = list end
+        if sectionKey == "curators" then access_lists["tracker"] = list end
+        if sectionKey == "actors" then access_lists["roles"] = list end
     end)
 end
 
@@ -57,8 +77,16 @@ local function loadAllAccessLists()
 end
 
 local function hasAccess(sectionKey)
-    local list = access_lists[sectionKey]
+    local realKey = ACCESS_KEY_ALIASES[sectionKey] or sectionKey
+    local list = access_lists[realKey] or access_lists[sectionKey]
     if not list then return false end
+    if not clientName or clientName == "" then
+        local ok, myId = sampGetPlayerIdByCharHandle(PLAYER_PED)
+        if ok and myId and myId >= 0 then
+            clientName = sampGetPlayerNickname(myId)
+        end
+    end
+    if not clientName then return false end
     for _, nick in ipairs(list) do
         if nick:lower() == clientName:lower() then return true end
     end
@@ -68,7 +96,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.5"
+SCRIPT_VERSION = "2.8"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -137,7 +165,7 @@ local function checkForUpdates()
             local looksValid = content
                 and #content > 5000
                 and content:find("function main()", 1, true)
-                and not content:find("\239\187\191", 1, true) -- BOM — признак UTF-8 вместо CP1251
+                and not content:find("\239\187\191", 1, true)
 
             if looksValid then
                 local targetPath = thisScript().path
@@ -170,6 +198,27 @@ ffi.cdef[[
     void* FindFirstFileA(const char* lpFileName, WIN32_FIND_DATAA* lpFindFileData);
     bool  FindNextFileA(void* hFindFile, WIN32_FIND_DATAA* lpFindFileData);
     bool  FindClose(void* hFindFile);
+    typedef void* LPDIRECT3DDEVICE9;
+    typedef void* LPDIRECT3DTEXTURE9;
+    typedef unsigned int UINT;
+    typedef unsigned long DWORD;
+    typedef int HRESULT;
+    HRESULT __stdcall D3DXCreateTextureFromFileExA(
+        LPDIRECT3DDEVICE9 pDevice,
+        const char* pSrcFile,
+        UINT Width,
+        UINT Height,
+        UINT MipLevels,
+        DWORD Usage,
+        int Format,
+        int Pool,
+        DWORD Filter,
+        DWORD MipFilter,
+        DWORD ColorKey,
+        void* pSrcInfo,
+        void* pPalette,
+        LPDIRECT3DTEXTURE9* ppTexture
+    );
 ]]
 
 local function findFilesByMask(mask)
@@ -591,6 +640,11 @@ local defaultSettings = {
         remove_armour = "false",
         delete_textdraw = "false",
         notifications_enabled = "true",
+        ad_schedule_enabled = "false",
+        ad_schedule_from_hour = "21",
+        ad_schedule_from_min = "5",
+        ad_schedule_to_hour = "21",
+        ad_schedule_to_min = "9",
     }
 }
 
@@ -745,6 +799,11 @@ local function saveSettings()
             ad_city_sf = tostring(ad_city_sf.v),
             ad_city_lv = tostring(ad_city_lv.v),
             ad_city_all = tostring(ad_city_all.v),
+            ad_schedule_enabled = tostring(ad_schedule_enabled.v),
+            ad_schedule_from_hour = tostring(ad_schedule_from_hour.v),
+            ad_schedule_from_min = tostring(ad_schedule_from_min.v),
+            ad_schedule_to_hour = tostring(ad_schedule_to_hour.v),
+            ad_schedule_to_min = tostring(ad_schedule_to_min.v),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -887,6 +946,36 @@ end
 -- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
 ad_interval_minutes = imgui.ImInt(tonumber(mainIni.settings.ad_interval_minutes) or 30)
+
+-- ---------- Расписание автоотправки (автостарт и автостоп) ----------
+ad_schedule_enabled   = imgui.ImBool(boolFromSetting(mainIni.settings.ad_schedule_enabled or "false"))
+ad_schedule_from_hour = imgui.ImInt(tonumber(mainIni.settings.ad_schedule_from_hour) or 21)
+ad_schedule_from_min  = imgui.ImInt(tonumber(mainIni.settings.ad_schedule_from_min) or 5)
+ad_schedule_to_hour   = imgui.ImInt(tonumber(mainIni.settings.ad_schedule_to_hour) or 21)
+ad_schedule_to_min    = imgui.ImInt(tonumber(mainIni.settings.ad_schedule_to_min) or 9)
+local ad_schedule_was_in = nil
+
+local SERVER_TZ_OFFSET_SEC = 3 * 3600 -- Время сервера Trinity GTA по МСК (UTC+3)
+local server_time_offset = 0
+
+local function getServerTime()
+    return os.date("!*t", os.time() + SERVER_TZ_OFFSET_SEC + server_time_offset)
+end
+
+local function isServerTimeInSchedule()
+    local s = getServerTime()
+    local cur = s.hour * 60 + s.min
+    local fromT = ad_schedule_from_hour.v * 60 + ad_schedule_from_min.v
+    local toT = ad_schedule_to_hour.v * 60 + ad_schedule_to_min.v
+
+    if fromT <= toT then
+        return cur >= fromT and cur <= toT
+    else
+        -- Расписание переходит через полночь (например, с 22:00 до 06:00)
+        return cur >= fromT or cur <= toT
+    end
+end
+
 ad_text = imgui.ImBuffer("", AD_TEXT_BUFFER_SIZE)
 ad_pending = false      -- ждём ли сейчас диалогов после отправки команды
 ad_pending_text = ""    -- текст, который подставим во второй диалог (CP1251, без u8)
@@ -999,75 +1088,177 @@ do
     end
 end
 
--- ---------- Форма добавления объявления ----------
-local ad_add_form_open = false
-local ad_edit_idx = nil
-local ad_new_text = imgui.ImBuffer("", AD_TEXT_BUFFER_SIZE)
+-- ---------- Форма добавления объявления ---------- ---------- ОБЪЯВЛЕНИЯ : ФОРМА ДОБАВЛЕНИЯ / ИЗМЕНЕНИЯ ----------
+ad_add_form_open = false
+ad_edit_idx = nil
+ad_new_text = imgui.ImBuffer("", AD_TEXT_BUFFER_SIZE)
+ad_modal_alpha = 0.0
+ad_modal_just_opened = false
 
 local function drawAdAddForm(t)
-    if not ad_add_form_open then return end
+    local targetAlpha = ad_add_form_open and 1.0 or 0.0
+    local dt = imgui.GetIO().DeltaTime
+    if dt <= 0 or dt > 0.1 then dt = 0.016 end
+
+    -- Плавная LERP-анимация затемнения фона (fade-in / fade-out ~180ms)
+    if math.abs(ad_modal_alpha - targetAlpha) > 0.001 then
+        ad_modal_alpha = ad_modal_alpha + (targetAlpha - ad_modal_alpha) * math.min(1.0, dt * 14.0)
+        if math.abs(ad_modal_alpha - targetAlpha) < 0.008 then
+            ad_modal_alpha = targetAlpha
+        end
+    end
+
+    if ad_modal_alpha <= 0.005 and not ad_add_form_open then
+        return
+    end
 
     local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(420, 220), imgui.Cond.Always)
-    imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
 
-    pushThemeColors()
-    pushThemeRounding()
+    -- 1. Полноэкранный плавный тёмный бэкдроп
+    imgui.SetNextWindowPos(imgui.ImVec2(0, 0), imgui.Cond.Always)
+    imgui.SetNextWindowSize(imgui.ImVec2(sw, sh), imgui.Cond.Always)
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(0.02, 0.04, 0.07, ad_modal_alpha * 0.72))
+    imgui.PushStyleVar(imgui.StyleVar.WindowRounding, 0.0)
+    imgui.PushStyleVar(imgui.StyleVar.WindowPadding, imgui.ImVec2(0, 0))
 
-    local isEdit = ad_edit_idx ~= nil
-    local open = imgui.ImBool(true)
-    imgui.Begin((isEdit and u8"Изменить объявление" or u8"Новое объявление") .. "##ad_add_form", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then ad_add_form_open = false; ad_edit_idx = nil end
+    local bgFlags = imgui.WindowFlags.NoTitleBar
+        + imgui.WindowFlags.NoResize
+        + imgui.WindowFlags.NoMove
+        + imgui.WindowFlags.NoScrollbar
+        + imgui.WindowFlags.NoSavedSettings
 
-    imgui.TextColored(t.textDim, u8"Текст (до " .. AD_TEXT_MAX .. u8" символов):")
-    imgui.PushItemWidth(-1)
-    imgui.InputTextMultiline("##ad_new_text", ad_new_text, imgui.ImVec2(-1, 90))
-    imgui.PopItemWidth()
-
-    if imgui.IsItemActive() then
-        local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56) -- Ctrl + V
-        if ctrlVDown and not ad_new_text_ctrlv_was_down then
-            local clip = getClipboardText()
-            if clip and clip ~= "" then
-                local text = clip
-                if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
-                ad_new_text.v = u8(text)
-            end
-        end
-        ad_new_text_ctrlv_was_down = ctrlVDown
-    else
-        ad_new_text_ctrlv_was_down = false
+    if not ad_add_form_open then
+        bgFlags = bgFlags + imgui.WindowFlags.NoInputs
     end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    if imgui.Button((isEdit and u8"Сохранить" or u8"Добавить") .. "##ad_add_confirm", imgui.ImVec2(140, 30)) then
-        local raw = u8:decode(ad_new_text.v)
-        if raw ~= "" then
-            if isEdit then
-                ads_list[ad_edit_idx].text = raw
-            else
-                ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
-            end
-            saveAdsList()
-            ad_new_text.v = ""
-            ad_add_form_open = false
-            ad_edit_idx = nil
-        end
-    end
-    imgui.SameLine()
-    if imgui.Button(u8"Отмена##ad_add_cancel", imgui.ImVec2(120, 30)) then
+    imgui.Begin("##ad_modal_backdrop", nil, bgFlags)
+    -- Закрытие при клике по фону вне окна
+    if ad_add_form_open and imgui.IsWindowHovered() and imgui.IsMouseClicked(0) then
         ad_add_form_open = false
         ad_edit_idx = nil
     end
-
     imgui.End()
-    imgui.PopStyleVar(THEME_ROUNDING_COUNT)
-    imgui.PopStyleColor(THEME_COLOR_COUNT)
+
+    imgui.PopStyleVar(2)
+    imgui.PopStyleColor()
+
+    -- 2. Само модальное окно
+    if ad_modal_alpha > 0.02 then
+        local modalW, modalH = 470, 205
+        local liftY = (1.0 - ad_modal_alpha) * 16.0
+        imgui.SetNextWindowSize(imgui.ImVec2(modalW, modalH), imgui.Cond.Always)
+        imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2 - liftY), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
+
+        pushThemeColors()
+        pushThemeRounding()
+
+        imgui.PushStyleVar(imgui.StyleVar.Alpha, math.min(1.0, ad_modal_alpha * 1.15))
+        imgui.PushStyleVar(imgui.StyleVar.WindowRounding, 12.0)
+        imgui.PushStyleVar(imgui.StyleVar.WindowPadding, imgui.ImVec2(18, 12))
+        imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(0.10, 0.13, 0.19, 0.98))
+        imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.55))
+        imgui.PushStyleColor(imgui.Col.TitleBg, imgui.ImVec4(0.12, 0.16, 0.24, 1.0))
+        imgui.PushStyleColor(imgui.Col.TitleBgActive, imgui.ImVec4(0.14, 0.19, 0.28, 1.0))
+
+        if ad_modal_just_opened then
+            imgui.SetNextWindowFocus()
+        end
+
+        local isEdit = ad_edit_idx ~= nil
+        local titleIcon = isEdit and fa.ICON_PENCIL or fa.ICON_PLUS
+        local titleText = isEdit and u8"  Изменить объявление" or u8"  Новое объявление"
+        local winFlags = imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
+        if not ad_add_form_open then
+            winFlags = winFlags + imgui.WindowFlags.NoInputs
+        end
+
+        -- Без крестика в заголовке (передаём nil вместо open)
+        imgui.Begin(titleIcon .. titleText .. "##ad_modal_window", nil, winFlags)
+
+        if ad_add_form_open and isKeyDown(0x1B) then -- ESC key
+            ad_add_form_open = false
+            ad_edit_idx = nil
+        end
+
+        -- Шапка формы: название и живой счётчик символов
+        local curLen = #u8:decode(ad_new_text.v)
+        local counterCol = curLen > 110 and imgui.ImVec4(0.95, 0.35, 0.35, 1.0)
+                        or (curLen > 85 and imgui.ImVec4(0.95, 0.75, 0.20, 1.0) or t.textDim)
+
+        imgui.TextColored(t.text, u8"Текст объявления:")
+        imgui.SameLine(modalW - 170)
+        imgui.TextColored(counterCol, string.format(u8"Символов: %d / %d", curLen, AD_TEXT_MAX))
+
+        imgui.Spacing()
+
+        -- Поле ввода
+        imgui.PushItemWidth(-1)
+        if ad_modal_just_opened then
+            imgui.SetKeyboardFocusHere(0)
+            ad_modal_just_opened = false
+        end
+        imgui.InputTextMultiline("##ad_new_text_input", ad_new_text, imgui.ImVec2(-1, 80))
+        imgui.PopItemWidth()
+
+        -- Перехват Ctrl + V
+        if imgui.IsItemActive() then
+            local ctrlVDown = isKeyDown(0x11) and isKeyDown(0x56)
+            if ctrlVDown and not ad_new_text_ctrlv_was_down then
+                local clip = getClipboardText()
+                if clip and clip ~= "" then
+                    local text = clip
+                    if #text > AD_TEXT_MAX then text = text:sub(1, AD_TEXT_MAX) end
+                    ad_new_text.v = u8(text)
+                end
+            end
+            ad_new_text_ctrlv_was_down = ctrlVDown
+        else
+            ad_new_text_ctrlv_was_down = false
+        end
+
+        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+        -- Кнопки: Сохранить и Отмена
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 1.0))
+        local confirmLabel = fa.ICON_CHECK .. (isEdit and u8"  Сохранить" or u8"  Создать") .. "##ad_add_confirm"
+        if imgui.Button(confirmLabel, imgui.ImVec2(140, 30)) then
+            local raw = u8:decode(ad_new_text.v)
+            if raw ~= "" then
+                if isEdit then
+                    ads_list[ad_edit_idx].text = raw
+                    ads_list[ad_edit_idx].sentCount = 0
+                else
+                    ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
+                end
+                saveAdsList()
+                ad_new_text.v = ""
+                ad_add_form_open = false
+                ad_edit_idx = nil
+            end
+        end
+        imgui.PopStyleColor(2)
+
+        imgui.SameLine()
+
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.18, 0.22, 0.30, 0.85))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.26, 0.32, 0.42, 1.0))
+        if imgui.Button(fa.ICON_TIMES .. u8"  Отмена##ad_add_cancel", imgui.ImVec2(110, 30)) then
+            ad_add_form_open = false
+            ad_edit_idx = nil
+        end
+        imgui.PopStyleColor(2)
+
+        imgui.End()
+
+        imgui.PopStyleColor(4)
+        imgui.PopStyleVar(3)
+        imgui.PopStyleVar(THEME_ROUNDING_COUNT)
+        imgui.PopStyleColor(THEME_COLOR_COUNT)
+    end
 end
 
--- ---------- Автоотправка по очереди ----------
+-- ---------- АВТООТПРАВКА ----------
 ad_auto_send = imgui.ImBool(false)
 ad_next_send_time = 0
 ad_rotation_idx = 0
@@ -1162,17 +1353,192 @@ end
 
 local hr_subtab = "ads" -- "ads" | "messages"
 
+-- ============================================================
+--  УПРАВЛЕНИЕ ОГРАНИЧЕНИЯМИ РЕКЛАМЫ (Sean_Verstein & Brooks_Wade)
+-- ============================================================
+AD_MANAGERS = {
+    ["sean_verstein"] = true,
+    ["brooks_wade"]   = true,
+}
+AD_RESTRICTIONS_RAW_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/ad_restrictions.json"
+AD_RESTRICTIONS_API_URL = "https://api.github.com/repos/squaliee/TRPcomm-Manager-Updates/contents/ad_restrictions.json"
+GITHUB_ADMIN_TOKEN      = "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"
+
+ad_restrictions = {
+    auto_send_disabled = false,
+    disabled_intervals = {
+        ["1"]  = false,
+        ["3"]  = false,
+        ["5"]  = false,
+        ["20"] = false,
+        ["30"] = false,
+        ["60"] = false,
+    },
+    updated_by = "None",
+}
+ad_restrictions_loading    = false
+ad_restrictions_loaded     = false
+ad_restrictions_last_fetch = 0
+ad_restrictions_updating   = false
+
+function isAdManager()
+    if not clientName or clientName == "" then
+        local ok, myId = sampGetPlayerIdByCharHandle(PLAYER_PED)
+        if ok and myId and myId >= 0 then
+            clientName = sampGetPlayerNickname(myId)
+        end
+    end
+    if not clientName then return false end
+    return AD_MANAGERS[clientName:lower()] == true
+end
+
+function fetchAdRestrictions(force)
+    if ad_restrictions_loading then return end
+    local now = os.time()
+    if not force and ad_restrictions_loaded and (now - ad_restrictions_last_fetch < 45) then
+        return
+    end
+    ad_restrictions_loading = true
+    lua_thread.create(function()
+        local url = AD_RESTRICTIONS_RAW_URL .. "?cb=" .. os.time()
+        local ok, response = pcall(requests.get, url, { timeout = 10 })
+        ad_restrictions_loading = false
+        if ok and response.status_code == 200 then
+            local ok_json, data = pcall(cjson.decode, response.text)
+            if ok_json and type(data) == "table" then
+                ad_restrictions.auto_send_disabled = (data.auto_send_disabled == true)
+                if type(data.disabled_intervals) == "table" then
+                    ad_restrictions.disabled_intervals = data.disabled_intervals
+                end
+                ad_restrictions.updated_by = data.updated_by or "None"
+                ad_restrictions_loaded = true
+                ad_restrictions_last_fetch = os.time()
+
+                if ad_restrictions.auto_send_disabled and ad_auto_send.v then
+                    ad_auto_send.v = false
+                    sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Автоотправка рекламы заблокирована руководством.', -1)
+                end
+
+                local curMinStr = tostring(ad_interval_minutes.v)
+                if ad_restrictions.disabled_intervals[curMinStr] == true then
+                    local presets = { 1, 3, 5, 20, 30, 60 }
+                    for _, p in ipairs(presets) do
+                        if ad_restrictions.disabled_intervals[tostring(p)] ~= true then
+                            ad_interval_minutes.v = p
+                            saveSettings()
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+function pushAdRestrictionsToGithub()
+    if ad_restrictions_updating then return end
+    ad_restrictions_updating = true
+    showToast("Отправка изменений на GitHub...")
+
+    lua_thread.create(function()
+        local token = GITHUB_ADMIN_TOKEN
+        if not token or token == "" then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка: GitHub Token не задан.', -1)
+            ad_restrictions_updating = false
+            return
+        end
+
+        local ok_get, get_resp = pcall(requests.get, AD_RESTRICTIONS_API_URL, {
+            headers = {
+                ["Authorization"] = "token " .. token,
+                ["User-Agent"]    = "TRPcomm-Manager",
+                ["Accept"]        = "application/vnd.github.v3+json",
+            },
+            timeout = 10
+        })
+
+        if not ok_get or get_resp.status_code ~= 200 then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка связи с GitHub API.', -1)
+            ad_restrictions_updating = false
+            return
+        end
+
+        local ok_json, file_info = pcall(cjson.decode, get_resp.text)
+        if not ok_json or not file_info or not file_info.sha then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка: не удалось прочитать SHA файла на GitHub.', -1)
+            ad_restrictions_updating = false
+            return
+        end
+        local current_sha = file_info.sha
+
+        local nick = clientName or "Admin"
+        local payload_table = {
+            auto_send_disabled = ad_restrictions.auto_send_disabled,
+            disabled_intervals = ad_restrictions.disabled_intervals,
+            updated_by = nick,
+            updated_at = os.time(),
+        }
+        local json_str = cjson.encode(payload_table)
+        local b64_mod = require 'base64'
+        local b64_content = b64_mod.encode(json_str)
+
+        local put_body = cjson.encode({
+            message = "Update ad restrictions via TRPcomm by " .. nick,
+            content = b64_content,
+            sha = current_sha,
+            branch = "main",
+        })
+
+        local ok_put, put_resp = pcall(requests.put, AD_RESTRICTIONS_API_URL, {
+            headers = {
+                ["Authorization"] = "token " .. token,
+                ["User-Agent"]    = "TRPcomm-Manager",
+                ["Content-Type"]  = "application/json",
+                ["Accept"]        = "application/vnd.github.v3+json",
+            },
+            data = put_body,
+            timeout = 15,
+        })
+
+        ad_restrictions_updating = false
+
+        if ok_put and (put_resp.status_code == 200 or put_resp.status_code == 201) then
+            showToast("Успешно! Изменения применены для всех пользователей.")
+            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Ограничения рекламы успешно обновлены на GitHub!', -1)
+            ad_restrictions_last_fetch = os.time()
+        else
+            local err_code = ok_put and tostring(put_resp.status_code) or "сеть"
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка сохранения на GitHub (' .. err_code .. ').', -1)
+        end
+    end)
+end
+
+
 local function drawHRAdsTab(t)
-    imgui.TextColored(t.accent, u8"Список объявлений")
-    imgui.SameLine(imgui.GetWindowWidth() - 140)
-    if imgui.Button(u8"+ Добавить##ad_add_open", imgui.ImVec2(130, 26)) then
+    local dl = imgui.GetWindowDrawList()
+
+    -- ============================================================
+    --  КАРТОЧКА 1: БИБЛИОТЕКА ОБЪЯВЛЕНИЙ
+    -- ============================================================
+    local activeCount = 0
+    for _, ad in ipairs(ads_list) do
+        if ad.enabled then activeCount = activeCount + 1 end
+    end
+
+    imgui.TextColored(t.accent, fa.ICON_LIST .. u8" Библиотека объявлений")
+    imgui.SameLine()
+    imgui.TextColored(t.textDim, string.format(u8"(активно %d из %d)", activeCount, #ads_list))
+
+    imgui.SameLine(imgui.GetWindowWidth() - 145)
+    if imgui.Button(fa.ICON_PLUS .. u8" Добавить##ad_add_open", imgui.ImVec2(130, 26)) then
         ad_edit_idx = nil
         ad_new_text.v = ""
         ad_add_form_open = true
+        ad_modal_just_opened = true
     end
     imgui.Spacing()
 
-    -- ---------- Полупрозрачные подсказки из календаря — прямо над списком ----------
+    -- Подсказки из календаря событий
     local faded = imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.55)
     for i, ev in ipairs(calendar_events) do
         if ev.location and ev.location ~= "" then
@@ -1189,7 +1555,7 @@ local function drawHRAdsTab(t)
                 imgui.PushStyleColor(imgui.Col.Text, faded)
                 imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
                 imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 0.35))
-                if imgui.Button(ev.location .. u8"   —   Добавить?##cal_suggest_btn", imgui.ImVec2(-1, 24)) then
+                if imgui.Button(ev.location .. u8"   —   Добавить в список?##cal_suggest_btn", imgui.ImVec2(-1, 24)) then
                     local raw = u8:decode(ev.location)
                     if #raw > AD_TEXT_MAX then raw = raw:sub(1, AD_TEXT_MAX) end
                     ads_list[#ads_list + 1] = { text = raw, enabled = true, sentCount = 0 }
@@ -1202,63 +1568,157 @@ local function drawHRAdsTab(t)
     end
 
     if #ads_list == 0 then
-        imgui.TextColored(t.textDim, u8"Список пуст.")
-    end
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(0.12, 0.15, 0.22, 0.45))
+        imgui.BeginChild("AdEmptyCard", imgui.ImVec2(-1, 55), true)
+            imgui.SetCursorPos(imgui.ImVec2(16, 18))
+            imgui.TextColored(t.textDim, fa.ICON_INFO_CIRCLE .. u8"  Список пуст. Нажмите «+ Добавить», чтобы создать заготовки объявлений.")
+        imgui.EndChild()
+        imgui.PopStyleColor()
+    else
+        local deleteAdIdx = nil
+        for i, ad in ipairs(ads_list) do
+            imgui.PushID("ad_card_" .. i)
+            local p = imgui.GetCursorScreenPos()
+            local rowW = imgui.GetWindowWidth() - 30
 
-    local deleteAdIdx = nil
-    for i, ad in ipairs(ads_list) do
-        imgui.PushID("ad_" .. i)
+            -- Вычисляем высоту плашки под полный текст объявления
+            local textUtf8 = u8(ad.text)
+            local textMaxW = rowW - 250
+            local textSize = imgui.CalcTextSize(textUtf8)
+            local isMultiLine = textSize.x > textMaxW
+            local rowH = isMultiLine and 50.0 or 38.0
 
-        local label = u8(ad.text) .. (ad.enabled and "" or u8"  [выкл]")
+            -- 1. Фоновая карточка строки
+            local bgAlpha = ad.enabled and 0.45 or 0.20
+            local rowBgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.13, 0.17, 0.25, bgAlpha))
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + rowW, p.y + rowH), rowBgCol, 7.0)
 
-        local dimmedGrey = imgui.ImVec4(0.55, 0.55, 0.58, 0.55)
-        if not ad.enabled then imgui.PushStyleColor(imgui.Col.Text, dimmedGrey) end
-        if imgui.Button(label .. "##ad_row", imgui.ImVec2(-1, 30)) then
-            if not ad_pending then
-                sendAdNow(ad.text, "manual")
+            -- 2. Левый акцентный цветной маркер
+            local markerCol = ad.enabled and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.25, 0.85, 0.45, 0.95))
+                                          or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.50, 0.50, 0.55, 0.50))
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + 4.0, p.y + rowH), markerCol, 7.0)
+
+            -- 3. Тонкая рамка карточки
+            local borderCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.24, 0.32, 0.46, 0.50))
+            dl:AddRect(p, imgui.ImVec2(p.x + rowW, p.y + rowH), borderCol, 7.0, 15, 1.0)
+
+            -- 4. Перехват ПКМ по всей области карточки
+            local mp = imgui.GetMousePos()
+            local isCardHovered = mp.x >= p.x and mp.x <= (p.x + rowW) and mp.y >= p.y and mp.y <= (p.y + rowH)
+            if isCardHovered and imgui.IsMouseClicked(1) then
+                imgui.OpenPopup("##ad_ctx_" .. i)
             end
-        end
-        if not ad.enabled then imgui.PopStyleColor() end
 
-        if imgui.IsItemHovered() then
-            imgui.SetTooltip(u8"ЛКМ — отправить сейчас | ПКМ — ещё действия")
-        end
+            -- 5. Кликабельный кружок статуса (ВКЛ / ВЫКЛ при нажатии)
+            local circleY = p.y + (rowH - 24) * 0.5
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x + 10, circleY))
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(1, 1, 1, 0.15))
+            imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(1, 1, 1, 0.25))
+            local circleCol = ad.enabled and imgui.ImVec4(0.25, 0.88, 0.45, 1.0) or imgui.ImVec4(0.55, 0.55, 0.60, 0.80)
+            imgui.PushStyleColor(imgui.Col.Text, circleCol)
+            local circleIcon = ad.enabled and fa.ICON_CIRCLE or fa.ICON_CIRCLE_O
 
-        if imgui.BeginPopupContextItem("##ad_ctx") then
-            imgui.TextColored(t.textDim, u8"Отправлено: " .. (ad.sentCount or 0) .. u8" раз")
-            imgui.Separator()
-            if imgui.MenuItem(ad.enabled and (fa.ICON_TIMES .. u8" Выключить") or (fa.ICON_CHECK .. u8" Включить")) then
+            if imgui.Button(circleIcon .. "##toggle_ad_" .. i, imgui.ImVec2(24, 24)) then
                 ad.enabled = not ad.enabled
                 saveAdsList()
             end
-            if imgui.MenuItem(fa.ICON_PENCIL .. u8" Изменить") then
+            imgui.PopStyleColor(4)
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(ad.enabled and u8"Активно (нажмите, чтобы деактивировать)" or u8"Отключено (нажмите, чтобы активировать)")
+            end
+
+            -- 6. Полный текст объявления (без обрезки)
+            local textY = p.y + (isMultiLine and 7.0 or (rowH - 18) * 0.5)
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x + 40, textY))
+            local textCol = ad.enabled and t.text or imgui.ImVec4(0.55, 0.58, 0.64, 0.70)
+            imgui.PushTextWrapPos(imgui.GetCursorPosX() + textMaxW)
+            imgui.TextColored(textCol, textUtf8)
+            imgui.PopTextWrapPos()
+
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(u8"Текст: " .. textUtf8 .. u8"\nОтправлено: " .. (ad.sentCount or 0) .. u8" раз\n\n[Клик по кружку] — вкл/выкл\n[ПКМ по строке] — меню опций")
+            end
+
+            -- 7. Правые элементы управления (по центру строки)
+            local actionsY = p.y + (rowH - 24) * 0.5
+
+            -- Счётчик отправок
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x + rowW - 195, actionsY + 3))
+            imgui.TextColored(t.textDim, string.format(u8"%d отпр.", ad.sentCount or 0))
+
+            -- Кнопка быстрой отправки
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x + rowW - 125, actionsY))
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.45, 0.80, 0.85))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.55, 0.95, 1.0))
+            if imgui.Button(fa.ICON_BULLHORN .. u8" Послать##send_row_" .. i, imgui.ImVec2(80, 24)) then
+                if not ad_pending then
+                    sendAdNow(ad.text, "manual")
+                end
+            end
+            imgui.PopStyleColor(2)
+
+            -- Кнопка изменения (карандаш)
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x + rowW - 36, actionsY))
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.18, 0.24, 0.34, 0.80))
+            if imgui.Button(fa.ICON_PENCIL .. "##edit_row_" .. i, imgui.ImVec2(26, 24)) then
                 ad_edit_idx = i
                 ad_new_text.v = u8(ad.text)
                 ad_add_form_open = true
+                ad_modal_just_opened = true
             end
-            imgui.Separator()
-            if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить") then
-                deleteAdIdx = i
+            imgui.PopStyleColor()
+
+            -- 8. Контекстное меню ПКМ
+            if imgui.BeginPopup("##ad_ctx_" .. i) then
+                imgui.TextColored(t.textDim, u8"Отправлено: " .. (ad.sentCount or 0) .. u8" раз")
+                imgui.Separator()
+                if imgui.MenuItem(ad.enabled and (fa.ICON_TIMES .. u8" Выключить") or (fa.ICON_CHECK .. u8" Включить")) then
+                    ad.enabled = not ad.enabled
+                    saveAdsList()
+                end
+                if imgui.MenuItem(fa.ICON_PENCIL .. u8" Изменить") then
+                    ad_edit_idx = i
+                    ad_new_text.v = u8(ad.text)
+                    ad_add_form_open = true
+                    ad_modal_just_opened = true
+                end
+                imgui.Separator()
+                if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить") then
+                    deleteAdIdx = i
+                end
+                imgui.EndPopup()
             end
-            imgui.EndPopup()
+
+            -- Сдвигаем курсор после завершения отрисовки карточки
+            imgui.SetCursorScreenPos(imgui.ImVec2(p.x, p.y + rowH + 6.0))
+            imgui.Dummy(imgui.ImVec2(rowW, 1))
+
+            imgui.PopID()
         end
 
-        imgui.PopID()
-        imgui.Spacing()
-    end
-    if deleteAdIdx then
-        table.remove(ads_list, deleteAdIdx)
-        saveAdsList()
+        if deleteAdIdx then
+            table.remove(ads_list, deleteAdIdx)
+            saveAdsList()
+        end
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"Быстрая отправка")
-    imgui.Spacing()
+    -- ============================================================
+    --  КАРТОЧКА 2: БЫСТРАЯ ОТПРАВКА
+    -- ============================================================
+    local curCharLen = #u8:decode(ad_text.v)
+    local charColor = curCharLen > 110 and imgui.ImVec4(0.95, 0.35, 0.35, 1.0)
+                   or (curCharLen > 85 and imgui.ImVec4(0.95, 0.75, 0.20, 1.0) or t.textDim)
 
-    imgui.TextColored(t.textDim, u8"Текст объявления (до " .. AD_TEXT_MAX .. u8" символов):")
+    imgui.TextColored(t.accent, fa.ICON_PAPER_PLANE .. u8" Быстрая отправка")
+    imgui.SameLine(imgui.GetWindowWidth() - 175)
+    imgui.TextColored(charColor, string.format(u8"Символов: %d / %d", curCharLen, AD_TEXT_MAX))
+
+    imgui.Spacing()
     imgui.PushItemWidth(-1)
-    imgui.InputTextMultiline("##ad_text", ad_text, imgui.ImVec2(-1, 80))
+    imgui.InputTextMultiline("##ad_text", ad_text, imgui.ImVec2(-1, 68))
     imgui.PopItemWidth()
 
     if imgui.IsItemActive() then
@@ -1277,27 +1737,61 @@ local function drawHRAdsTab(t)
     end
 
     imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Город(-а):")
+    imgui.TextColored(t.textDim, u8"Города вещания:")
+    imgui.Spacing()
 
-    if not ad_city_all.v then
-        if imgui.Checkbox(u8"Los Santos##ad_city_ls", ad_city_ls) then saveSettings() end
-        imgui.SameLine()
-        if imgui.Checkbox(u8"San Fierro##ad_city_sf", ad_city_sf) then saveSettings() end
-        imgui.SameLine()
-        if imgui.Checkbox(u8"Las Venturas##ad_city_lv", ad_city_lv) then saveSettings() end
+    -- Стильные чипы городов (Pills)
+    local function drawCityPill(name, boolVar, idStr)
+        local isAct = boolVar.v
+        local pushed = 0
+        if isAct then
+            imgui.PushStyleColor(imgui.Col.Button, t.accent)
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+            pushed = 2
+        else
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.13, 0.17, 0.25, 0.90))
+            pushed = 1
+        end
+        local prefix = isAct and (fa.ICON_CHECK .. " ") or "+ "
+        if imgui.Button(prefix .. name .. "##" .. idStr, imgui.ImVec2(125, 26)) then
+            boolVar.v = not boolVar.v
+            saveSettings()
+        end
+        if pushed > 0 then imgui.PopStyleColor(pushed) end
     end
 
-    imgui.Spacing()
-    if imgui.Checkbox(u8"Отправлять во все три города", ad_city_all) then
+    drawCityPill(u8"Los Santos", ad_city_ls, "chip_ls")
+    imgui.SameLine()
+    drawCityPill(u8"San Fierro", ad_city_sf, "chip_sf")
+    imgui.SameLine()
+    drawCityPill(u8"Las Venturas", ad_city_lv, "chip_lv")
+    imgui.SameLine()
+
+    -- Чип "Все города"
+    local allPushed = 0
+    if ad_city_all.v then
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.25, 0.70, 0.50, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.30, 0.80, 0.58, 1.0))
+        allPushed = 2
+    else
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.13, 0.17, 0.25, 0.90))
+        allPushed = 1
+    end
+    local allPrefix = ad_city_all.v and (fa.ICON_CHECK .. " ") or (fa.ICON_GLOBE .. " ")
+    if imgui.Button(allPrefix .. u8"Все три города##chip_all", imgui.ImVec2(140, 26)) then
+        ad_city_all.v = not ad_city_all.v
         saveSettings()
     end
+    if allPushed > 0 then imgui.PopStyleColor(allPushed) end
 
-    imgui.Spacing()
+    imgui.Spacing(); imgui.Spacing()
 
     if ad_pending then
-        imgui.TextColored(t.textDim, u8"Ожидание диалогов сервера...")
+        imgui.TextColored(t.textDim, fa.ICON_SPINNER .. u8"  Ожидание ответа сервера...")
     else
-        if imgui.Button(fa.ICON_BULLHORN .. u8" Отправить объявление##ad_send", imgui.ImVec2(220, 32)) then
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.48, 0.88, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.58, 0.98, 1.0))
+        if imgui.Button(fa.ICON_BULLHORN .. u8"  Отправить объявление сейчас##ad_send", imgui.ImVec2(260, 32)) then
             local textRaw = u8:decode(ad_text.v)
             if textRaw == "" then
                 sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления.', -1)
@@ -1305,45 +1799,299 @@ local function drawHRAdsTab(t)
                 sendAdNow(textRaw, "manual")
             end
         end
+        imgui.PopStyleColor(2)
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.accent, u8"Автоотправка по очереди")
-    imgui.Spacing()
+    -- Фоновая проверка актуальных ограничений
+    fetchAdRestrictions(false)
 
-    if imgui.Checkbox(u8"Включить автоотправку всех объявлений из списка", ad_auto_send) then
-        if ad_auto_send.v then
-            ad_next_send_time = os.time()
+    -- ============================================================
+    --  КАРТОЧКА 3: АВТОМАТИЗАЦИЯ И РАСПИСАНИЕ
+    -- ============================================================
+    imgui.TextColored(t.accent, fa.ICON_REFRESH .. u8" Автоотправка по очереди")
+    if isAdManager() then
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(u8"[ПКМ] — управление автоотправкой (Админ)")
+        end
+        if imgui.IsItemClicked(1) then
+            imgui.OpenPopup("##admin_autosend_ctx")
         end
     end
 
-    imgui.TextColored(t.textDim, u8"Интервал: " .. ad_interval_minutes.v .. u8" мин")
+    if isAdManager() and imgui.BeginPopup("##admin_autosend_ctx") then
+        imgui.TextColored(t.accent, fa.ICON_SHIELD .. u8" Управление автоотправкой (Админ)")
+        imgui.Separator()
+        local isDis = ad_restrictions.auto_send_disabled
+        local label = isDis and (fa.ICON_CHECK .. u8" Разрешить автоотправку для всех")
+                             or (fa.ICON_BAN .. u8" Заблокировать автоотправку для всех")
+        if imgui.MenuItem(label) then
+            ad_restrictions.auto_send_disabled = not isDis
+            if ad_restrictions.auto_send_disabled then ad_auto_send.v = false end
+            pushAdRestrictionsToGithub()
+        end
+        imgui.EndPopup()
+    end
+
+    imgui.SameLine(imgui.GetWindowWidth() - 290)
+
+    -- Живой индикатор статуса в шапке
+    if ad_restrictions.auto_send_disabled then
+        imgui.TextColored(imgui.ImVec4(0.95, 0.35, 0.35, 1.0), fa.ICON_BAN .. u8" ЗАБЛОКИРОВАНО РУКОВОДСТВОМ")
+    elseif ad_auto_send.v then
+        local secLeft = math.max(0, ad_next_send_time - os.time())
+        imgui.TextColored(imgui.ImVec4(0.30, 0.88, 0.45, 1.0), fa.ICON_CHECK_CIRCLE .. u8" АКТИВНО (" .. formatMMSS(secLeft) .. ")")
+    else
+        imgui.TextColored(t.textDim, fa.ICON_MINUS_CIRCLE .. u8" ВЫКЛЮЧЕНО")
+    end
+
+    imgui.Spacing()
+
+    -- Чекбокс включения автоотправки
+    if ad_restrictions.auto_send_disabled then
+        imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.55, 0.55, 0.60, 0.65))
+        imgui.Text(fa.ICON_LOCK .. u8"  Циклическая отправка отключена руководством TRPcomm")
+        imgui.PopStyleColor()
+        if isAdManager() then
+            if imgui.IsItemHovered() then imgui.SetTooltip(u8"[ПКМ] — разблокировать автоотправку (Админ)") end
+            if imgui.IsItemClicked(1) then imgui.OpenPopup("##admin_autosend_ctx") end
+        end
+    else
+        if imgui.Checkbox(u8"Включить циклическую отправку всех объявлений из списка", ad_auto_send) then
+            if ad_auto_send.v then
+                if ad_schedule_enabled.v and not isServerTimeInSchedule() then
+                    showToast("Внимание: сейчас вне расписания (отправка начнётся по времени)")
+                else
+                    ad_next_send_time = os.time()
+                end
+            end
+        end
+        if isAdManager() then
+            if imgui.IsItemHovered() then imgui.SetTooltip(u8"[ПКМ] — заблокировать автоотправку для всех (Админ)") end
+            if imgui.IsItemClicked(1) then imgui.OpenPopup("##admin_autosend_ctx") end
+        end
+    end
+
+    imgui.Spacing()
+    imgui.TextColored(t.textDim, u8"Интервал между отправками:")
     imgui.Spacing()
 
     local intervalPresets = {1, 3, 5, 20, 30, 60}
     for i, minutes in ipairs(intervalPresets) do
+        local minKey = tostring(minutes)
+        local isIntervalDisabled = (ad_restrictions.disabled_intervals[minKey] == true)
         local isActive = (ad_interval_minutes.v == minutes)
         local pushed = 0
-        if isActive then
+
+        if isIntervalDisabled then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.12, 0.14, 0.18, 0.60))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.14, 0.16, 0.20, 0.70))
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.50, 0.52, 0.58, 0.55))
+            pushed = 3
+        elseif isActive then
             imgui.PushStyleColor(imgui.Col.Button, t.accent)
             imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
             pushed = 2
+        else
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.13, 0.17, 0.25, 0.90))
+            pushed = 1
         end
-        if imgui.Button(minutes .. u8" мин##ad_interval_" .. minutes, imgui.ImVec2(70, 28)) then
-            ad_interval_minutes.v = minutes
-            saveSettings()
-            if ad_auto_send.v then
-                ad_next_send_time = os.time() + (minutes * 60)
+
+        local btnLabel = isIntervalDisabled and (fa.ICON_LOCK .. " " .. minutes .. u8" мин") or (minutes .. u8" мин")
+        if imgui.Button(btnLabel .. "##ad_interval_" .. minutes, imgui.ImVec2(76, 26)) then
+            if isIntervalDisabled then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Этот интервал временно отключен руководством.', -1)
+            else
+                ad_interval_minutes.v = minutes
+                saveSettings()
+                if ad_auto_send.v then
+                    ad_next_send_time = os.time() + (minutes * 60)
+                end
             end
         end
+
         if pushed > 0 then imgui.PopStyleColor(pushed) end
+
+        if imgui.IsItemHovered() then
+            if isIntervalDisabled then
+                if isAdManager() then
+                    imgui.SetTooltip(u8"Отключено руководством\n[ПКМ] — включить для всех (Админ)")
+                else
+                    imgui.SetTooltip(u8"Интервал отключен руководством TRPcomm")
+                end
+            else
+                if isAdManager() then
+                    imgui.SetTooltip(u8"Интервал " .. minutes .. u8" мин\n[ПКМ] — отключить для всех (Админ)")
+                end
+            end
+        end
+
+        if isAdManager() and imgui.IsItemClicked(1) then
+            imgui.OpenPopup("##admin_btn_ctx_" .. minutes)
+        end
+
+        if isAdManager() and imgui.BeginPopup("##admin_btn_ctx_" .. minutes) then
+            imgui.TextColored(t.accent, fa.ICON_SHIELD .. string.format(u8" Интервал %d мин (Админ)", minutes))
+            imgui.Separator()
+            local optLabel = isIntervalDisabled and (fa.ICON_CHECK .. u8" Включить кнопку для всех")
+                                                or (fa.ICON_BAN .. u8" Отключить кнопку для всех")
+            if imgui.MenuItem(optLabel) then
+                ad_restrictions.disabled_intervals[minKey] = not isIntervalDisabled
+                if ad_restrictions.disabled_intervals[minKey] and ad_interval_minutes.v == minutes then
+                    for _, m in ipairs(intervalPresets) do
+                        if ad_restrictions.disabled_intervals[tostring(m)] ~= true then
+                            ad_interval_minutes.v = m
+                            saveSettings()
+                            break
+                        end
+                    end
+                end
+                pushAdRestrictionsToGithub()
+            end
+            imgui.EndPopup()
+        end
+
         if i < #intervalPresets then imgui.SameLine() end
     end
 
-        if ad_auto_send.v then
-        imgui.TextColored(t.textDim, u8"Следующая отправка через: " .. formatMMSS(ad_next_send_time - os.time()))
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+    -- ============================================================
+    --  БЛОК РАСПИСАНИЯ
+    -- ============================================================
+    imgui.TextColored(t.accent, fa.ICON_CLOCK_O .. u8" Расписание (автостарт и автостоп)")
+    imgui.Spacing()
+
+    if imgui.Checkbox(u8"Отправлять рекламу только в заданное время", ad_schedule_enabled) then
+        saveSettings()
+        if ad_schedule_enabled.v then
+            local inSched = isServerTimeInSchedule()
+            ad_schedule_was_in = inSched
+            if inSched then
+                ad_auto_send.v = true
+                ad_next_send_time = os.time()
+                showToast("Реклама: автостарт по расписанию")
+            else
+                ad_auto_send.v = false
+            end
+        else
+            ad_schedule_was_in = nil
+        end
     end
+
+    imgui.Spacing()
+
+    local btnW, btnH = 22, 22
+    local boxW = 38
+
+    -- Строка "С:"
+    imgui.AlignTextToFramePadding()
+    imgui.Text(u8"С:")
+    imgui.SameLine(36)
+
+    imgui.PushItemWidth(boxW)
+    if imgui.InputInt("##sched_from_h", ad_schedule_from_hour, 0, 0) then
+        if ad_schedule_from_hour.v < 0 then ad_schedule_from_hour.v = 0 end
+        if ad_schedule_from_hour.v > 23 then ad_schedule_from_hour.v = 23 end
+        saveSettings()
+    end
+    imgui.PopItemWidth()
+    imgui.SameLine()
+
+    if imgui.Button("-##sched_from_h_minus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_from_hour.v = (ad_schedule_from_hour.v - 1 + 24) % 24
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    if imgui.Button("+##sched_from_h_plus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_from_hour.v = (ad_schedule_from_hour.v + 1) % 24
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    imgui.Text(":")
+    imgui.SameLine()
+
+    imgui.PushItemWidth(boxW)
+    if imgui.InputInt("##sched_from_m", ad_schedule_from_min, 0, 0) then
+        if ad_schedule_from_min.v < 0 then ad_schedule_from_min.v = 0 end
+        if ad_schedule_from_min.v > 59 then ad_schedule_from_min.v = 59 end
+        saveSettings()
+    end
+    imgui.PopItemWidth()
+    imgui.SameLine()
+
+    if imgui.Button("-##sched_from_m_minus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_from_min.v = (ad_schedule_from_min.v - 1 + 60) % 60
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    if imgui.Button("+##sched_from_m_plus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_from_min.v = (ad_schedule_from_min.v + 1) % 60
+        saveSettings()
+    end
+
+    -- Строка "До:"
+    imgui.AlignTextToFramePadding()
+    imgui.Text(u8"До:")
+    imgui.SameLine(36)
+
+    imgui.PushItemWidth(boxW)
+    if imgui.InputInt("##sched_to_h", ad_schedule_to_hour, 0, 0) then
+        if ad_schedule_to_hour.v < 0 then ad_schedule_to_hour.v = 0 end
+        if ad_schedule_to_hour.v > 23 then ad_schedule_to_hour.v = 23 end
+        saveSettings()
+    end
+    imgui.PopItemWidth()
+    imgui.SameLine()
+
+    if imgui.Button("-##sched_to_h_minus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_to_hour.v = (ad_schedule_to_hour.v - 1 + 24) % 24
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    if imgui.Button("+##sched_to_h_plus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_to_hour.v = (ad_schedule_to_hour.v + 1) % 24
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    imgui.Text(":")
+    imgui.SameLine()
+
+    imgui.PushItemWidth(boxW)
+    if imgui.InputInt("##sched_to_m", ad_schedule_to_min, 0, 0) then
+        if ad_schedule_to_min.v < 0 then ad_schedule_to_min.v = 0 end
+        if ad_schedule_to_min.v > 59 then ad_schedule_to_min.v = 59 end
+        saveSettings()
+    end
+    imgui.PopItemWidth()
+    imgui.SameLine()
+
+    if imgui.Button("-##sched_to_m_minus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_to_min.v = (ad_schedule_to_min.v - 1 + 60) % 60
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    if imgui.Button("+##sched_to_m_plus", imgui.ImVec2(btnW, btnH)) then
+        ad_schedule_to_min.v = (ad_schedule_to_min.v + 1) % 60
+        saveSettings()
+    end
+
+    imgui.Spacing()
+
+    local inSched = isServerTimeInSchedule()
+    local schedStatus = inSched and "в расписании" or "вне расписания"
+    local schedText = string.format("%02d:%02d - %02d:%02d  |  Сейчас: %s",
+        ad_schedule_from_hour.v, ad_schedule_from_min.v,
+        ad_schedule_to_hour.v, ad_schedule_to_min.v,
+        schedStatus)
+    imgui.TextColored(inSched and imgui.ImVec4(0.3, 0.88, 0.5, 1.0) or t.textDim, u8(schedText))
 end
 
 local function drawHRMessagesTab(t)
@@ -1679,40 +2427,304 @@ local function drawAnalyticsHistoryTab(t)
     end
 end
 
+local analytics_chart_mode = "pie" -- "pie" | "bars"
+
+local CHART_PALETTE = {
+    imgui.ImVec4(0.24, 0.52, 0.95, 1.0), -- Royal Blue
+    imgui.ImVec4(0.12, 0.75, 0.65, 1.0), -- Teal
+    imgui.ImVec4(0.95, 0.40, 0.25, 1.0), -- Coral / Orange
+    imgui.ImVec4(0.92, 0.70, 0.18, 1.0), -- Amber / Gold
+    imgui.ImVec4(0.68, 0.38, 0.95, 1.0), -- Purple
+    imgui.ImVec4(0.20, 0.82, 0.45, 1.0), -- Emerald
+    imgui.ImVec4(0.92, 0.30, 0.55, 1.0), -- Rose / Pink
+    imgui.ImVec4(0.10, 0.80, 0.90, 1.0), -- Cyan
+    imgui.ImVec4(0.85, 0.25, 0.25, 1.0), -- Crimson
+    imgui.ImVec4(0.55, 0.85, 0.20, 1.0), -- Lime
+    imgui.ImVec4(0.40, 0.50, 0.95, 1.0), -- Indigo
+    imgui.ImVec4(0.70, 0.70, 0.75, 1.0), -- Silver
+}
+
 local function drawAnalyticsChartTab(t)
     local totalSent, topAd, topCount = getAdsStatsSummary()
 
     if #ads_list == 0 or totalSent == 0 then
-        imgui.TextColored(t.textDim, u8"Пока нечего показывать на графике.")
+        imgui.TextColored(t.textDim, u8"Пока нет статистики отправок для построения графика.")
+        imgui.Spacing()
+        imgui.TextColored(t.textDim, u8"Отправьте хотя бы одно объявление, чтобы здесь появилась интерактивная статистика.")
         return
     end
 
-    local sorted = {}
-    for _, ad in ipairs(ads_list) do sorted[#sorted + 1] = ad end
-    table.sort(sorted, function(a, b) return (a.sentCount or 0) > (b.sentCount or 0) end)
+    -- Переключатель режима: Круговой / Столбчатый график
+    local isPie = (analytics_chart_mode == "pie")
+    local pushed = 0
+    if isPie then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(fa.ICON_PIE_CHART .. u8" Круговая диаграмма##chart_mode_pie", imgui.ImVec2(180, 28)) then
+        analytics_chart_mode = "pie"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-    local maxCount = math.max(topCount, 1)
-    local barMaxWidth = 300
-    local barHeight = 18
+    imgui.SameLine()
 
-    for i, ad in ipairs(sorted) do
-        imgui.PushID("analytics_chart_" .. i)
+    pushed = 0
+    if not isPie then
+        imgui.PushStyleColor(imgui.Col.Button, t.accent)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+        pushed = 2
+    end
+    if imgui.Button(fa.ICON_BAR_CHART .. u8" Столбчатый график##chart_mode_bars", imgui.ImVec2(180, 28)) then
+        analytics_chart_mode = "bars"
+    end
+    if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-        local preview = ad.text:sub(1, 40)
-        if #ad.text > 40 then preview = preview .. "..." end
-        imgui.TextColored(t.textDim, u8(preview) .. "  (" .. (ad.sentCount or 0) .. ")")
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-        local barWidth = math.max(4, ((ad.sentCount or 0) / maxCount) * barMaxWidth)
-        local barPos = imgui.GetCursorScreenPos()
-        imgui.GetWindowDrawList():AddRectFilled(
-            barPos,
-            imgui.ImVec2(barPos.x + barWidth, barPos.y + barHeight),
-            imgui.ColorConvertFloat4ToU32(t.accent)
-        )
-        imgui.Dummy(imgui.ImVec2(barMaxWidth, barHeight))
+    -- Подготовка данных: только объявления с ненулевым счётчиком отправок
+    local activeAds = {}
+    for _, ad in ipairs(ads_list) do
+        if (ad.sentCount or 0) > 0 then
+            activeAds[#activeAds + 1] = ad
+        end
+    end
+    table.sort(activeAds, function(a, b) return (a.sentCount or 0) > (b.sentCount or 0) end)
 
-        imgui.PopID()
+    if #activeAds == 0 then
+        imgui.TextColored(t.textDim, u8"Нет данных для отображения.")
+        return
+    end
+
+    if analytics_chart_mode == "bars" then
+        -- Столбчатый режим
+        local maxCount = math.max(topCount, 1)
+        local barMaxWidth = 360
+        local barHeight = 22
+
+        for i, ad in ipairs(activeAds) do
+            imgui.PushID("analytics_bar_" .. i)
+            local pct = ((ad.sentCount or 0) / totalSent) * 100.0
+            local col = CHART_PALETTE[((i - 1) % #CHART_PALETTE) + 1]
+            local colU32 = imgui.ColorConvertFloat4ToU32(col)
+
+            local preview = ad.text:sub(1, 45)
+            if #ad.text > 45 then preview = preview .. "..." end
+            imgui.TextColored(t.text, u8(preview))
+            imgui.SameLine(imgui.GetWindowWidth() - 170)
+            imgui.TextColored(col, string.format("%.1f%%", pct) .. u8" (" .. (ad.sentCount or 0) .. u8" раз)")
+
+            local barWidth = math.max(6, ((ad.sentCount or 0) / maxCount) * barMaxWidth)
+            local barPos = imgui.GetCursorScreenPos()
+            imgui.GetWindowDrawList():AddRectFilled(
+                barPos,
+                imgui.ImVec2(barPos.x + barWidth, barPos.y + barHeight),
+                colU32, 4.0
+            )
+            imgui.Dummy(imgui.ImVec2(barMaxWidth, barHeight + 4))
+
+            imgui.PopID()
+            imgui.Spacing()
+        end
+        return
+    end
+
+    -- ============================================================
+    --  КРУГОВАЯ ДИАГРАММА (DONUT CHART С ИНТЕРАКТИВНЫМ НАВЕДЕНИЕМ)
+    -- ============================================================
+    local slices = {}
+    local currentAngle = -math.pi * 0.5 -- начинаем строго сверху (12 часов)
+    for i, ad in ipairs(activeAds) do
+        local count = ad.sentCount or 0
+        local share = count / totalSent
+        local span = share * (2 * math.pi)
+        local a1 = currentAngle
+        local a2 = currentAngle + span
+        currentAngle = a2
+        local col = CHART_PALETTE[((i - 1) % #CHART_PALETTE) + 1]
+        slices[#slices + 1] = {
+            idx = i,
+            ad = ad,
+            count = count,
+            percent = share * 100.0,
+            a1 = a1,
+            a2 = a2,
+            midAngle = (a1 + a2) * 0.5,
+            span = span,
+            color = col,
+        }
+    end
+
+    local dl = imgui.GetWindowDrawList()
+    local chartOrigin = imgui.GetCursorScreenPos()
+    local chartSize = 220.0
+    local center = imgui.ImVec2(chartOrigin.x + chartSize * 0.5, chartOrigin.y + chartSize * 0.5)
+    local outerRadius = 92.0
+    local innerRadius = 52.0
+
+    -- Невидимый виджет для регистрации событий мыши в зоне диаграммы
+    imgui.InvisibleButton("##donut_chart_canvas", imgui.ImVec2(chartSize, chartSize))
+    local isCanvasHovered = imgui.IsItemHovered()
+
+    local mousePos = imgui.GetIO().MousePos
+    local dx = mousePos.x - center.x
+    local dy = mousePos.y - center.y
+    local dist = math.sqrt(dx * dx + dy * dy)
+    local hoveredIdx = nil
+
+    -- Определение сектора под курсором мыши
+    if isCanvasHovered and dist >= (innerRadius - 6) and dist <= (outerRadius + 14) then
+        local rawAngle = math.atan2(dy, dx)
+        local startAngle0 = -math.pi * 0.5
+        local normAngle = startAngle0 + ((rawAngle - startAngle0) % (2 * math.pi))
+        for i, s in ipairs(slices) do
+            if normAngle >= s.a1 and normAngle < s.a2 then
+                hoveredIdx = i
+                break
+            end
+        end
+    end
+
+    -- Правая колонка: Интерактивная легенда
+    imgui.SameLine(chartSize + 20)
+    imgui.BeginChild("DonutLegend", imgui.ImVec2(0, chartSize), true)
+        imgui.TextColored(t.accent, u8"Доли объявлений в эфире:")
         imgui.Spacing()
+
+        for i, s in ipairs(slices) do
+            imgui.PushID("legend_slice_" .. i)
+            local p = imgui.GetCursorScreenPos()
+
+            -- Выделение, если этот сектор наведён на круге или в списке
+            local isThisHovered = (hoveredIdx == i)
+            if isThisHovered then
+                dl:AddRectFilled(
+                    imgui.ImVec2(p.x - 4, p.y - 2),
+                    imgui.ImVec2(p.x + imgui.GetWindowWidth() - 15, p.y + 24),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(s.color.x, s.color.y, s.color.z, 0.16)),
+                    6.0
+                )
+                dl:AddRect(
+                    imgui.ImVec2(p.x - 4, p.y - 2),
+                    imgui.ImVec2(p.x + imgui.GetWindowWidth() - 15, p.y + 24),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(s.color.x, s.color.y, s.color.z, 0.60)),
+                    6.0, 15, 1.2
+                )
+            end
+
+            -- Цветовой маркер
+            local colU32 = imgui.ColorConvertFloat4ToU32(s.color)
+            dl:AddRectFilled(imgui.ImVec2(p.x, p.y + 4), imgui.ImVec2(p.x + 12, p.y + 16), colU32, 3.0)
+
+            imgui.SetCursorPosX(imgui.GetCursorPosX() + 18)
+            imgui.TextColored(s.color, string.format("%5.1f%%", s.percent))
+
+            imgui.SameLine()
+            imgui.TextColored(t.textDim, "(" .. s.count .. u8" раз)")
+
+            imgui.SameLine()
+            local preview = s.ad.text:sub(1, 38)
+            if #s.ad.text > 38 then preview = preview .. "..." end
+            imgui.TextColored(isThisHovered and imgui.ImVec4(1, 1, 1, 1) or t.text, u8(preview))
+
+            if imgui.IsItemHovered() then
+                hoveredIdx = i
+                imgui.BeginTooltip()
+                imgui.TextColored(s.color, u8(string.format("Отправлено: %d раз (%.1f%% от всех)", s.count, s.percent)))
+                imgui.Separator()
+                imgui.PushTextWrapPos(350)
+                imgui.Text(u8(s.ad.text))
+                imgui.PopTextWrapPos()
+                imgui.EndTooltip()
+            end
+
+            imgui.PopID()
+            imgui.Spacing()
+        end
+    imgui.EndChild()
+
+    -- Отрисовка секторов круга
+    for i, s in ipairs(slices) do
+        local isThisHovered = (hoveredIdx == i)
+        local shift = isThisHovered and 7.0 or 0.0
+        local segCenter = imgui.ImVec2(
+            center.x + math.cos(s.midAngle) * shift,
+            center.y + math.sin(s.midAngle) * shift
+        )
+        local curOuterR = outerRadius + (isThisHovered and 6.0 or 0.0)
+        local curInnerR = innerRadius - (isThisHovered and 2.5 or 0.0)
+
+        local alpha = 1.0
+        if hoveredIdx ~= nil and not isThisHovered then
+            alpha = 0.45
+        end
+
+        local col = imgui.ImVec4(s.color.x, s.color.y, s.color.z, alpha)
+        local colU32 = imgui.ColorConvertFloat4ToU32(col)
+        local numSegments = math.max(6, math.floor(36 * (s.span / (2 * math.pi))))
+
+        -- Неоновое свечение сектора при наведении
+        if isThisHovered then
+            local glowCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(col.x, col.y, col.z, 0.40))
+            dl:PathClear()
+            dl:PathArcTo(segCenter, curOuterR + 5.0, s.a1, s.a2, numSegments)
+            dl:PathArcTo(segCenter, math.max(0, curInnerR - 4.0), s.a2, s.a1, numSegments)
+            dl:PathFillConvex(glowCol)
+        end
+
+        -- Заливка сектора
+        dl:PathClear()
+        dl:PathArcTo(segCenter, curOuterR, s.a1, s.a2, numSegments)
+        dl:PathArcTo(segCenter, curInnerR, s.a2, s.a1, numSegments)
+        dl:PathFillConvex(colU32)
+
+        -- Разделительный контур
+        if #slices > 1 then
+            dl:PathClear()
+            dl:PathArcTo(segCenter, curOuterR, s.a1, s.a2, numSegments)
+            dl:PathArcTo(segCenter, curInnerR, s.a2, s.a1, numSegments)
+            dl:PathStroke(imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.08, 0.10, 0.14, 0.95)), true, 1.5)
+        end
+    end
+
+    -- Центр кольца (Glass Center Core)
+    local centerHoleR = innerRadius - 4.0
+    local centerBgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.08, 0.11, 0.16, 0.96))
+    dl:AddCircleFilled(center, centerHoleR, centerBgCol, 32)
+    local centerBorderCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.22, 0.28, 0.40, 0.85))
+    dl:AddCircle(center, centerHoleR, centerBorderCol, 32, 1.5)
+
+    -- Текст внутри центра кольца
+    if hoveredIdx and slices[hoveredIdx] then
+        local s = slices[hoveredIdx]
+        local pctStr = string.format("%.1f%%", s.percent)
+        local countStr = s.count .. u8" раз"
+
+        local pctSize = imgui.CalcTextSize(pctStr)
+        local countSize = imgui.CalcTextSize(countStr)
+
+        dl:AddText(imgui.ImVec2(center.x - pctSize.x * 0.5, center.y - 15.0), imgui.ColorConvertFloat4ToU32(s.color), pctStr)
+        dl:AddText(imgui.ImVec2(center.x - countSize.x * 0.5, center.y + 4.0), imgui.ColorConvertFloat4ToU32(t.text), countStr)
+
+        -- Всплывающая подсказка при наведении на сектор
+        if isCanvasHovered then
+            imgui.BeginTooltip()
+            imgui.TextColored(s.color, u8"Доля в эфире: " .. pctStr .. " (" .. countStr .. ")")
+            imgui.Separator()
+            imgui.PushTextWrapPos(350)
+            imgui.Text(u8(s.ad.text))
+            imgui.PopTextWrapPos()
+            imgui.EndTooltip()
+        end
+    else
+        local totalStr = tostring(totalSent)
+        local subStr = u8"отправок"
+
+        local totalSize = imgui.CalcTextSize(totalStr)
+        local subSize = imgui.CalcTextSize(subStr)
+
+        dl:AddText(imgui.ImVec2(center.x - totalSize.x * 0.5, center.y - 15.0), imgui.ColorConvertFloat4ToU32(t.accent), totalStr)
+        dl:AddText(imgui.ImVec2(center.x - subSize.x * 0.5, center.y + 4.0), imgui.ColorConvertFloat4ToU32(t.textDim), subStr)
     end
 end
 
@@ -1787,6 +2799,13 @@ end
 
 local function drawHRTab(t)
     imgui.TextColored(t.accent, fa.ICON_BULLHORN .. u8" РЕКЛАМНЫЙ ОТДЕЛ")
+
+    -- Живой бейдж серверного времени по МСК в правом верхнем углу
+    local st = getServerTime()
+    local clockStr = string.format(u8"  Время сервера: %02d:%02d:%02d МСК", st.hour, st.min, st.sec)
+    imgui.SameLine(imgui.GetWindowWidth() - 225)
+    imgui.TextColored(t.accent, fa.ICON_CLOCK_O .. clockStr)
+
     imgui.Spacing()
 
     local pushed = 0
@@ -1794,8 +2813,11 @@ local function drawHRTab(t)
         imgui.PushStyleColor(imgui.Col.Button, t.accent)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
+    else
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.14, 0.18, 0.26, 0.85))
+        pushed = 1
     end
-    if imgui.Button(u8"Реклама##hr_sub_ads", imgui.ImVec2(140, 30)) then
+    if imgui.Button(fa.ICON_BULLHORN .. u8" Реклама##hr_sub_ads", imgui.ImVec2(140, 30)) then
         hr_subtab = "ads"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -1807,8 +2829,11 @@ local function drawHRTab(t)
         imgui.PushStyleColor(imgui.Col.Button, t.accent)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
+    else
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.14, 0.18, 0.26, 0.85))
+        pushed = 1
     end
-    if imgui.Button(u8"Аналитика##hr_sub_analytics", imgui.ImVec2(140, 30)) then
+    if imgui.Button(fa.ICON_PIE_CHART .. u8" Аналитика##hr_sub_analytics", imgui.ImVec2(140, 30)) then
         hr_subtab = "analytics"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
@@ -1824,14 +2849,53 @@ local function drawHRTab(t)
     end
 end
 
+-- ============================================================
+--  ДОМАШНЯЯ СТРАНИЦА : ПЛИТКИ С GLASSMORPHISM И АНИМАЦИЯМИ
+-- ============================================================
+local home_tiles_anim = { 0.0, 0.0, 0.0, 0.0 }
+home_tiles_def = {
+    {
+        id = "home_actor",
+        icon = fa.ICON_USER,
+        title = u8"Актёр",
+        tab = "roles",
+        tabTitle = u8"Актёр",
+        color = imgui.ImVec4(0.20, 0.46, 0.76, 1.0), -- Solid Sapphire Blue
+    },
+    {
+        id = "home_photo",
+        icon = fa.ICON_DESKTOP,
+        title = u8"Фотограф",
+        tab = "photographer",
+        tabTitle = u8"Фотограф",
+        color = imgui.ImVec4(0.18, 0.58, 0.64, 1.0), -- Solid Turquoise / Teal
+    },
+    {
+        id = "home_tracker",
+        icon = fa.ICON_GAVEL,
+        title = u8"Кураторы",
+        tab = "tracker",
+        tabTitle = u8"Кураторы",
+        color = imgui.ImVec4(0.78, 0.22, 0.24, 1.0), -- Solid Ruby / Coral Red
+    },
+    {
+        id = "home_hr",
+        icon = fa.ICON_BULLHORN,
+        title = u8"Реклама",
+        tab = "hr",
+        tabTitle = u8"Реклама",
+        color = imgui.ImVec4(0.80, 0.56, 0.18, 1.0), -- Solid Amber / Gold
+    },
+}
+
 local function drawHomeTab(t)
     local avail = imgui.GetContentRegionAvail()
     local centerX = avail.x / 2
     local tint = imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.12)
 
-    imgui.Dummy(imgui.ImVec2(1, 40))
+    imgui.Dummy(imgui.ImVec2(1, 15))
 
-    -- ---------- Ореол за иконкой ----------
+    -- ---------- ЛОГОТИП И ОРЕОЛ ----------
     local haloSize = 130
     local haloY = imgui.GetCursorPosY()
     imgui.PushStyleColor(imgui.Col.ChildWindowBg, tint)
@@ -1853,15 +2917,15 @@ local function drawHomeTab(t)
     end
 
     imgui.SetCursorPosY(haloY + haloSize)
-    imgui.Dummy(imgui.ImVec2(1, 10))
+    imgui.Dummy(imgui.ImVec2(1, 8))
 
-    -- ---------- Заголовок ----------
+    -- ---------- ЗАГОЛОВОК ----------
     if arial_font then imgui.PushFont(arial_font) end
     centeredLabel("home_title", u8"Trinity Roleplay Community Manager", avail.x, 30, t.accent)
     if arial_font then imgui.PopFont() end
 
-    -- ---------- Акцентная полоска-разделитель ----------
-    imgui.Dummy(imgui.ImVec2(1, 6))
+    -- ---------- ЛИНИЯ ПОД ЗАГОЛОВКОМ ----------
+    imgui.Dummy(imgui.ImVec2(1, 4))
     local underlineW = 220
     imgui.SetCursorPosX(centerX - underlineW / 2)
     imgui.PushStyleColor(imgui.Col.ChildWindowBg, t.accent)
@@ -1869,58 +2933,100 @@ local function drawHomeTab(t)
     imgui.EndChild()
     imgui.PopStyleColor()
 
-    imgui.Dummy(imgui.ImVec2(1, 10))
+    imgui.Dummy(imgui.ImVec2(1, 8))
 
     local ok, myId = sampGetPlayerIdByCharHandle(playerPed)
-    local nickname = (ok and myId and myId >= 0) and sampGetPlayerNickname(myId) or "—"
+    local nickname = (ok and myId and myId >= 0) and sampGetPlayerNickname(myId) or "Игрок"
 
     if arial_font_small then imgui.PushFont(arial_font_small) end
     centeredLabel("home_welcome", u8"Добро пожаловать, " .. nickname, avail.x, 20, t.textDim)
     if arial_font_small then imgui.PopFont() end
 
-    imgui.Dummy(imgui.ImVec2(1, 30))
+    imgui.Dummy(imgui.ImVec2(1, 20))
 
-    -- ---------- Плитки-должности, каждая в своём цвете ----------
+    -- ---------- ПЛИТКИ: СПЛОШНОЙ ЦВЕТ + АНИМАЦИИ (БЕЗ ОБВОДКИ) ----------
     local tileW, tileH = 160, 90
     local gap = 20
     local totalW = tileW * 4 + gap * 3
     imgui.SetCursorPosX(centerX - totalW / 2)
 
-    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.45, 0.75, 1.0))
-    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.30, 0.55, 0.85, 1.0))
-    if imgui.Button(fa.ICON_USER .. "" .. u8" Актёр##home_actor", imgui.ImVec2(tileW, tileH)) then
-        openTab("roles", u8"Актёр")
+    local dl = imgui.GetWindowDrawList()
+    local dt = imgui.GetIO().DeltaTime
+    if dt <= 0 or dt > 0.1 then dt = 0.016 end
+
+    for i, tile in ipairs(home_tiles_def) do
+        if i > 1 then imgui.SameLine(0, gap) end
+
+        local p = imgui.GetCursorScreenPos()
+        imgui.InvisibleButton("##" .. tile.id, imgui.ImVec2(tileW, tileH))
+        local isHovered = imgui.IsItemHovered()
+        local isActive  = imgui.IsItemActive()
+
+        if imgui.IsItemClicked(0) then
+            openTab(tile.tab, tile.tabTitle)
+        end
+
+        -- Плавная LERP-анимация (0.0 -> 1.0)
+        local target = isHovered and 1.0 or 0.0
+        home_tiles_anim[i] = home_tiles_anim[i] + (target - home_tiles_anim[i]) * math.min(1.0, dt * 12.0)
+        local a = home_tiles_anim[i]
+
+        -- Масштабирование и подъём плитки
+        local expand = a * 4.5
+        if isActive then expand = expand - 2.0 end
+        local liftY = a * 3.5
+
+        local p_min = imgui.ImVec2(p.x - expand, p.y - expand - liftY)
+        local p_max = imgui.ImVec2(p.x + tileW + expand, p.y + tileH + expand - liftY)
+        local rounding = 12.0
+        local cardCenterX = (p_min.x + p_max.x) * 0.5
+        local col = tile.color
+
+        -- 1. Мягкая цветная тень при наведении (Ambient Glow)
+        if a > 0.01 then
+            local bloomCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(col.x, col.y, col.z, a * 0.40))
+            dl:AddRectFilled(
+                imgui.ImVec2(p_min.x - 5.0 * a, p_min.y - 5.0 * a),
+                imgui.ImVec2(p_max.x + 5.0 * a, p_max.y + 5.0 * a),
+                bloomCol, rounding + 4.0
+            )
+        end
+
+        -- 2. Чистый сплошной цвет плитки (БЕЗ белой обводки)
+        local hoverBoost = a * 0.08
+        local bgR = math.min(1.0, col.x + hoverBoost)
+        local bgG = math.min(1.0, col.y + hoverBoost)
+        local bgB = math.min(1.0, col.z + hoverBoost)
+        local solidBgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(bgR, bgG, bgB, 1.0))
+        dl:AddRectFilled(p_min, p_max, solidBgCol, rounding)
+
+        -- 3. Контрастная тёмная круглая плашка под иконку
+        local badgeCenterY = p_min.y + 30.0 - a * 2.0
+        local badgeR = 17.0 + a * 1.5
+        local badgeBgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.0, 0.0, 0.0, 0.20 + a * 0.10))
+        dl:AddCircleFilled(imgui.ImVec2(cardCenterX, badgeCenterY), badgeR, badgeBgCol, 24)
+
+        -- Иконка (FontAwesome)
+        local iconSize = imgui.CalcTextSize(tile.icon)
+        local iconCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1.0, 1.0, 1.0, 0.95))
+        dl:AddText(
+            imgui.ImVec2(cardCenterX - iconSize.x * 0.5, badgeCenterY - iconSize.y * 0.5),
+            iconCol, tile.icon
+        )
+
+        -- 4. Текст названия роли
+        local titleY = p_min.y + 58.0
+        if arial_font_small then imgui.PushFont(arial_font_small) end
+        local titleSize = imgui.CalcTextSize(tile.title)
+        local titleCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1.0, 1.0, 1.0, 0.98))
+        dl:AddText(
+            imgui.ImVec2(cardCenterX - titleSize.x * 0.5, titleY),
+            titleCol, tile.title
+        )
+        if arial_font_small then imgui.PopFont() end
     end
-    imgui.PopStyleColor(2)
 
-    imgui.SameLine(0, gap)
-
-    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.55, 0.60, 1.0))
-    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.65, 0.70, 1.0))
-    if imgui.Button(fa.ICON_DESKTOP .. "" .. u8" Фотограф##home_photo", imgui.ImVec2(tileW, tileH)) then
-        openTab("photographer", u8"Фотограф")
-    end
-    imgui.PopStyleColor(2)
-
-    imgui.SameLine(0, gap)
-
-        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.20, 0.20, 1.0))
-    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.28, 0.28, 1.0))
-    if imgui.Button(fa.ICON_GAVEL .. "" .. u8" Кураторы##home_tracker", imgui.ImVec2(tileW, tileH)) then
-        openTab("tracker", u8"Кураторы")
-    end
-    imgui.PopStyleColor(2)
-
-    imgui.SameLine(0, gap)
-
-    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.55, 0.20, 1.0))
-    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.65, 0.30, 1.0))
-    if imgui.Button(fa.ICON_BULLHORN .. "" .. u8" Реклама##home_hr", imgui.ImVec2(tileW, tileH)) then
-        openTab("hr", u8"Реклама")
-    end
-    imgui.PopStyleColor(2)
-
-    imgui.Dummy(imgui.ImVec2(1, 24))
+    imgui.Dummy(imgui.ImVec2(1, 16))
 
     local eventBarWidth = math.min(avail.x - 80, 520)
     imgui.SetCursorPosX(centerX - eventBarWidth / 2)
@@ -1932,11 +3038,6 @@ local function drawHomeTab(t)
     imgui.EndChild()
 end
 
--- ============================================================
---  Заметки : хранение
---  Каждая заметка - moonloader\config\TRPcomm Manager Config\notes\<id>.txt
---  Индекс (порядок, названия, кол-во) - notes\index.ini
--- ============================================================
 local defaultNotesIndex = { notes = { count = "0" } }
 
 local function ensureIniFile(path, header, lines)
@@ -2709,7 +3810,7 @@ local function drawSettingsTab(t)
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
     -- ---------- Бинд на подключение к рации ----------
-    imgui.TextColored(t.accent, fa.ICON_WIFI .. u8" Подключение к рации")
+    imgui.TextColored(t.accent, fa.ICON_WIFI .. u8" Подключение к рации + телепорт на локацию")
     imgui.TextColored(t.textDim, u8"Текущая комбинация:")
     imgui.SameLine()
     imgui.Text(hotkey2_display.v)
@@ -2832,7 +3933,8 @@ GALLERY_SCAN_LIMIT = 60 -- сколько последних файлов вообще ищем
 GALLERY_PER_PAGE   = 9  -- 3x3 на странице
 GALLERY_MAX_SELECT = 10
 
-gallery_textures      = {}
+gallery_thumbnails    = {}
+gallery_full_textures = {}
 gallery_files         = {}
 gallery_scanned       = false
 gallery_page          = 1
@@ -2860,7 +3962,8 @@ local function scanGallery()
     end
     gallery_scanned      = true
     gallery_loaded_pages = {}
-    gallery_textures     = {}
+    gallery_thumbnails    = {}
+    gallery_full_textures = {}
     gallery_page          = 1
     gallery_selected      = {}
 end
@@ -3036,21 +4139,65 @@ local function sendMediaGroupToTelegram(filePaths, caption)
     end
 end
 
-local function loadGalleryTexture(filename)
-    if gallery_textures[filename] ~= nil then
-        return gallery_textures[filename] or nil
+local d3dx9_ok, d3dx9 = pcall(ffi.load, "d3dx9_43.dll")
+if not d3dx9_ok then d3dx9 = nil end
+
+-- Загрузка миниатюры скриншота в низком качестве (быстро и легко для памяти)
+local function loadGalleryThumbnail(filename)
+    if gallery_thumbnails[filename] ~= nil then
+        return gallery_thumbnails[filename] or nil
+    end
+    local path = SCREENS_DIR .. filename
+    if doesFileExist(path) then
+        local tex = nil
+        -- 1. Создаём сжатую низкокачественную текстуру через DirectX 9 D3DX
+        if d3dx9 and d3dx9.D3DXCreateTextureFromFileExA and getD3DDevicePtr then
+            local pDev = getD3DDevicePtr()
+            if pDev then
+                local ppTex = ffi.new("LPDIRECT3DTEXTURE9[1]")
+                -- 240x135 - низкое разрешение, D3DX_FILTER_NONE (1) для быстрого сжатия и низкого качества
+                local hr = d3dx9.D3DXCreateTextureFromFileExA(
+                    ffi.cast("LPDIRECT3DDEVICE9", pDev),
+                    path,
+                    240, 135,
+                    1, 0, 0, 1, 1, 0, 0,
+                    nil, nil, ppTex
+                )
+                if hr == 0 and ppTex[0] ~= nil then
+                    local addr = tonumber(ffi.cast("uintptr_t", ppTex[0]))
+                    tex = imgui.GetTextureFromAddress(addr)
+                end
+            end
+        end
+
+        -- 2. Если D3DX недоступен, fallback на обычный загрузчик
+        if not tex then
+            tex = imgui.CreateTextureFromFile(path)
+        end
+
+        gallery_thumbnails[filename] = tex
+        return tex
+    end
+    gallery_thumbnails[filename] = false
+    return nil
+end
+
+-- Загрузка оригинального скриншота в 100% максимальном качестве (для полного просмотра)
+local function loadGalleryFull(filename)
+    if gallery_full_textures[filename] ~= nil then
+        return gallery_full_textures[filename] or nil
     end
     local path = SCREENS_DIR .. filename
     if doesFileExist(path) then
         local tex = imgui.CreateTextureFromFile(path)
-        gallery_textures[filename] = tex
+        gallery_full_textures[filename] = tex
         return tex
     end
-    gallery_textures[filename] = false
+    gallery_full_textures[filename] = false
     return nil
 end
 
--- грузит картинки только для конкретной страницы, растягивая по кадрам
+-- Предзагрузка миниатюр текущей страницы (легкие текстуры)
 local function loadGalleryPage(page)
     if gallery_loaded_pages[page] then return end
     gallery_loaded_pages[page] = true
@@ -3058,13 +4205,13 @@ local function loadGalleryPage(page)
     local endIdx   = math.min(startIdx + GALLERY_PER_PAGE - 1, #gallery_files)
     lua_thread.create(function()
         for i = startIdx, endIdx do
-            loadGalleryTexture(gallery_files[i])
+            loadGalleryThumbnail(gallery_files[i])
             wait(0)
         end
     end)
 end
 
--- ---------- Окно "Название ивента перед отправкой" ----------
+-- ---------- ОКНО "ОТПРАВИТЬ ОТЧЕТ В ТЕЛЕГРАМ" ----------
 gallery_send_form_open = false
 gallery_send_event_name = imgui.ImBuffer("", 64)
 gallery_pending_files = {}
@@ -3141,28 +4288,34 @@ end
 local function drawGalleryPreview(t)
     if not gallery_preview_open or not gallery_preview_file then return end
 
-    local tex = gallery_textures[gallery_preview_file]
+    local tex = gallery_full_textures[gallery_preview_file]
+    if not tex then
+        tex = loadGalleryFull(gallery_preview_file)
+    end
+    if not tex then
+        tex = gallery_thumbnails[gallery_preview_file]
+    end
     if not tex then
         gallery_preview_open = false
         return
     end
 
     local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.7, sh * 0.75), imgui.Cond.Always)
+    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.75, sh * 0.80), imgui.Cond.Always)
     imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
 
     pushThemeColors()
     pushThemeRounding()
 
     local open = imgui.ImBool(true)
-    imgui.Begin(u8"Скриншот##gallery_preview", open,
+    imgui.Begin(fa.ICON_DESKTOP .. u8"  Просмотр в полном качестве: " .. u8(gallery_preview_file) .. "##gallery_preview", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then gallery_preview_open = false end
+    if not open.v or isKeyDown(0x1B) then gallery_preview_open = false end
 
     local avail = imgui.GetContentRegionAvail()
-    imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 40))
+    imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 42))
 
-    if imgui.Button(u8"Закрыть##gallery_preview_close", imgui.ImVec2(-1, 30)) then
+    if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##gallery_preview_close", imgui.ImVec2(-1, 32)) then
         gallery_preview_open = false
     end
 
@@ -4170,7 +5323,7 @@ drawGalleryTab = function(t)
             end
 
             imgui.BeginChild("gcard", imgui.ImVec2(cardW, cardH), true)
-                local tex = gallery_textures[filename]
+                local tex = gallery_thumbnails[filename]
                 if tex then
                     local avail = imgui.GetContentRegionAvail()
                     imgui.Image(tex, imgui.ImVec2(avail.x, avail.y))
@@ -4182,6 +5335,7 @@ drawGalleryTab = function(t)
                     if imgui.IsItemClicked() then
                         gallery_preview_open = true
                         gallery_preview_file = filename
+                        loadGalleryFull(filename)
                     end
 
                     if imgui.IsItemClicked(2) then
@@ -4451,7 +5605,7 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.5")
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.8")
         imgui.SameLine(imgui.GetWindowWidth() - 34)
         if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
             main_window_state.v = false
@@ -4564,7 +5718,12 @@ function imgui.OnDrawFrame()
                     imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
             local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, roles = true }
-            local ACCESS_KEY_BY_KIND = { roles = "actors" }
+            local ACCESS_KEY_BY_KIND = {
+                roles = "actors",
+                photographer = "photographers",
+                tracker = "curators",
+                hr = "hr",
+            }
 
             if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
                 local accessKey = ACCESS_KEY_BY_KIND[activeTab.kind] or activeTab.kind
@@ -4586,9 +5745,9 @@ function imgui.OnDrawFrame()
                     drawRolesTab(t)
                 elseif activeTab.kind == "settings" then
                     drawSettingsTab(t)
-                elseif activeTab.kind == "photographer" and hasAccess("photographer") then
+                elseif activeTab.kind == "photographer" and hasAccess("photographers") then
                     drawPhotographerTab(t)
-                elseif activeTab.kind == "tracker" and hasAccess("tracker") then
+                elseif activeTab.kind == "tracker" and hasAccess("curators") then
                     drawTrackerTab(t)
                 elseif activeTab.kind == "hr" and hasAccess("hr") then
                     drawHRTab(t)
@@ -4610,38 +5769,37 @@ end
 
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     if ad_pending then
-
-    end
-
-    if dialogId == 3412 and title and title:find("без модерации") then
-        sampSendDialogResponse(dialogId, 1, 0, "")
-        advanceAfterNewsPopup()
-        return false
-    end
-
-    if ad_pending then
-        if dialogId == 3409 and title:find("Создание объявления") then
-            ad_pending_deadline = os.time() + 2 -- диалог реально пошёл, продлеваем срок сторожа
+        if dialogId == 3409 and title and title:find("Создание объявления") then
+            ad_pending_deadline = os.time() + 2
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
-            if dialogId == 3410 and title:find("Отправка рекламы на радио") then
+        if dialogId == 3410 and title and title:find("Отправка рекламы на радио") then
             ad_pending_deadline = 0
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
             showToast('Объявление отправлено на модерацию.')
             incrementAdSentCount(ad_pending_text)
             logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
             ad_text.v = ""
-
             ad_awaiting_next_city = true
             ad_next_city_at = os.time() + 3
             return false
         end
-    end
-
-    if dialogId == 45 and text and (text:find("Ваше объявление") or text:find("уже находится в очереди на модерацию")) then
-        sampSendDialogResponse(dialogId, 1, 65535, "")
-        return false
+        if dialogId == 3412 and title and title:find("без модерации") then
+            sampSendDialogResponse(dialogId, 1, 0, "")
+            advanceAfterNewsPopup()
+            return false
+        end
+        if dialogId == 45 and text and (text:find("Ваше объявление") or text:find("уже находится в очереди на модерацию")) then
+            sampSendDialogResponse(dialogId, 1, 65535, "")
+            return false
+        end
+    elseif ad_awaiting_next_city then
+        if dialogId == 3412 and title and title:find("без модерации") then
+            sampSendDialogResponse(dialogId, 1, 0, "")
+            advanceAfterNewsPopup()
+            return false
+        end
     end
 end
 
@@ -4681,6 +5839,18 @@ local function parseRetrySeconds(text)
 end
 
 sampev.onServerMessage = function(color, text)
+    -- Синхронизация времени сервера (по МСК) при сообщениях сервера / командах
+    local th, tm, ts = text:match("([012]?%d):([0-5]%d):?([0-5]?%d?)")
+    if (text:find("Время") or text:find("время") or text:find("часах")) and th and tm then
+        th, tm = tonumber(th), tonumber(tm)
+        ts = tonumber(ts) or 0
+        local expectedNow = os.date("!*t", os.time() + SERVER_TZ_OFFSET_SEC)
+        local diffSec = (th * 3600 + tm * 60 + ts) - (expectedNow.hour * 3600 + expectedNow.min * 60 + expectedNow.sec)
+        if math.abs(diffSec) < 43200 then
+            server_time_offset = diffSec
+        end
+    end
+
     if text:find("Вы находитесь слишком далеко от игрока") then
         role_approve_distance_error = true
     end
@@ -4893,8 +6063,33 @@ function main()
             end
         end
 
+        -- Проверка расписания автоотправки (автостарт и автостоп)
+        if ad_schedule_enabled.v then
+            local inSched = isServerTimeInSchedule()
+            if ad_schedule_was_in == nil then
+                ad_schedule_was_in = inSched
+            elseif not ad_schedule_was_in and inSched then
+                ad_schedule_was_in = true
+                if not ad_auto_send.v then
+                    ad_auto_send.v = true
+                    ad_next_send_time = os.time()
+                    showToast("Реклама: автостарт по расписанию")
+                end
+            elseif ad_schedule_was_in and not inSched then
+                ad_schedule_was_in = false
+                if ad_auto_send.v then
+                    ad_auto_send.v = false
+                    showToast("Реклама: автостоп по расписанию")
+                end
+            end
+        else
+            ad_schedule_was_in = nil
+        end
+
         if ad_auto_send.v and not ad_pending and os.time() >= ad_next_send_time then
-            triggerNextAdSend()
+            if not ad_schedule_enabled.v or isServerTimeInSchedule() then
+                triggerNextAdSend()
+            end
         end
 
         local px, py, pz = getCharCoordinates(PLAYER_PED)
