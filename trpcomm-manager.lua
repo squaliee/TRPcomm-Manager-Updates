@@ -645,6 +645,7 @@ local defaultSettings = {
         ad_schedule_from_min = "5",
         ad_schedule_to_hour = "21",
         ad_schedule_to_min = "9",
+        github_token = "",
     }
 }
 
@@ -676,6 +677,9 @@ else
 end
 
 local mainIni = inicfg.load(defaultSettings, CONFIG_PATH) or defaultSettings
+
+github_admin_token_buf = imgui.ImBuffer(u8(mainIni.settings.github_token or ""), 128)
+github_token_show      = imgui.ImBool(false)
 
 ad_interval_minutes = imgui.ImInt(30)
 ad_city_ls  = imgui.ImBool(true)
@@ -804,6 +808,7 @@ local function saveSettings()
             ad_schedule_from_min = tostring(ad_schedule_from_min.v),
             ad_schedule_to_hour = tostring(ad_schedule_to_hour.v),
             ad_schedule_to_min = tostring(ad_schedule_to_min.v),
+            github_token = (github_admin_token_buf and u8:decode(github_admin_token_buf.v) or (mainIni.settings and mainIni.settings.github_token) or ""),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -1362,7 +1367,7 @@ AD_MANAGERS = {
 }
 AD_RESTRICTIONS_RAW_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/ad_restrictions.json"
 AD_RESTRICTIONS_API_URL = "https://api.github.com/repos/squaliee/TRPcomm-Manager-Updates/contents/ad_restrictions.json"
-GITHUB_ADMIN_TOKEN      = "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"
+-- GitHub токен задаётся в настройках скрипта (trpcomm-manager.ini) и не хранится в коде
 
 ad_restrictions = {
     auto_send_disabled = false,
@@ -1441,9 +1446,17 @@ function pushAdRestrictionsToGithub()
     showToast("Отправка изменений на GitHub...")
 
     lua_thread.create(function()
-        local token = GITHUB_ADMIN_TOKEN
+        local token = ""
+        if github_admin_token_buf and github_admin_token_buf.v ~= "" then
+            token = u8:decode(github_admin_token_buf.v)
+        elseif mainIni and mainIni.settings and mainIni.settings.github_token then
+            token = tostring(mainIni.settings.github_token)
+        end
+        token = token:gsub("^%s+", ""):gsub("%s+$", "")
+
         if not token or token == "" then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка: GitHub Token не задан.', -1)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка: GitHub Token не задан! Введите его во вкладке "Настройки".', -1)
+            showToast("Укажите GitHub токен в Настройках")
             ad_restrictions_updating = false
             return
         end
@@ -1458,7 +1471,14 @@ function pushAdRestrictionsToGithub()
         })
 
         if not ok_get or get_resp.status_code ~= 200 then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка связи с GitHub API.', -1)
+            local code = ok_get and get_resp.status_code or 0
+            if code == 401 then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка GitHub: токен недействителен (401 Bad credentials). Обновите токен в Настройках.', -1)
+            elseif code == 404 then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка GitHub: файл ad_restrictions.json не найден (404).', -1)
+            else
+                sampAddChatMessage(string.format('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка связи с GitHub API (HTTP %s).', tostring(code)), -1)
+            end
             ad_restrictions_updating = false
             return
         end
@@ -1508,7 +1528,13 @@ function pushAdRestrictionsToGithub()
             ad_restrictions_last_fetch = os.time()
         else
             local err_code = ok_put and tostring(put_resp.status_code) or "сеть"
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка сохранения на GitHub (' .. err_code .. ').', -1)
+            if err_code == "401" then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка GitHub: доступ запрещен (401). Проверьте права токена (галочка repo).', -1)
+            elseif err_code == "409" then
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка GitHub: конфликт версий (409 Conflict). Повторите попытку.', -1)
+            else
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка сохранения на GitHub (' .. err_code .. ').', -1)
+            end
         end
     end)
 end
@@ -3920,6 +3946,29 @@ imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
     if imgui.Checkbox(u8"Показывать экранные уведомления в углу экрана", notifications_enabled) then
         saveSettings()
+    end
+
+    if isAdManager() then
+        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+        imgui.TextColored(t.accent, fa.ICON_KEY .. u8" Управление GitHub API (Руководство)")
+        imgui.TextColored(t.textDim, u8"GitHub Personal Access Token (для синхронизации ограничений рекламы):")
+        imgui.PushItemWidth(360)
+        local inputFlags = github_token_show.v and 0 or (imgui.InputTextFlags.Password or 32768)
+        if imgui.InputText("##github_token_field", github_admin_token_buf, inputFlags) then
+            saveSettings()
+        end
+        imgui.PopItemWidth()
+        imgui.SameLine()
+        if imgui.Checkbox(u8"Показать##gh_show_tok", github_token_show) then
+            -- переключение отображения
+        end
+        imgui.SameLine()
+        if imgui.Button(u8"Сохранить##btn_save_ghtoken") then
+            saveSettings()
+            showToast("GitHub токен успешно сохранён!")
+        end
+        imgui.Spacing()
+        imgui.TextColored(imgui.ImVec4(0.55, 0.58, 0.65, 0.85), u8"Токен хранится локально на вашем ПК (в trpcomm-manager.ini) и не попадает в скрипт.")
     end
 end
 
