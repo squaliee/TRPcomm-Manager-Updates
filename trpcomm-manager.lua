@@ -1,6 +1,6 @@
 -- ============================================================
 --  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.8
+--  Актуальная версия: 2.9
 -- ============================================================
 
 imgui = require 'imgui'
@@ -30,8 +30,7 @@ TG_THREAD_ID = "9"
 --  ДОСТУПЫ К РАЗДЕЛАМ
 -- ============================================================
 local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
-local ACCESS_SECTIONS = { "photographers", "curators", "hr", "actors" }
-local ACCESS_FILENAME_OVERRIDES = { hr = "access_advertising.txt" }
+local ACCESS_SECTIONS = { "photographers", "curators", "advertising", "actors" }
 
 local ACCESS_KEY_ALIASES = {
     roles = "actors",
@@ -40,22 +39,43 @@ local ACCESS_KEY_ALIASES = {
     photographers = "photographers",
     tracker = "curators",
     curators = "curators",
-    hr = "hr",
-    advertising = "hr",
+    hr = "advertising",
+    advertising = "advertising",
 }
 
 access_lists = {} -- access_lists["photographers"] = {"Nick_One", ...} ; nil = ещё не загружен
 
+function performHttpGet(url, args, onSuccess, onError)
+    args = args or { timeout = 12 }
+    local asyncHttpAvailable, asyncHttp = pcall(require, 'asyncHttpRequest')
+    if asyncHttpAvailable and asyncHttp and asyncHttp.request then
+        asyncHttp.request("GET", url, args, function(response)
+            if onSuccess then onSuccess(response) end
+        end, function(err)
+            if onError then onError(err) end
+        end)
+    else
+        lua_thread.create(function()
+            local ok, response = pcall(requests.get, url, args)
+            if ok and response then
+                if onSuccess then onSuccess(response) end
+            else
+                if onError then onError(response) end
+            end
+        end)
+    end
+end
+
 local function loadAccessList(sectionKey)
-    lua_thread.create(function()
-        local filename = ACCESS_FILENAME_OVERRIDES[sectionKey] or ("access_" .. sectionKey .. ".txt")
-        local url = ACCESS_BASE_URL .. filename .. "?cb=" .. os.time()
-        local ok, response = pcall(requests.get, url, { timeout = 15 })
-        if not ok or response.status_code ~= 200 then
+    local filename = "access_" .. sectionKey .. ".txt"
+    local url = ACCESS_BASE_URL .. filename .. "?cb=" .. os.time()
+    performHttpGet(url, { timeout = 12 }, function(response)
+        if not response or response.status_code ~= 200 then
             access_lists[sectionKey] = {}
             if sectionKey == "photographers" then access_lists["photographer"] = {} end
             if sectionKey == "curators" then access_lists["tracker"] = {} end
             if sectionKey == "actors" then access_lists["roles"] = {} end
+            if sectionKey == "advertising" then access_lists["hr"] = {} end
             return
         end
 
@@ -67,6 +87,13 @@ local function loadAccessList(sectionKey)
         if sectionKey == "photographers" then access_lists["photographer"] = list end
         if sectionKey == "curators" then access_lists["tracker"] = list end
         if sectionKey == "actors" then access_lists["roles"] = list end
+        if sectionKey == "advertising" then access_lists["hr"] = list end
+    end, function(err)
+        access_lists[sectionKey] = {}
+        if sectionKey == "photographers" then access_lists["photographer"] = {} end
+        if sectionKey == "curators" then access_lists["tracker"] = {} end
+        if sectionKey == "actors" then access_lists["roles"] = {} end
+        if sectionKey == "advertising" then access_lists["hr"] = {} end
     end)
 end
 
@@ -96,7 +123,7 @@ end
 -- ============================================================
 --  АВТООБНОВЛЕНИЕ
 -- ============================================================
-SCRIPT_VERSION = "2.8"
+SCRIPT_VERSION = "2.9"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -126,9 +153,8 @@ local function normalizeRawUrl(url)
 end
 
 local function checkForUpdates()
-    lua_thread.create(function()
-        local ok, response = pcall(requests.get, UPDATE_MANIFEST_URL .. "?cb=" .. os.time(), { timeout = 15 })
-        if not ok or response.status_code ~= 200 then return end
+    performHttpGet(UPDATE_MANIFEST_URL .. "?cb=" .. os.time(), { timeout = 12 }, function(response)
+        if not response or response.status_code ~= 200 then return end
 
         local lines = {}
         for line in response.text:gmatch("[^\r\n]+") do
@@ -139,43 +165,45 @@ local function checkForUpdates()
         downloadUrl = normalizeRawUrl(downloadUrl)
 
         if isNewerVersion(remoteVersion, SCRIPT_VERSION) then
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
+            lua_thread.create(function()
+                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Найдена новая версия ' .. remoteVersion .. ', скачиваю...', -1)
 
-            local tempPath = "moonloader\\trpcomm_update_tmp.lua"
-            os.remove(tempPath)
-            downloadUrlToFile(downloadUrl .. "?cb=" .. os.time(), tempPath, function() end)
-
-            local lastSize, stableTicks, waitedMs = -1, 0, 0
-            while waitedMs < 20000 and stableTicks < 3 do
-                wait(500)
-                waitedMs = waitedMs + 500
-                local f = io.open(tempPath, "rb")
-                if f then
-                    local size = f:seek("end")
-                    f:close()
-                    stableTicks = (size == lastSize and size > 0) and (stableTicks + 1) or 0
-                    lastSize = size
-                end
-            end
-
-            local fr = io.open(tempPath, "rb")
-            local content = fr and fr:read("*a")
-            if fr then fr:close() end
-
-            local looksValid = content
-                and #content > 5000
-                and content:find("function main()", 1, true)
-                and not content:find("\239\187\191", 1, true)
-
-            if looksValid then
-                local targetPath = thisScript().path
-                os.remove(targetPath)
-                os.rename(tempPath, targetPath)
-                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Скрипт успешно обновлён, перезайдите в игру чтобы применить изменения.', -1)
-            else
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Скачанный файл выглядит битым, обновление отменено — рабочий скрипт не тронут.', -1)
+                local tempPath = "moonloader\\trpcomm_update_tmp.lua"
                 os.remove(tempPath)
-            end
+                downloadUrlToFile(downloadUrl .. "?cb=" .. os.time(), tempPath, function() end)
+
+                local lastSize, stableTicks, waitedMs = -1, 0, 0
+                while waitedMs < 20000 and stableTicks < 3 do
+                    wait(500)
+                    waitedMs = waitedMs + 500
+                    local f = io.open(tempPath, "rb")
+                    if f then
+                        local size = f:seek("end")
+                        f:close()
+                        stableTicks = (size == lastSize and size > 0) and (stableTicks + 1) or 0
+                        lastSize = size
+                    end
+                end
+
+                local fr = io.open(tempPath, "rb")
+                local content = fr and fr:read("*a")
+                if fr then fr:close() end
+
+                local looksValid = content
+                    and #content > 5000
+                    and content:find("function main()", 1, true)
+                    and not content:find("\239\187\191", 1, true)
+
+                if looksValid then
+                    local targetPath = thisScript().path
+                    os.remove(targetPath)
+                    os.rename(tempPath, targetPath)
+                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Скрипт успешно обновлён, перезайдите в игру чтобы применить изменения.', -1)
+                else
+                    sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Скачанный файл выглядит битым, обновление отменено — рабочий скрипт не тронут.', -1)
+                    os.remove(tempPath)
+                end
+            end)
         end
     end)
 end
@@ -646,6 +674,7 @@ local defaultSettings = {
         ad_schedule_to_hour = "21",
         ad_schedule_to_min = "9",
         github_token = "",
+        actors_google_url = "https://script.google.com/macros/s/AKfycbwAb8CpcQgee8dVZobbsZNTA1zDWQsF98B2glHXBurCPjfVwT7vsI_DOavIdQ0XEq1M-Q/exec",
     }
 }
 
@@ -680,6 +709,8 @@ local mainIni = inicfg.load(defaultSettings, CONFIG_PATH) or defaultSettings
 
 github_admin_token_buf = imgui.ImBuffer(u8(mainIni.settings.github_token or ""), 128)
 github_token_show      = imgui.ImBool(false)
+actors_google_url_buf  = imgui.ImBuffer(u8(mainIni.settings.actors_google_url or "https://script.google.com/macros/s/AKfycbwAb8CpcQgee8dVZobbsZNTA1zDWQsF98B2glHXBurCPjfVwT7vsI_DOavIdQ0XEq1M-Q/exec"), 256)
+actors_manual_nick_buf = imgui.ImBuffer("", 32)
 
 ad_interval_minutes = imgui.ImInt(30)
 ad_city_ls  = imgui.ImBool(true)
@@ -756,6 +787,7 @@ acs_rem = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem))
 acs_rem_me = imgui.ImBool(boolFromSetting(mainIni.settings.acs_rem_me))
 remove_armour = imgui.ImBool(boolFromSetting(mainIni.settings.remove_armour))
 delete_textdraw = imgui.ImBool(boolFromSetting(mainIni.settings.delete_textdraw))
+delete_textdraw_was_active = false
 notifications_enabled = imgui.ImBool(mainIni.settings.notifications_enabled == nil or boolFromSetting(mainIni.settings.notifications_enabled))
 
 local function deleteAllAcs(id)
@@ -808,7 +840,11 @@ local function saveSettings()
             ad_schedule_from_min = tostring(ad_schedule_from_min.v),
             ad_schedule_to_hour = tostring(ad_schedule_to_hour.v),
             ad_schedule_to_min = tostring(ad_schedule_to_min.v),
+            ad_limit_enabled = tostring(ad_limit_enabled and ad_limit_enabled.v or false),
+            ad_limit_max = tostring(ad_limit_max and ad_limit_max.v or 10),
+            ad_shuffle_enabled = tostring(ad_shuffle_enabled and ad_shuffle_enabled.v or false),
             github_token = (github_admin_token_buf and u8:decode(github_admin_token_buf.v) or (mainIni.settings and mainIni.settings.github_token) or ""),
+            actors_google_url = (actors_google_url_buf and u8:decode(actors_google_url_buf.v) or (mainIni.settings and mainIni.settings.actors_google_url) or ""),
         }
     }
     inicfg.save(cfg, CONFIG_PATH)
@@ -951,6 +987,86 @@ end
 -- ---------- Автоотправка по очереди ----------
 ad_auto_send = imgui.ImBool(false)
 ad_interval_minutes = imgui.ImInt(tonumber(mainIni.settings.ad_interval_minutes) or 30)
+ad_limit_enabled   = imgui.ImBool(boolFromSetting(mainIni.settings.ad_limit_enabled or "false"))
+ad_limit_max       = imgui.ImInt(tonumber(mainIni.settings.ad_limit_max) or 10)
+ad_limit_sent      = 0
+ad_shuffle_enabled = imgui.ImBool(boolFromSetting(mainIni.settings.ad_shuffle_enabled or "false"))
+ad_session_sent_count = 0
+ad_session_spent   = 0
+
+function safeU8(str)
+    if not str or str == "" then return "" end
+    local ok, res = pcall(u8, str)
+    if ok and res then return res end
+    return tostring(str)
+end
+
+function safeU8Decode(str)
+    if not str or str == "" then return "" end
+    local ok, res = pcall(u8.decode, u8, str)
+    if ok and res then return res end
+    return tostring(str)
+end
+
+function getNextCityName()
+    local ok, cities = pcall(getSelectedCityCodes)
+    if not ok or not cities or #cities == 0 then return u8"Город не выбран" end
+    local cityNames = { ls = "Los Santos", sf = "San Fierro", lv = "Las Venturas" }
+    local nextCode = cities[1]
+    if #cities > 1 then
+        local nextIdx = ((ad_city_rotation_idx or 0) % #cities) + 1
+        nextCode = cities[nextIdx] or cities[1]
+    end
+    if not nextCode then return u8"Город не выбран" end
+    local name = cityNames[nextCode] or tostring(nextCode):upper()
+    return u8(name)
+end
+
+function appendToAdBuffer(buffer, insertText)
+    local curRaw = safeU8Decode(buffer.v)
+    if curRaw ~= "" and not curRaw:match("%s$") and not insertText:match("^[%.%!%?]") then
+        curRaw = curRaw .. " "
+    end
+    local combined = curRaw .. insertText
+    if #combined > AD_TEXT_MAX then
+        combined = combined:sub(1, AD_TEXT_MAX)
+        showToast("Достигнут лимит 119 символов")
+    end
+    buffer.v = safeU8(combined)
+end
+
+function drawAdQuickChips(buffer, tagId)
+    imgui.PushStyleVar(imgui.StyleVar.FrameRounding, 4.0)
+    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.14, 0.18, 0.26, 0.80))
+    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.20, 0.26, 0.38, 0.95))
+    imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.75, 0.80, 0.90, 0.90))
+
+    imgui.TextColored(imgui.ImVec4(0.55, 0.58, 0.65, 0.80), u8"Быстро:")
+    imgui.SameLine()
+
+    if imgui.Button(fa.ICON_MAP_MARKER .. u8" Навигатор##chip_nav_" .. tagId, imgui.ImVec2(0, 22)) then
+        appendToAdBuffer(buffer, "Навигатор: ")
+    end
+    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Вставить 'Навигатор: '") end
+
+    imgui.SameLine()
+    if imgui.Button(fa.ICON_COMMENTING .. u8" Звоните##chip_call_" .. tagId, imgui.ImVec2(0, 22)) then
+        appendToAdBuffer(buffer, "Звоните.")
+    end
+    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Вставить 'Звоните.'") end
+
+    imgui.SameLine()
+    if imgui.Button(u8"+ Точка [.]##chip_dot_" .. tagId, imgui.ImVec2(0, 22)) then
+        local raw = safeU8Decode(buffer.v)
+        if raw ~= "" and not raw:match("[%.%!%?]$") then
+            buffer.v = safeU8(raw .. ".")
+        end
+    end
+    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Поставить точку в конце объявления (если нет)") end
+
+    imgui.PopStyleColor(3)
+    imgui.PopStyleVar()
+end
 
 -- ---------- Расписание автоотправки (автостарт и автостоп) ----------
 ad_schedule_enabled   = imgui.ImBool(boolFromSetting(mainIni.settings.ad_schedule_enabled or "false"))
@@ -1149,7 +1265,7 @@ local function drawAdAddForm(t)
 
     -- 2. Само модальное окно
     if ad_modal_alpha > 0.02 then
-        local modalW, modalH = 470, 205
+        local modalW, modalH = 470, 240
         local liftY = (1.0 - ad_modal_alpha) * 16.0
         imgui.SetNextWindowSize(imgui.ImVec2(modalW, modalH), imgui.Cond.Always)
         imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2 - liftY), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
@@ -1186,7 +1302,7 @@ local function drawAdAddForm(t)
         end
 
         -- Шапка формы: название и живой счётчик символов
-        local curLen = #u8:decode(ad_new_text.v)
+        local curLen = #safeU8Decode(ad_new_text.v)
         local counterCol = curLen > 110 and imgui.ImVec4(0.95, 0.35, 0.35, 1.0)
                         or (curLen > 85 and imgui.ImVec4(0.95, 0.75, 0.20, 1.0) or t.textDim)
 
@@ -1221,6 +1337,9 @@ local function drawAdAddForm(t)
             ad_new_text_ctrlv_was_down = false
         end
 
+        imgui.Spacing()
+        drawAdQuickChips(ad_new_text, "modal")
+
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
         -- Кнопки: Сохранить и Отмена
@@ -1228,7 +1347,7 @@ local function drawAdAddForm(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.buttonHov.x, t.buttonHov.y, t.buttonHov.z, 1.0))
         local confirmLabel = fa.ICON_CHECK .. (isEdit and u8"  Сохранить" or u8"  Создать") .. "##ad_add_confirm"
         if imgui.Button(confirmLabel, imgui.ImVec2(140, 30)) then
-            local raw = u8:decode(ad_new_text.v)
+            local raw = safeU8Decode(ad_new_text.v)
             if raw ~= "" then
                 if isEdit then
                     ads_list[ad_edit_idx].text = raw
@@ -1264,7 +1383,6 @@ local function drawAdAddForm(t)
 end
 
 -- ---------- АВТООТПРАВКА ----------
-ad_auto_send = imgui.ImBool(false)
 ad_next_send_time = 0
 ad_rotation_idx = 0
 
@@ -1312,10 +1430,12 @@ local function advanceAfterNewsPopup()
         wait(300)
         sendToNextPendingCity()
         if not ad_pending and ad_auto_send.v then
-            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
+            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60) + 2
         end
     end)
 end
+
+ad_city_rotation_idx = 0
 
 local function sendAdNow(textRaw, source, eventLabel)
     local cities = getSelectedCityCodes()
@@ -1323,10 +1443,15 @@ local function sendAdNow(textRaw, source, eventLabel)
         sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Выбери хотя бы один город для отправки.', -1)
         return
     end
+    local targetCities = cities
+    if #cities > 1 then
+        ad_city_rotation_idx = ((ad_city_rotation_idx or 0) % #cities) + 1
+        targetCities = { cities[ad_city_rotation_idx] }
+    end
     ad_pending_text = textRaw
     ad_pending_source = source or "manual"
     ad_pending_event_label = eventLabel
-    ad_pending_cities = cities
+    ad_pending_cities = targetCities
     ad_pending_city_pos = 0
     sendToNextPendingCity()
 end
@@ -1336,24 +1461,61 @@ local function incrementAdSentCount(textRaw)
         if ad.text == textRaw then
             ad.sentCount = (ad.sentCount or 0) + 1
             saveAdsList()
-            return
+            break
         end
     end
-    -- текст не найден в списке (например, разовая ручная отправка не из списка) — просто не считаем
+    ad_limit_sent = (ad_limit_sent or 0) + 1
+    ad_session_sent_count = (ad_session_sent_count or 0) + 1
+    local cost = math.max(20, #textRaw * 2)
+    ad_session_spent = (ad_session_spent or 0) + cost
+
+    if ad_limit_enabled.v and ad_limit_sent >= ad_limit_max.v then
+        ad_auto_send.v = false
+        saveSettings()
+        showToast("Лимит отправок (" .. ad_limit_max.v .. ") достигнут. Автоотправка завершена!")
+        sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Лимит отправок ({5B85C4}' .. ad_limit_max.v .. '{FFFFFF}) достигнут. Циклическая отправка остановлена.', -1)
+    end
 end
 
 local function triggerNextAdSend()
     if #ads_list == 0 then return end
-    ad_next_send_time = os.time() + (ad_interval_minutes.v * 60)
-    for i = 1, #ads_list do
-        local idx = ((ad_rotation_idx + i - 1) % #ads_list) + 1
-        local ad = ads_list[idx]
-        if ad.enabled then
-            ad_rotation_idx = idx
-            sendAdNow(ad.text, "queue")
-            return
+    if ad_limit_enabled.v and ad_limit_sent >= ad_limit_max.v then
+        ad_auto_send.v = false
+        saveSettings()
+        showToast("Лимит отправок исчерпан. Автоотправка остановлена.")
+        return
+    end
+
+    ad_next_send_time = os.time() + (ad_interval_minutes.v * 60) + 2
+
+    local enabledIndices = {}
+    for i, ad in ipairs(ads_list) do
+        if ad.enabled then enabledIndices[#enabledIndices + 1] = i end
+    end
+    if #enabledIndices == 0 then return end
+
+    local targetIdx = enabledIndices[1]
+    if ad_shuffle_enabled.v and #enabledIndices > 1 then
+        local choices = {}
+        for _, idx in ipairs(enabledIndices) do
+            if idx ~= ad_rotation_idx or #enabledIndices == 1 then
+                choices[#choices + 1] = idx
+            end
+        end
+        if #choices == 0 then choices = enabledIndices end
+        targetIdx = choices[math.random(1, #choices)]
+    else
+        for i = 1, #ads_list do
+            local idx = ((ad_rotation_idx + i - 1) % #ads_list) + 1
+            if ads_list[idx].enabled then
+                targetIdx = idx
+                break
+            end
         end
     end
+
+    ad_rotation_idx = targetIdx
+    sendAdNow(ads_list[targetIdx].text, "queue")
 end
 
 local hr_subtab = "ads" -- "ads" | "messages"
@@ -1400,15 +1562,16 @@ end
 function fetchAdRestrictions(force)
     if ad_restrictions_loading then return end
     local now = os.time()
-    if not force and ad_restrictions_loaded and (now - ad_restrictions_last_fetch < 45) then
+    if not force and (now - ad_restrictions_last_fetch < 60) then
         return
     end
     ad_restrictions_loading = true
-    lua_thread.create(function()
-        local url = AD_RESTRICTIONS_RAW_URL .. "?cb=" .. os.time()
-        local ok, response = pcall(requests.get, url, { timeout = 10 })
+    ad_restrictions_last_fetch = now
+    local url = AD_RESTRICTIONS_RAW_URL .. "?cb=" .. os.time()
+    performHttpGet(url, { timeout = 10 }, function(response)
         ad_restrictions_loading = false
-        if ok and response.status_code == 200 then
+        ad_restrictions_last_fetch = os.time()
+        if response and response.status_code == 200 then
             local ok_json, data = pcall(cjson.decode, response.text)
             if ok_json and type(data) == "table" then
                 ad_restrictions.auto_send_disabled = (data.auto_send_disabled == true)
@@ -1417,7 +1580,6 @@ function fetchAdRestrictions(force)
                 end
                 ad_restrictions.updated_by = data.updated_by or "None"
                 ad_restrictions_loaded = true
-                ad_restrictions_last_fetch = os.time()
 
                 if ad_restrictions.auto_send_disabled and ad_auto_send.v then
                     ad_auto_send.v = false
@@ -1437,6 +1599,9 @@ function fetchAdRestrictions(force)
                 end
             end
         end
+    end, function(err)
+        ad_restrictions_loading = false
+        ad_restrictions_last_fetch = os.time()
     end)
 end
 
@@ -1555,8 +1720,28 @@ local function drawHRAdsTab(t)
     imgui.SameLine()
     imgui.TextColored(t.textDim, string.format(u8"(активно %d из %d)", activeCount, #ads_list))
 
-    imgui.SameLine(imgui.GetWindowWidth() - 145)
-    if imgui.Button(fa.ICON_PLUS .. u8" Добавить##ad_add_open", imgui.ImVec2(130, 26)) then
+    imgui.SameLine(imgui.GetWindowWidth() - 440)
+    if imgui.Button(fa.ICON_CHECK .. u8" Вкл все##ad_all_on", imgui.ImVec2(80, 26)) then
+        for _, a in ipairs(ads_list) do a.enabled = true end
+        saveAdsList()
+        showToast("Все объявления включены")
+    end
+    imgui.SameLine()
+    if imgui.Button(fa.ICON_TIMES .. u8" Выкл все##ad_all_off", imgui.ImVec2(85, 26)) then
+        for _, a in ipairs(ads_list) do a.enabled = false end
+        saveAdsList()
+        showToast("Все объявления выключены")
+    end
+    imgui.SameLine()
+    if imgui.Checkbox(fa.ICON_RANDOM .. u8" Shuffle##ad_shuffle", ad_shuffle_enabled) then
+        saveSettings()
+    end
+    if imgui.IsItemHovered() then
+        imgui.SetTooltip(u8"Случайный порядок отправки (Shuffle)\nвместо строгой ротации по кругу")
+    end
+
+    imgui.SameLine(imgui.GetWindowWidth() - 125)
+    if imgui.Button(fa.ICON_PLUS .. u8" Добавить##ad_add_open", imgui.ImVec2(110, 26)) then
         ad_edit_idx = nil
         ad_new_text.v = ""
         ad_add_form_open = true
@@ -1608,7 +1793,7 @@ local function drawHRAdsTab(t)
             local rowW = imgui.GetWindowWidth() - 30
 
             -- Вычисляем высоту плашки под полный текст объявления
-            local textUtf8 = u8(ad.text)
+            local textUtf8 = safeU8(ad.text)
             local textMaxW = rowW - 250
             local textSize = imgui.CalcTextSize(textUtf8)
             local isMultiLine = textSize.x > textMaxW
@@ -1619,14 +1804,14 @@ local function drawHRAdsTab(t)
             local rowBgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.13, 0.17, 0.25, bgAlpha))
             dl:AddRectFilled(p, imgui.ImVec2(p.x + rowW, p.y + rowH), rowBgCol, 7.0)
 
-            -- 2. Левый акцентный цветной маркер
+            -- 2. Левый акцентный цветной маркер (без скругления тонкой полоски)
             local markerCol = ad.enabled and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.25, 0.85, 0.45, 0.95))
                                           or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.50, 0.50, 0.55, 0.50))
-            dl:AddRectFilled(p, imgui.ImVec2(p.x + 4.0, p.y + rowH), markerCol, 7.0)
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + 4.0, p.y + rowH), markerCol)
 
             -- 3. Тонкая рамка карточки
             local borderCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.24, 0.32, 0.46, 0.50))
-            dl:AddRect(p, imgui.ImVec2(p.x + rowW, p.y + rowH), borderCol, 7.0, 15, 1.0)
+            dl:AddRect(p, imgui.ImVec2(p.x + rowW, p.y + rowH), borderCol, 7.0)
 
             -- 4. Перехват ПКМ по всей области карточки
             local mp = imgui.GetMousePos()
@@ -1635,7 +1820,7 @@ local function drawHRAdsTab(t)
                 imgui.OpenPopup("##ad_ctx_" .. i)
             end
 
-            -- 5. Кликабельный кружок статуса (ВКЛ / ВЫКЛ при нажатии)
+            -- 5. Кликабельный кружочек статуса (ВКЛ / ВЫКЛ при нажатии)
             local circleY = p.y + (rowH - 24) * 0.5
             imgui.SetCursorScreenPos(imgui.ImVec2(p.x + 10, circleY))
             imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0, 0, 0, 0))
@@ -1651,7 +1836,7 @@ local function drawHRAdsTab(t)
             end
             imgui.PopStyleColor(4)
             if imgui.IsItemHovered() then
-                imgui.SetTooltip(ad.enabled and u8"Активно (нажмите, чтобы деактивировать)" or u8"Отключено (нажмите, чтобы активировать)")
+                imgui.SetTooltip("%s", ad.enabled and u8"Активно (нажмите, чтобы деактивировать)" or u8"Отключено (нажмите, чтобы активировать)")
             end
 
             -- 6. Полный текст объявления (без обрезки)
@@ -1663,7 +1848,8 @@ local function drawHRAdsTab(t)
             imgui.PopTextWrapPos()
 
             if imgui.IsItemHovered() then
-                imgui.SetTooltip(u8"Текст: " .. textUtf8 .. u8"\nОтправлено: " .. (ad.sentCount or 0) .. u8" раз\n\n[Клик по кружку] — вкл/выкл\n[ПКМ по строке] — меню опций")
+                local tipText = u8"Текст: " .. textUtf8 .. string.format(u8"\nОтправлено: %d раз\n\n[Клик по кружку] - вкл/выкл\n[ПКМ по строке] - меню опций", ad.sentCount or 0)
+                imgui.SetTooltip("%s", tipText)
             end
 
             -- 7. Правые элементы управления (по центру строки)
@@ -1734,7 +1920,7 @@ local function drawHRAdsTab(t)
     -- ============================================================
     --  КАРТОЧКА 2: БЫСТРАЯ ОТПРАВКА
     -- ============================================================
-    local curCharLen = #u8:decode(ad_text.v)
+    local curCharLen = #safeU8Decode(ad_text.v)
     local charColor = curCharLen > 110 and imgui.ImVec4(0.95, 0.35, 0.35, 1.0)
                    or (curCharLen > 85 and imgui.ImVec4(0.95, 0.75, 0.20, 1.0) or t.textDim)
 
@@ -1761,6 +1947,9 @@ local function drawHRAdsTab(t)
     else
         ad_text_ctrlv_was_down = false
     end
+
+    imgui.Spacing()
+    drawAdQuickChips(ad_text, "quick")
 
     imgui.Spacing()
     imgui.TextColored(t.textDim, u8"Города вещания:")
@@ -1818,7 +2007,7 @@ local function drawHRAdsTab(t)
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.48, 0.88, 1.0))
         imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.58, 0.98, 1.0))
         if imgui.Button(fa.ICON_BULLHORN .. u8"  Отправить объявление сейчас##ad_send", imgui.ImVec2(260, 32)) then
-            local textRaw = u8:decode(ad_text.v)
+            local textRaw = safeU8Decode(ad_text.v)
             if textRaw == "" then
                 sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала введи текст объявления.', -1)
             else
@@ -1829,9 +2018,6 @@ local function drawHRAdsTab(t)
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    -- Фоновая проверка актуальных ограничений
-    fetchAdRestrictions(false)
 
     -- ============================================================
     --  КАРТОЧКА 3: АВТОМАТИЗАЦИЯ И РАСПИСАНИЕ
@@ -1867,7 +2053,12 @@ local function drawHRAdsTab(t)
         imgui.TextColored(imgui.ImVec4(0.95, 0.35, 0.35, 1.0), fa.ICON_BAN .. u8" ЗАБЛОКИРОВАНО РУКОВОДСТВОМ")
     elseif ad_auto_send.v then
         local secLeft = math.max(0, ad_next_send_time - os.time())
-        imgui.TextColored(imgui.ImVec4(0.30, 0.88, 0.45, 1.0), fa.ICON_CHECK_CIRCLE .. u8" АКТИВНО (" .. formatMMSS(secLeft) .. ")")
+        local statusTxt = fa.ICON_CHECK_CIRCLE .. u8" АКТИВНО (" .. formatMMSS(secLeft) .. u8")  |  " .. getNextCityName()
+        if ad_limit_enabled.v then
+            local left = math.max(0, ad_limit_max.v - ad_limit_sent)
+            statusTxt = statusTxt .. string.format(u8"  |  Осталось: %d", left)
+        end
+        imgui.TextColored(imgui.ImVec4(0.30, 0.88, 0.45, 1.0), statusTxt)
     else
         imgui.TextColored(t.textDim, fa.ICON_MINUS_CIRCLE .. u8" ВЫКЛЮЧЕНО")
     end
@@ -1886,6 +2077,9 @@ local function drawHRAdsTab(t)
     else
         if imgui.Checkbox(u8"Включить циклическую отправку всех объявлений из списка", ad_auto_send) then
             if ad_auto_send.v then
+                if ad_limit_enabled.v and ad_limit_sent >= ad_limit_max.v then
+                    ad_limit_sent = 0
+                end
                 if ad_schedule_enabled.v and not isServerTimeInSchedule() then
                     showToast("Внимание: сейчас вне расписания (отправка начнётся по времени)")
                 else
@@ -1932,7 +2126,7 @@ local function drawHRAdsTab(t)
                 ad_interval_minutes.v = minutes
                 saveSettings()
                 if ad_auto_send.v then
-                    ad_next_send_time = os.time() + (minutes * 60)
+                    ad_next_send_time = os.time() + (minutes * 60) + 2
                 end
             end
         end
@@ -1980,6 +2174,52 @@ local function drawHRAdsTab(t)
 
         if i < #intervalPresets then imgui.SameLine() end
     end
+
+    imgui.Spacing()
+    imgui.AlignTextToFramePadding()
+    if imgui.Checkbox(u8"Остановить после##ad_limit_cb", ad_limit_enabled) then
+        saveSettings()
+    end
+    imgui.SameLine()
+
+    imgui.PushItemWidth(44)
+    if imgui.InputInt("##ad_limit_val", ad_limit_max, 0, 0) then
+        if ad_limit_max.v < 1 then ad_limit_max.v = 1 end
+        if ad_limit_max.v > 9999 then ad_limit_max.v = 9999 end
+        saveSettings()
+    end
+    imgui.PopItemWidth()
+    imgui.SameLine()
+
+    local limBtnW, limBtnH = 22, 22
+    if imgui.Button("-##ad_limit_minus", imgui.ImVec2(limBtnW, limBtnH)) then
+        if ad_limit_max.v > 1 then
+            ad_limit_max.v = ad_limit_max.v - 1
+            saveSettings()
+        end
+    end
+    imgui.SameLine()
+    if imgui.Button("+##ad_limit_plus", imgui.ImVec2(limBtnW, limBtnH)) then
+        if ad_limit_max.v < 9999 then
+            ad_limit_max.v = ad_limit_max.v + 1
+            saveSettings()
+        end
+    end
+    imgui.SameLine()
+
+    local limitInfo = u8"отправок"
+    if ad_limit_enabled.v then
+        limitInfo = string.format(u8"отправок (отправлено: %d из %d)", ad_limit_sent, ad_limit_max.v)
+    end
+    imgui.Text(limitInfo)
+    if ad_limit_sent > 0 then
+        imgui.SameLine()
+        if imgui.SmallButton(u8"Сбросить##ad_reset_limit") then
+            ad_limit_sent = 0
+        end
+    end
+    imgui.SameLine(imgui.GetWindowWidth() - 250)
+    imgui.TextColored(t.textDim, string.format(u8"За сессию: %d отпр. (~$%d)", ad_session_sent_count or 0, ad_session_spent or 0))
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
@@ -2175,31 +2415,23 @@ local function fetchCalendarEvents()
     end
 
     calendar_loading = true
-    lua_thread.create(function()
-        local timeMin = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 90 * 86400) -- 90 дней назад
-        local url = "https://www.googleapis.com/calendar/v3/calendars/"
-            .. GCAL_ID:gsub(":", "%%3A")
-            .. "/events?key=" .. GCAL_API_KEY
-            .. "&singleEvents=true&orderBy=startTime&timeMin=" .. timeMin
-            .. "&maxResults=250"
+    local timeMin = os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() - 90 * 86400) -- 90 дней назад
+    local url = "https://www.googleapis.com/calendar/v3/calendars/"
+        .. GCAL_ID:gsub(":", "%%3A")
+        .. "/events?key=" .. GCAL_API_KEY
+        .. "&singleEvents=true&orderBy=startTime&timeMin=" .. timeMin
+        .. "&maxResults=250"
 
-        local ok, response = pcall(requests.get, url, { timeout = 15 })
+    performHttpGet(url, { timeout = 15 }, function(response)
         calendar_loading = false
         calendar_loaded_once = true
 
-        if not ok then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка запроса к календарю: ' .. tostring(response), -1)
+        if not response or response.status_code ~= 200 then
             return
         end
 
-        if response.status_code ~= 200 then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Google Calendar вернул ошибку ' .. tostring(response.status_code) .. ': ' .. tostring(response.text), -1)
-            return
-        end
-
-        local data = cjson.decode(response.text)
-        if not data or not data.items then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось разобрать ответ календаря.', -1)
+        local ok_json, data = pcall(cjson.decode, response.text)
+        if not ok_json or not data or not data.items then
             return
         end
 
@@ -2273,6 +2505,8 @@ local function fetchCalendarEvents()
             upcoming_event_timestamp = nil
         end
 
+    end, function(err)
+        calendar_loading = false
     end)
 end
 
@@ -2397,15 +2631,17 @@ end
 local function getAdsStatsSummary()
     local totalSent = 0
     local topAd, topCount = nil, 0
+    local totalSpent = 0
     for _, ad in ipairs(ads_list) do
         local c = ad.sentCount or 0
         totalSent = totalSent + c
+        totalSpent = totalSpent + (c * math.max(20, #ad.text * 2))
         if c > topCount then
             topCount = c
             topAd = ad
         end
     end
-    return totalSent, topAd, topCount
+    return totalSent, topAd, topCount, totalSpent
 end
 
 local function drawAnalyticsListTab(t)
@@ -2760,10 +2996,14 @@ local function drawHRAnalyticsTab(t)
     imgui.TextColored(t.accent, u8"Аналитика по объявлениям")
     imgui.Spacing()
 
-    local totalSent, topAd, topCount = getAdsStatsSummary()
+    local totalSent, topAd, topCount, totalSpent = getAdsStatsSummary()
     imgui.TextColored(t.textDim, u8"Всего отправлено объявлений: ")
     imgui.SameLine()
     imgui.TextColored(t.accent, tostring(totalSent))
+    imgui.SameLine(imgui.GetWindowWidth() - 250)
+    imgui.TextColored(t.textDim, u8"Затраты (оценка): ")
+    imgui.SameLine()
+    imgui.TextColored(imgui.ImVec4(0.35, 0.85, 0.45, 1.0), string.format("$%d", totalSpent))
 
     if topAd then
         imgui.TextColored(t.textDim, u8"Самое частое: ")
@@ -2935,11 +3175,9 @@ local function drawHomeTab(t)
         local logoSize = 96
         imgui.SetCursorPos(imgui.ImVec2(centerX - logoSize / 2, haloY + (haloSize - logoSize) / 2))
         imgui.Image(logoTex, imgui.ImVec2(logoSize, logoSize))
-    elseif fa_font_large then
-        imgui.PushFont(fa_font_large)
-        imgui.SetCursorPos(imgui.ImVec2(centerX - 42, haloY + 20))
+    else
+        imgui.SetCursorPos(imgui.ImVec2(centerX - 16, haloY + 45))
         imgui.TextColored(t.accent, fa.ICON_USER)
-        imgui.PopFont()
     end
 
     imgui.SetCursorPosY(haloY + haloSize)
@@ -3453,24 +3691,12 @@ builtin_roles_loading = false
 
 local function fetchBuiltinRoleTemplates()
     builtin_roles_loading = true
-    lua_thread.create(function()
-        local ok, response = pcall(requests.get, ROLES_GITHUB_URL, { timeout = 15 })
+    performHttpGet(ROLES_GITHUB_URL, { timeout = 15 }, function(response)
         builtin_roles_loading = false
+        if not response or response.status_code ~= 200 then return end
 
-        if not ok then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось загрузить готовые шаблоны ролей: ' .. tostring(response), -1)
-            return
-        end
-        if response.status_code ~= 200 then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}GitHub вернул ошибку ' .. tostring(response.status_code) .. ' при загрузке шаблонов ролей.', -1)
-            return
-        end
-
-        local data = cjson.decode(response.text)
-        if not data then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Не удалось разобрать roles.json (некорректный JSON).', -1)
-            return
-        end
+        local ok_json, data = pcall(cjson.decode, response.text)
+        if not ok_json or not data then return end
 
         local parsed = {}
         for _, item in ipairs(data) do
@@ -3487,9 +3713,9 @@ local function fetchBuiltinRoleTemplates()
 
         if #parsed > 0 then
             builtinRoleTemplates = parsed
-        else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}roles.json пустой или в неправильном формате — оставил старые шаблоны.', -1)
         end
+    end, function(err)
+        builtin_roles_loading = false
     end)
 end
 
@@ -3789,191 +4015,294 @@ end
 -- ============================================================
 
 local function drawSettingsTab(t)
-    imgui.TextColored(t.accent, u8"НАСТРОЙКИ")
-    imgui.Separator()
-    imgui.Spacing()
+    local colW = (imgui.GetWindowWidth() - 30) * 0.5
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.75)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+    local pillDefaultBg = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.85)
 
-    -- ---------- Бинд на открытие меню ----------
-    imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8" Открытие меню")
-    imgui.TextColored(t.textDim, u8"Текущая комбинация:")
-    imgui.SameLine()
-    imgui.Text(hotkey_display.v)
+    -- ============================================================
+    --  ЛЕВАЯ КОЛОНКА (КЛАВИШИ, ТЕМА, АДМИН-ТОКЕН)
+    -- ============================================================
+    imgui.BeginChild("SettingsColLeft", imgui.ImVec2(colW, 0), false)
 
-    if waiting_for_key then
-        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"Нажмите клавишу или комбинацию...")
-    else
-        if imgui.Button(u8"Изменить##hotkey_change", imgui.ImVec2(180, 25)) then
-            waiting_for_key2 = false
-            waiting_for_key = true
-        end
-        imgui.SameLine()
-        if imgui.Button(u8"Сброс на Alt + P##hotkey_reset", imgui.ImVec2(180, 25)) then
-            hotkey_alt.v   = true
-            hotkey_ctrl.v  = false
-            hotkey_shift.v = false
-            hotkey_key.v   = 0x50
-            updateHotkeyDisplay()
-            saveSettings()
-        end
-    end
+        -- 1. Карточка горячих клавиш
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("card_hotkeys", imgui.ImVec2(0, 195), true)
 
-    if waiting_for_key then
-        for vk = 1, 254 do
-            if isKeyDown(vk) and vk ~= 0x12 and vk ~= 0x11 and vk ~= 0x10
-               and vk ~= 0xA0 and vk ~= 0xA1 and vk ~= 0xA2 and vk ~= 0xA3 and vk ~= 0xA4 and vk ~= 0xA5 then
-                hotkey_key.v   = vk
-                hotkey_alt.v   = isKeyDown(0x12) or isKeyDown(0xA4) or isKeyDown(0xA5)
-                hotkey_ctrl.v  = isKeyDown(0x11) or isKeyDown(0xA2) or isKeyDown(0xA3)
-                hotkey_shift.v = isKeyDown(0x10) or isKeyDown(0xA0) or isKeyDown(0xA1)
-                waiting_for_key = false
-                updateHotkeyDisplay()
-                saveSettings()
-                break
+            imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8"  Управление и клавиши")
+            imgui.Spacing()
+
+            -- Главное меню
+            imgui.TextColored(t.text, u8"Главное меню TRPcomm:")
+            local isHk1Wait = waiting_for_key
+            local hk1Col = isHk1Wait and imgui.ImVec4(0.95, 0.65, 0.20, 1.0) or t.accent
+            local hk1Bg = isHk1Wait and imgui.ImVec4(0.35, 0.25, 0.10, 0.85) or pillDefaultBg
+            imgui.PushStyleColor(imgui.Col.Button, hk1Bg)
+            imgui.PushStyleColor(imgui.Col.Text, hk1Col)
+            imgui.Button((isHk1Wait and (fa.ICON_SPINNER .. u8" Нажмите клавишу...") or hotkey_display.v) .. "##hk1_disp", imgui.ImVec2(175, 25))
+            imgui.PopStyleColor(2)
+
+            imgui.SameLine()
+            if isHk1Wait then
+                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk1_cancel", imgui.ImVec2(80, 25)) then
+                    waiting_for_key = false
+                end
+            else
+                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk1_change", imgui.ImVec2(80, 25)) then
+                    waiting_for_key2 = false
+                    waiting_for_key = true
+                end
+                imgui.SameLine()
+                if imgui.Button(fa.ICON_UNDO .. u8" Сброс##hk1_reset", imgui.ImVec2(75, 25)) then
+                    hotkey_alt.v   = true
+                    hotkey_ctrl.v  = false
+                    hotkey_shift.v = false
+                    hotkey_key.v   = 0x50
+                    updateHotkeyDisplay()
+                    saveSettings()
+                end
+                if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Сбросить клавишу меню на Alt + P") end
             end
-        end
-    end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    -- ---------- Бинд на подключение к рации ----------
-    imgui.TextColored(t.accent, fa.ICON_WIFI .. u8" Подключение к рации + телепорт на локацию")
-    imgui.TextColored(t.textDim, u8"Текущая комбинация:")
-    imgui.SameLine()
-    imgui.Text(hotkey2_display.v)
-
-    if waiting_for_key2 then
-        imgui.TextColored(imgui.ImVec4(1, 0.6, 0.2, 1), u8"Нажмите клавишу или комбинацию...")
-    else
-        if imgui.Button(u8"Изменить##hotkey2_change", imgui.ImVec2(180, 25)) then
-            waiting_for_key = false
-            waiting_for_key2 = true
-        end
-        imgui.SameLine()
-        if imgui.Button(u8"Убрать бинд##hotkey2_clear", imgui.ImVec2(180, 25)) then
-            hotkey2_alt.v   = false
-            hotkey2_ctrl.v  = false
-            hotkey2_shift.v = false
-            hotkey2_key.v   = 0
-            updateHotkey2Display()
-            saveSettings()
-        end
-    end
-
-    if waiting_for_key2 then
-        for vk = 1, 254 do
-            if isKeyDown(vk) and vk ~= 0x12 and vk ~= 0x11 and vk ~= 0x10
-               and vk ~= 0xA0 and vk ~= 0xA1 and vk ~= 0xA2 and vk ~= 0xA3 and vk ~= 0xA4 and vk ~= 0xA5 then
-                hotkey2_key.v   = vk
-                hotkey2_alt.v   = isKeyDown(0x12) or isKeyDown(0xA4) or isKeyDown(0xA5)
-                hotkey2_ctrl.v  = isKeyDown(0x11) or isKeyDown(0xA2) or isKeyDown(0xA3)
-                hotkey2_shift.v = isKeyDown(0x10) or isKeyDown(0xA0) or isKeyDown(0xA1)
-                waiting_for_key2 = false
-                updateHotkey2Display()
-                saveSettings()
-                break
+            if waiting_for_key then
+                for vk = 1, 254 do
+                    if isKeyDown(vk) and vk ~= 0x12 and vk ~= 0x11 and vk ~= 0x10
+                       and vk ~= 0xA0 and vk ~= 0xA1 and vk ~= 0xA2 and vk ~= 0xA3 and vk ~= 0xA4 and vk ~= 0xA5 then
+                        hotkey_key.v   = vk
+                        hotkey_alt.v   = isKeyDown(0x12) or isKeyDown(0xA4) or isKeyDown(0xA5)
+                        hotkey_ctrl.v  = isKeyDown(0x11) or isKeyDown(0xA2) or isKeyDown(0xA3)
+                        hotkey_shift.v = isKeyDown(0x10) or isKeyDown(0xA0) or isKeyDown(0xA1)
+                        waiting_for_key = false
+                        updateHotkeyDisplay()
+                        saveSettings()
+                        break
+                    end
+                end
             end
-        end
-    end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    -- ---------- Тема оформления ----------
-    imgui.TextColored(t.accent, fa.ICON_PAINT_BRUSH .. u8" Тема оформления")
-    local theme_names = {}
-    for _, th in ipairs(themes) do theme_names[#theme_names + 1] = th.name end
-    if imgui.Combo("##theme_select", selected_theme_combo, theme_names) then
-        currentThemeIdx = selected_theme_combo.v + 1
-        saveSettings()
-    end
+            -- Радио + Мегафон
+            imgui.TextColored(t.text, u8"Слушать радио + мегафон:")
+            local isHk2Wait = waiting_for_key2
+            local hk2Text = hotkey2_key.v == 0 and u8"Не назначено" or hotkey2_display.v
+            local hk2Col = isHk2Wait and imgui.ImVec4(0.95, 0.65, 0.20, 1.0) or (hotkey2_key.v == 0 and t.textDim or t.accent)
+            local hk2Bg = isHk2Wait and imgui.ImVec4(0.35, 0.25, 0.10, 0.85) or pillDefaultBg
+            imgui.PushStyleColor(imgui.Col.Button, hk2Bg)
+            imgui.PushStyleColor(imgui.Col.Text, hk2Col)
+            imgui.Button((isHk2Wait and (fa.ICON_SPINNER .. u8" Нажмите клавишу...") or hk2Text) .. "##hk2_disp", imgui.ImVec2(175, 25))
+            imgui.PopStyleColor(2)
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    -- ---------- Рация ----------
-    imgui.TextColored(t.accent, fa.ICON_WRENCH .. u8" Рация")
-    imgui.TextColored(t.textDim, u8"Частота рации:")
-    imgui.PushItemWidth(200)
-    if imgui.InputText("##radio_freq", radio_freq) then
-        saveSettings()
-    end
-    imgui.PopItemWidth()
-
-    imgui.TextColored(t.textDim, u8"Пароль рации:")
-    imgui.PushItemWidth(200)
-    if imgui.InputText("##radio_pass", radio_pass) then
-        saveSettings()
-    end
-    imgui.PopItemWidth()
-
-    imgui.TextColored(t.textDim, u8"Пароль к телепорту:")
-    imgui.PushItemWidth(200)
-    if imgui.InputText("##teleport_pass", teleport_pass) then
-        saveSettings()
-    end
-    imgui.PopItemWidth()
-
-imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-    imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Дополнительные настройки")
-
-    if imgui.Checkbox(u8"Отключить аксессуары игроков", acs_rem) then
-        saveSettings()
-        if acs_rem.v then
-            for k, v in ipairs(getAllChars()) do
-                local res, id = sampGetPlayerIdByCharHandle(v)
-                if v ~= 1 and res and not sampIsPlayerNpc(id) then deleteAllAcs(id) end
+            imgui.SameLine()
+            if isHk2Wait then
+                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk2_cancel", imgui.ImVec2(80, 25)) then
+                    waiting_for_key2 = false
+                end
+            else
+                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk2_change", imgui.ImVec2(80, 25)) then
+                    waiting_for_key = false
+                    waiting_for_key2 = true
+                end
+                imgui.SameLine()
+                if imgui.Button(fa.ICON_TRASH .. u8" Сброс##hk2_clear", imgui.ImVec2(75, 25)) then
+                    hotkey2_alt.v   = false
+                    hotkey2_ctrl.v  = false
+                    hotkey2_shift.v = false
+                    hotkey2_key.v   = 0
+                    updateHotkey2Display()
+                    saveSettings()
+                end
+                if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Очистить горячую клавишу радио") end
             end
-        else
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Требуется перезагрузка зоны стрима (войдите в интерьер и выйдите)', -1)
-        end
-    end
-    
-    if imgui.Checkbox(u8"Отключить свои аксессуары", acs_rem_me) then
-        saveSettings()
-        if acs_rem_me.v then
-            local res, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
-            if res then deleteAllAcs(id) end
-        else
-            sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Требуется снять и заново надеть все аксессуары', -1)
-        end
-    end
-    
-    if imgui.Checkbox(u8"Отключить модели бронежилетов", remove_armour) then
-        saveSettings()
-    end
-    
-    if imgui.Checkbox(u8"Убрать надпись gta-trinity.com", delete_textdraw) then
-        saveSettings()
-    end
 
-    if imgui.Checkbox(u8"Показывать экранные уведомления в углу экрана", notifications_enabled) then
-        saveSettings()
-    end
+            if waiting_for_key2 then
+                for vk = 1, 254 do
+                    if isKeyDown(vk) and vk ~= 0x12 and vk ~= 0x11 and vk ~= 0x10
+                       and vk ~= 0xA0 and vk ~= 0xA1 and vk ~= 0xA2 and vk ~= 0xA3 and vk ~= 0xA4 and vk ~= 0xA5 then
+                        hotkey2_key.v   = vk
+                        hotkey2_alt.v   = isKeyDown(0x12) or isKeyDown(0xA4) or isKeyDown(0xA5)
+                        hotkey2_ctrl.v  = isKeyDown(0x11) or isKeyDown(0xA2) or isKeyDown(0xA3)
+                        hotkey2_shift.v = isKeyDown(0x10) or isKeyDown(0xA0) or isKeyDown(0xA1)
+                        waiting_for_key2 = false
+                        updateHotkey2Display()
+                        saveSettings()
+                        break
+                    end
+                end
+            end
 
-    if isAdManager() then
-        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-        imgui.TextColored(t.accent, fa.ICON_KEY .. u8" Управление GitHub API (Руководство)")
-        imgui.TextColored(t.textDim, u8"GitHub Personal Access Token (для синхронизации ограничений рекламы):")
-        imgui.PushItemWidth(360)
-        local inputFlags = github_token_show.v and 0 or (imgui.InputTextFlags.Password or 32768)
-        if imgui.InputText("##github_token_field", github_admin_token_buf, inputFlags) then
-            saveSettings()
-        end
-        imgui.PopItemWidth()
-        imgui.SameLine()
-        if imgui.Checkbox(u8"Показать##gh_show_tok", github_token_show) then
-            -- переключение отображения
-        end
-        imgui.SameLine()
-        if imgui.Button(u8"Сохранить##btn_save_ghtoken") then
-            saveSettings()
-            showToast("GitHub токен успешно сохранён!")
-        end
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
         imgui.Spacing()
-        imgui.TextColored(imgui.ImVec4(0.55, 0.58, 0.65, 0.85), u8"Токен хранится локально на вашем ПК (в trpcomm-manager.ini) и не попадает в скрипт.")
-    end
+
+        -- 2. Карточка оформления интерфейса (без палитры)
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("card_theme", imgui.ImVec2(0, 85), true)
+
+            imgui.TextColored(t.accent, fa.ICON_PAINT_BRUSH .. u8"  Оформление интерфейса")
+            imgui.Spacing()
+
+            imgui.TextColored(t.textDim, u8"Тема оформления:")
+            local theme_names = {}
+            for _, th in ipairs(themes) do theme_names[#theme_names + 1] = th.name end
+            imgui.PushItemWidth(-1)
+            if imgui.Combo("##theme_select", selected_theme_combo, theme_names) then
+                currentThemeIdx = selected_theme_combo.v + 1
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+        -- 3. Карточка GitHub API (Только руководство)
+        if isAdManager() then
+            imgui.Spacing()
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("card_github", imgui.ImVec2(0, 135), true)
+
+                imgui.TextColored(t.accent, fa.ICON_GITHUB .. u8"  GitHub API Token (Руководство)")
+                imgui.Spacing()
+                imgui.TextColored(t.textDim, u8"Синхронизация глобальных ограничений:")
+
+                local ghW = colW - 145
+                imgui.PushItemWidth(math.max(120, ghW))
+                local inputFlags = github_token_show.v and 0 or (imgui.InputTextFlags.Password or 32768)
+                if imgui.InputText("##github_token_field", github_admin_token_buf, inputFlags) then
+                    saveSettings()
+                end
+                imgui.PopItemWidth()
+
+                imgui.SameLine()
+                local eyeIcon = github_token_show.v and fa.ICON_EYE_SLASH or fa.ICON_EYE
+                if imgui.Button(eyeIcon .. "##gh_show_tok", imgui.ImVec2(28, 25)) then
+                    github_token_show.v = not github_token_show.v
+                end
+                if imgui.IsItemHovered() then imgui.SetTooltip("%s", github_token_show.v and u8"Скрыть токен" or u8"Показать токен") end
+
+                imgui.SameLine()
+                if imgui.Button(fa.ICON_CHECK .. u8" Сохранить##btn_save_ghtoken", imgui.ImVec2(85, 25)) then
+                    saveSettings()
+                    showToast("GitHub токен сохранен")
+                end
+
+                imgui.Spacing()
+                imgui.TextColored(imgui.ImVec4(0.55, 0.58, 0.65, 0.85), u8"Доступен только доверенным администраторам TRPcomm.")
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+        end
+
+    imgui.EndChild()
+
+    -- ============================================================
+    --  ПРАВАЯ КОЛОНКА (РАДИОСВЯЗЬ И ОПТИМИЗАЦИЯ)
+    -- ============================================================
+    imgui.SameLine(0, 12)
+    imgui.BeginChild("SettingsColRight", imgui.ImVec2(colW, 0), false)
+
+        -- 4. Карточка радиосвязи и служебных доступов
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("card_radio", imgui.ImVec2(0, 195), true)
+
+            imgui.TextColored(t.accent, fa.ICON_RSS .. u8"  Радиосвязь и доступы")
+            imgui.Spacing()
+
+            imgui.TextColored(t.textDim, fa.ICON_VOLUME_UP .. u8" Частота рации:")
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##radio_freq", radio_freq) then
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+            imgui.Spacing()
+            imgui.TextColored(t.textDim, fa.ICON_LOCK .. u8" Пароль от волны:")
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##radio_pass", radio_pass) then
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+            imgui.Spacing()
+            imgui.TextColored(t.textDim, fa.ICON_MAP_MARKER .. u8" Пароль телепорта к фракции:")
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##teleport_pass", teleport_pass) then
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+        imgui.Spacing()
+
+        -- 5. Карточка игрового процесса и оптимизации
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("card_tweaks", imgui.ImVec2(0, 215), true)
+
+            imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8"  Игровой процесс и оптимизация")
+            imgui.Spacing()
+
+            if imgui.Checkbox(fa.ICON_USERS .. u8"  Скрыть аксессуары других игроков", acs_rem) then
+                saveSettings()
+                if acs_rem.v then
+                    for k, v in ipairs(getAllChars()) do
+                        local res, id = sampGetPlayerIdByCharHandle(v)
+                        if v ~= 1 and res and not sampIsPlayerNpc(id) then deleteAllAcs(id) end
+                    end
+                else
+                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Аксессуары снова отображаются (после рестрима)', -1)
+                end
+            end
+
+            imgui.Spacing()
+            if imgui.Checkbox(fa.ICON_USER .. u8"  Скрыть аксессуары на своем персонаже", acs_rem_me) then
+                saveSettings()
+                if acs_rem_me.v then
+                    local res, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
+                    if res then deleteAllAcs(id) end
+                else
+                    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Аксессуары вернутся после смены скина или респавна', -1)
+                end
+            end
+
+            imgui.Spacing()
+            if imgui.Checkbox(fa.ICON_SHIELD .. u8"  Скрыть бронежилет на персонаже", remove_armour) then
+                saveSettings()
+            end
+
+            imgui.Spacing()
+            if imgui.Checkbox(fa.ICON_GLOBE .. u8"  Удалить логотип сервера (gta-trinity.com)", delete_textdraw) then
+                saveSettings()
+            end
+
+            imgui.Spacing()
+            if imgui.Checkbox(fa.ICON_BELL .. u8"  Всплывающие уведомления (Toasts)", notifications_enabled) then
+                saveSettings()
+            end
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+    imgui.EndChild()
 end
 
--- ============================================================
---  ГАЛЕРЕЯ СКРИНШОТОВ (Фотограф)
 -- ============================================================
 -- Папка со скриншотами SAMP — стандартная папка "Документы" пользователя
 local SCREENS_DIR = (os.getenv("USERPROFILE") or "") .. "\\Documents\\GTA San Andreas User Files\\SAMP\\screens\\"
@@ -4359,7 +4688,7 @@ local function drawGalleryPreview(t)
     local open = imgui.ImBool(true)
     imgui.Begin(fa.ICON_DESKTOP .. u8"  Просмотр в полном качестве: " .. u8(gallery_preview_file) .. "##gallery_preview", open,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v or isKeyDown(0x1B) then gallery_preview_open = false end
+    if not open.v then gallery_preview_open = false end
 
     local avail = imgui.GetContentRegionAvail()
     imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 42))
@@ -4616,7 +4945,7 @@ do
 end
 
 -- ---------- Форма создания отчёта ----------
-local tracker_report_form_open = false
+tracker_report_form_open = false
 local tracker_report_name = imgui.ImBuffer("", 64)
 
 local function drawTrackerCreateReportForm(t)
@@ -5075,101 +5404,257 @@ local function drawCuratorsFillCuratorsSection(t)
 end
 
 -- ============================================================
---  КУРАТОРЫ: автозаполнение посещаемости актёров
 -- ============================================================
-local ACTORS_GOOGLE_URL = "https://script.google.com/macros/s/AKfycbzAeXxqpPiaK70P9OqI0EgdpzoM0skt-84xiYzLR8Sp5cLLfZMwRsssx4APiaq2pca1eQ/exec"
+--  КУРАТОРЫ: АВТОЗАПОЛНЕНИЕ ПОСЕЩАЕМОСТИ АКТЁРОВ (v3.0)
+-- ============================================================
+ACTORS_DEFAULT_URL = "https://script.google.com/macros/s/AKfycbwAb8CpcQgee8dVZobbsZNTA1zDWQsF98B2glHXBurCPjfVwT7vsI_DOavIdQ0XEq1M-Q/exec"
 
 actors_event_name = imgui.ImBuffer("", 64)
 actors_active     = false
-actors_captured   = {}      -- список ников (raw CP1251)
+actors_sending    = false
+actors_captured   = {}
 
 local function sendActorsReport()
     if #actors_captured == 0 then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Список актёров пуст, отправка отменена.', -1)
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Список участников пуст! Сначала соберите их кнопкой "Собрать участников" или добавьте вручную.', -1)
         return
     end
 
-    local eventText = u8:decode(actors_event_name.v)
+    local eventTitle = actors_event_name.v
+    if not eventTitle or eventTitle == "" or eventTitle:gsub("%s+", "") == "" then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Укажите название ивента перед отправкой в таблицу!', -1)
+        return
+    end
+
     local membersUtf8 = {}
     for i, nick in ipairs(actors_captured) do
         membersUtf8[i] = u8(nick)
     end
-    local json_data = cjson.encode({ event = u8(eventText), members = membersUtf8 })
+    local json_data = cjson.encode({ event = eventTitle, members = membersUtf8 })
 
-    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка данных по актёрам...', -1)
-    lua_thread.create(function()
-        local ok, response = pcall(requests.post, ACTORS_GOOGLE_URL, {
-            headers = { ["Content-Type"] = "application/json; charset=UTF-8" },
-            data = json_data,
-            timeout = 15,
-        })
+    local targetUrl = (actors_google_url_buf and actors_google_url_buf.v ~= "") and u8:decode(actors_google_url_buf.v) or ACTORS_DEFAULT_URL
+    targetUrl = targetUrl:gsub("^%s+", ""):gsub("%s+$", "")
 
-        if not ok then
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки! Проверь интернет или URL.', -1)
+    actors_sending = true
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Отправка посещаемости в Google Таблицу ({5B85C4}' .. #actors_captured .. '{FFFFFF} чел.)...', -1)
+
+    local function handleResponse(resp)
+        actors_sending = false
+        if not resp then
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка: нет ответа от Google Таблицы.', -1)
             return
         end
 
-                if response.status_code == 200 then
-            showToast('Данные по актёрам занесены в таблицу.')
+        local text = resp.text or ""
+        local ok_json, resData = pcall(cjson.decode, text)
+        if ok_json and type(resData) == "table" and resData.status == "ok" then
+            local col = resData.colLetter or ("#" .. tostring(resData.colIndex or "?"))
+            local count = tostring(resData.presentCount or 0)
+            local total = tostring(resData.totalActors or 0)
+            local displayTitle = eventTitle
+            local p_ok, dec = pcall(u8.decode, u8, eventTitle)
+            if p_ok and dec then displayTitle = dec end
+            showToast('Успешно! Колонка ' .. col .. ' (' .. count .. ' чел.)')
+            sampAddChatMessage(string.format('{5B85C4}[TRPcomm] {FFFFFF}Успешно! Ивент {5B85C4}"%s"{FFFFFF} записан в колонку {5B85C4}%s{FFFFFF} (отмечено {5B85C4}%s{FFFFFF} из {5B85C4}%s{FFFFFF} чел.).', displayTitle, col, count, total), -1)
             actors_captured = {}
+        elseif ok_json and type(resData) == "table" and resData.status == "error" then
+            local msg = tostring(resData.message or "Неизвестная ошибка")
+            local p_ok, dec = pcall(u8.decode, u8, msg)
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка Google таблицы: ' .. (p_ok and dec or msg), -1)
         else
-            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сервер вернул ошибку ' .. tostring(response.status_code), -1)
+            local errClean = text:match('ErrorMessage">(.-)</div>') or text:match('Error:%s*([^%c<]+)')
+            if errClean then
+                local p_ok, dec = pcall(u8.decode, u8, errClean)
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка в скрипте таблицы: ' .. (p_ok and dec or errClean), -1)
+            elseif resp.status_code == 200 or resp.status_code == 302 then
+                showToast('Посещаемость отправлена!')
+                sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Запрос успешно доставлен в Google Таблицу.', -1)
+                actors_captured = {}
+            else
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка отправки: HTTP код ' .. tostring(resp.status_code), -1)
+            end
         end
-    end)
+    end
+
+    local ok_req, https = pcall(require, 'asyncHttpRequest')
+    if ok_req and https and https.request then
+        https.request("POST", targetUrl, {
+            headers = { ["Content-Type"] = "application/json; charset=UTF-8" },
+            data = json_data
+        },
+        function(response)
+            local loc = response and response.headers and (response.headers.location or response.headers.Location)
+            if (response.status_code == 302 or response.status_code == 301) and loc and loc ~= "" then
+                https.request("GET", loc, {}, function(redir_resp)
+                    handleResponse(redir_resp or response)
+                end,
+                function(err)
+                    handleResponse(response)
+                end)
+            else
+                handleResponse(response)
+            end
+        end,
+        function(err)
+            actors_sending = false
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сетевая ошибка: ' .. tostring(err or "таймаут"), -1)
+        end)
+    else
+        lua_thread.create(function()
+            local ok, response = pcall(requests.post, targetUrl, {
+                headers = { ["Content-Type"] = "application/json; charset=UTF-8" },
+                data = json_data,
+                timeout = 15,
+            })
+            if not ok or not response then
+                actors_sending = false
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Ошибка сети! Проверьте подключение к интернету.', -1)
+                return
+            end
+            local loc = response.headers and (response.headers.location or response.headers.Location)
+            if (response.status_code == 302 or response.status_code == 301) and loc and loc ~= "" then
+                local ok2, redir_resp = pcall(requests.get, loc, { timeout = 10 })
+                if ok2 and redir_resp then
+                    handleResponse(redir_resp)
+                    return
+                end
+            end
+            handleResponse(response)
+        end)
+    end
 end
 
 local function startActorsCollection()
     local nameText = u8:decode(actors_event_name.v)
-    if nameText == "" then
-        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала укажи название ивента.', -1)
+    if nameText == "" or nameText:gsub("%s+", "") == "" then
+        sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Введите название ивента перед запуском сбора!', -1)
         return
     end
 
-        actors_active   = true
+    actors_active   = true
     actors_captured = {}
-    showToast('Сбор актёров запущен: ' .. nameText)
+    sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Сбор участников для ивента {5B85C4}"' .. nameText .. '"{FFFFFF}... Отправка /rwave members.', -1)
+    showToast('Сбор участников: ' .. nameText)
     sampSendChat("/rwave members")
 
     lua_thread.create(function()
         wait(2500)
         actors_active = false
-        sendActorsReport()
+        if #actors_captured > 0 then
+            sampAddChatMessage(string.format('{5B85C4}[TRPcomm] {FFFFFF}Сбор завершён! Найдено участников: {5B85C4}%d{FFFFFF} чел. Нажмите "Отправить в таблицу".', #actors_captured), -1)
+            showToast('Найдено: ' .. #actors_captured .. ' участников')
+        else
+            sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Члены радиоволны не ответили на /rwave members. Вы можете ввести ники вручную в окне скрипта.', -1)
+            showToast('Участники не найдены')
+        end
     end)
 end
 
 local function drawCuratorsFillActorsSection(t)
-        imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Автозаполнение актёров")
+    imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Посещаемость актёров (лист 'Активность актеров и фотографов')")
     imgui.Spacing()
 
     imgui.TextColored(t.textDim, u8"Название ивента:")
-    imgui.PushItemWidth(300)
+    imgui.PushItemWidth(350)
     imgui.InputText("##actors_event_name", actors_event_name)
     imgui.PopItemWidth()
 
     imgui.Spacing()
 
+    -- Шаг 1: Сбор участников
     if actors_active then
-        imgui.TextColored(t.textDim, u8"Идёт сбор...")
+        imgui.TextColored(t.textDim, fa.ICON_SPINNER .. u8" Идёт сбор ников из /rwave members (2.5 сек)...")
     else
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##actors_start", imgui.ImVec2(230, 32)) then
+        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" 1. Собрать участников (/rwave members)##actors_start", imgui.ImVec2(280, 32)) then
             startActorsCollection()
+        end
+    end
+
+    imgui.Spacing()
+
+    -- Шаг 2: Отправка в таблицу
+    if actors_sending then
+        imgui.TextColored(t.accent, fa.ICON_REFRESH .. u8" Отправка данных в Google Таблицу...")
+    else
+        local canSend = (#actors_captured > 0) and not actors_active
+        if not canSend then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
+        end
+        if imgui.Button(fa.ICON_CLOUD_UPLOAD .. u8" 2. Отправить в Google Таблицу##actors_send", imgui.ImVec2(280, 34)) then
+            if canSend then
+                sendActorsReport()
+            else
+                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала соберите участников кнопки 1!', -1)
+            end
+        end
+        if not canSend then
+            imgui.PopStyleColor(3)
         end
     end
 
     imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"Зафиксированные актёры:")
-    imgui.Spacing()
-    if #actors_captured == 0 then
-        imgui.TextColored(t.textDim, u8"Пока никого.")
+    -- Ручное добавление и управление списком
+    imgui.TextColored(t.textDim, u8"Добавить участника вручную (если кого-то нет в /rwave):")
+    imgui.PushItemWidth(200)
+    imgui.InputText("##actors_manual_add", actors_manual_nick_buf)
+    imgui.PopItemWidth()
+    imgui.SameLine()
+    if imgui.Button(u8"+ Добавить##actors_btn_add", imgui.ImVec2(90, 24)) then
+        local addNick = u8:decode(actors_manual_nick_buf.v)
+        addNick = addNick:gsub("^%s+", ""):gsub("%s+$", "")
+        if addNick ~= "" then
+            actors_captured[#actors_captured + 1] = addNick
+            actors_manual_nick_buf.v = ""
+            showToast('Добавлен: ' .. addNick)
+        end
     end
-    for i, name in ipairs(actors_captured) do
-        imgui.Text(i .. ". " .. name)
+    if #actors_captured > 0 then
+        imgui.SameLine()
+        if imgui.Button(fa.ICON_TRASH .. u8" Очистить список##actors_clear", imgui.ImVec2(130, 24)) then
+            actors_captured = {}
+        end
+    end
+
+    imgui.Spacing()
+    imgui.TextColored(t.accent, u8"Собранные участники ивента (" .. #actors_captured .. u8" чел.):")
+    imgui.Spacing()
+
+    if #actors_captured == 0 then
+        imgui.TextColored(t.textDim, u8"Список пуст. Нажмите кнопку '1. Собрать участников' или введите ники вручную.")
+    else
+        imgui.BeginChild("##actors_captured_list", imgui.ImVec2(380, 140), true)
+        for i, name in ipairs(actors_captured) do
+            imgui.TextColored(imgui.ImVec4(0.3, 0.85, 0.45, 1.0), fa.ICON_CHECK_CIRCLE .. " ")
+            imgui.SameLine()
+            imgui.Text(string.format("%d. %s", i, name))
+        end
+        imgui.EndChild()
+    end
+
+    -- Настройки ссылки Google Script
+    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+    if imgui.TreeNode(u8"Настройки ссылки Google Apps Script") then
+        imgui.TextColored(t.textDim, u8"URL веб-приложения:")
+        imgui.PushItemWidth(450)
+        if imgui.InputText("##actors_gas_url", actors_google_url_buf) then
+            saveSettings()
+        end
+        imgui.PopItemWidth()
+        imgui.SameLine()
+        if imgui.Button(u8"Сброс##actors_url_reset") then
+            actors_google_url_buf.v = u8(ACTORS_DEFAULT_URL)
+            saveSettings()
+            showToast('Ссылка сброшена по умолчанию')
+        end
+        imgui.TreePop()
     end
 end
 
 -- ============================================================
---  МЕНЕДЖЕР ВЫДАЧИ РОЛЕЙ АКТЁРАМ (пункт 4 в "Кураторах")
+--  УПРАВЛЕНИЕ РОЛЯМИ АКТЁРОВ (Вкладка 4 в "Кураторы")
 -- ============================================================
 role_requests = {} -- { {id=числоStr, nick=, skin=, weapon=, weaponName=, color=}, ... }
 role_approve_distance_error = false -- флаг "сервер только что написал 'вы слишком далеко'"
@@ -5609,24 +6094,14 @@ function imgui.BeforeDrawFrame()
             'moonloader/resource/fonts/fontawesome-webfont.ttf',
             14.0, font_config, fa_glyph_ranges)
     end
-    if fa_font_large == nil then
-        local font_config_large = imgui.ImFontConfig()
-        fa_font_large = imgui.GetIO().Fonts:AddFontFromFileTTF(
-            'moonloader/resource/fonts/fontawesome-webfont.ttf',
-            84.0, font_config_large, fa_glyph_ranges)
-    end
     if arial_font == nil and not arial_font_failed then
         local font_path = getFolderPath(0x14) .. '\\arial.ttf'
         if doesFileExist(font_path) then
             local builder = imgui.ImFontAtlasGlyphRangesBuilder()
             builder:AddRanges(imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
-            local arial_ranges = builder:BuildRanges()
-            arial_font = imgui.GetIO().Fonts:AddFontFromFileTTF(font_path, 20.0, nil, arial_ranges)
-
-            local builder_small = imgui.ImFontAtlasGlyphRangesBuilder()
-            builder_small:AddRanges(imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
-            local arial_ranges_small = builder_small:BuildRanges()
-            arial_font_small = imgui.GetIO().Fonts:AddFontFromFileTTF(font_path, 15.0, nil, arial_ranges_small)
+            local cyrillic_ranges = builder:BuildRanges()
+            arial_font = imgui.GetIO().Fonts:AddFontFromFileTTF(font_path, 20.0, nil, cyrillic_ranges)
+            arial_font_small = imgui.GetIO().Fonts:AddFontFromFileTTF(font_path, 15.0, nil, cyrillic_ranges)
         else
             arial_font_failed = true
         end
@@ -5637,7 +6112,7 @@ calendar_tab_active_last_frame = false
 curator_section_active_last_frame = false
 
 function imgui.OnDrawFrame()
-        if not main_window_state.v then
+    if not main_window_state.v then
         calendar_tab_active_last_frame = false
         curator_section_active_last_frame = false
         return
@@ -5654,10 +6129,25 @@ function imgui.OnDrawFrame()
     imgui.Begin("##trpcomm_main", main_window_state,
         imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
 
-        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER | Актуальная версия: 2.8")
-        imgui.SameLine(imgui.GetWindowWidth() - 34)
-        if imgui.Button(fa.ICON_TIMES, imgui.ImVec2(24, 24)) then
+        imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER")
+        imgui.SameLine()
+        imgui.TextColored(t.textDim, u8 "•  Версия 2.9")
+
+        -- Компактная квадратная кнопка закрытия
+        imgui.SameLine(imgui.GetWindowWidth() - 28)
+        imgui.PushStyleVar(imgui.StyleVar.FrameRounding, 2.0)
+        imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(0, 0))
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(t.panelBg.x, t.panelBg.y, t.panelBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.25, 0.25, 0.90))
+        imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.95, 0.30, 0.30, 1.0))
+        imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.75, 0.80, 0.88, 0.90))
+        if imgui.Button(fa.ICON_TIMES .. "##win_close", imgui.ImVec2(18, 18)) then
             main_window_state.v = false
+        end
+        imgui.PopStyleColor(4)
+        imgui.PopStyleVar(2)
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip("%s", u8"Закрыть меню (ESC)")
         end
 
         imgui.Separator()
@@ -5749,7 +6239,6 @@ function imgui.OnDrawFrame()
                 -- ---------- Содержимое активной вкладки ----------
         local calendarShouldBeVisible = open_tabs[active_tab_idx] and (
             open_tabs[active_tab_idx].kind == "calendar"
-            or open_tabs[active_tab_idx].kind == "hr"
         )
         if calendarShouldBeVisible and not calendar_tab_active_last_frame and not calendar_loading then
             fetchCalendarEvents()
@@ -5766,12 +6255,13 @@ function imgui.OnDrawFrame()
 
                     imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
-            local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, roles = true }
+            local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, advertising = true, roles = true }
             local ACCESS_KEY_BY_KIND = {
                 roles = "actors",
                 photographer = "photographers",
                 tracker = "curators",
-                hr = "hr",
+                hr = "advertising",
+                advertising = "advertising",
             }
 
             if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
@@ -5798,7 +6288,7 @@ function imgui.OnDrawFrame()
                     drawPhotographerTab(t)
                 elseif activeTab.kind == "tracker" and hasAccess("curators") then
                     drawTrackerTab(t)
-                elseif activeTab.kind == "hr" and hasAccess("hr") then
+                elseif (activeTab.kind == "hr" or activeTab.kind == "advertising") and (hasAccess("advertising") or hasAccess("hr")) then
                     drawHRTab(t)
                 elseif activeTab.kind == "calendar" then
                     drawHRCalendarTab(t)
@@ -5817,6 +6307,23 @@ function imgui.OnDrawFrame()
 end
 
 sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
+    local cleanText = text and text:gsub("{%x%x%x%x%x%x}", "") or ""
+    local cleanTitle = title and title:gsub("{%x%x%x%x%x%x}", "") or ""
+
+    if cleanText:find("находится в очереди") or cleanText:find("в очереди на публикацию") or cleanText:find("в очереди на модерацию") or cleanTitle:find("в очереди") then
+        ad_pending = false
+        ad_pending_deadline = 0
+        ad_awaiting_next_city = false
+        ad_pending_cities = {}
+        ad_pending_city_pos = 0
+        sampSendDialogResponse(dialogId, 1, 0, "")
+        showToast("Предыдущее объявление ещё в очереди.")
+        if ad_auto_send.v then
+            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60) + 2
+        end
+        return false
+    end
+
     if ad_pending then
         if dialogId == 3409 and title and title:find("Создание объявления") then
             ad_pending_deadline = os.time() + 2
@@ -5830,6 +6337,8 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
             incrementAdSentCount(ad_pending_text)
             logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
             ad_text.v = ""
+            ad_pending_cities = {}
+            ad_pending_city_pos = 0
             ad_awaiting_next_city = true
             ad_next_city_at = os.time() + 3
             return false
@@ -5837,10 +6346,6 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
         if dialogId == 3412 and title and title:find("без модерации") then
             sampSendDialogResponse(dialogId, 1, 0, "")
             advanceAfterNewsPopup()
-            return false
-        end
-        if dialogId == 45 and text and (text:find("Ваше объявление") or text:find("уже находится в очереди на модерацию")) then
-            sampSendDialogResponse(dialogId, 1, 65535, "")
             return false
         end
     elseif ad_awaiting_next_city then
@@ -5904,16 +6409,18 @@ sampev.onServerMessage = function(color, text)
         role_approve_distance_error = true
     end
 
-    if ad_pending then
-        if text:find("Одно из ваших объявлений уже находится в очереди на модерацию") then
-            ad_pending = false
-            ad_pending_deadline = 0
-            if ad_auto_send.v then
-                ad_auto_send.v = false
-                saveSettings()
-            end
-            showToast("Предыдущее объявление ещё не прошло модерацию. Автоотправка остановлена — включи вручную, когда очередь освободится.")
-        elseif text:find("Нельзя отправлять рекламу на радио слишком часто") then
+    if text:find("находится в очереди") or text:find("в очереди на") then
+        ad_pending = false
+        ad_pending_deadline = 0
+        ad_awaiting_next_city = false
+        ad_pending_cities = {}
+        ad_pending_city_pos = 0
+        if ad_auto_send.v then
+            ad_next_send_time = os.time() + (ad_interval_minutes.v * 60) + 2
+        end
+        showToast("Предыдущее объявление ещё в очереди.")
+    elseif ad_pending then
+        if text:find("Нельзя отправлять рекламу на радио слишком часто") then
             local waitSec = parseRetrySeconds(text) or 60
             ad_pending_deadline = 0
             lua_thread.create(function()
@@ -5930,12 +6437,18 @@ sampev.onServerMessage = function(color, text)
         end
     end
 
-        if actors_active then
+    if actors_active then
         local clean = text:gsub("{%x%x%x%x%x%x}", "")
-        local nick = clean:match("Ник%s+([%w_]+)")
+        local nick = clean:match("Ник[:%s]+([%w_]+)") or clean:match("%[.+%]%s+([%w_]+)")
         if nick then
-            nick = nick:gsub("%.", "")
-            actors_captured[#actors_captured + 1] = nick
+            nick = nick:gsub("%.", ""):gsub("%s+", "")
+            local already = false
+            for _, existing in ipairs(actors_captured) do
+                if existing:lower() == nick:lower() then already = true; break end
+            end
+            if not already then
+                actors_captured[#actors_captured + 1] = nick
+            end
             return false
         end
     end
@@ -5978,22 +6491,77 @@ end
 -- ============================================================
 --  ТОЧКА ВХОДА
 -- ============================================================
+esc_consumed = false
+
+function onWindowMessage(msg, wparam, lparam)
+    if wparam == 0x1B then -- VK_ESCAPE
+        if isSampAvailable() and (sampIsChatInputActive() or sampIsDialogActive()) then
+            return
+        end
+        if msg == 0x0100 then -- WM_KEYDOWN
+            if (main_window_state and main_window_state.v) or ad_add_form_open or gallery_preview_open or gallery_send_form_open or tracker_report_form_open then
+                esc_consumed = true
+                if ad_add_form_open then
+                    ad_add_form_open = false
+                    ad_edit_idx = nil
+                elseif gallery_preview_open then
+                    gallery_preview_open = false
+                elseif gallery_send_form_open then
+                    gallery_send_form_open = false
+                elseif tracker_report_form_open then
+                    tracker_report_form_open = false
+                elseif main_window_state and main_window_state.v then
+                    main_window_state.v = false
+                end
+                consumeWindowMessage(true, true)
+            elseif esc_consumed then
+                consumeWindowMessage(true, true)
+            end
+        elseif msg == 0x0101 then -- WM_KEYUP
+            if esc_consumed then
+                esc_consumed = false
+                consumeWindowMessage(true, true)
+            end
+        end
+    end
+end
+
 function main()
     repeat wait(0) until isSampAvailable()
 
     local result, my1id = sampGetPlayerIdByCharHandle(PLAYER_PED)
     clientName = sampGetPlayerNickname(my1id)
 
-    checkForUpdates()
-    loadAllAccessLists()
-    fetchCalendarEvents()
-    fetchBuiltinRoleTemplates()
-
     toast_font = renderCreateFont("Arial", 9, 1)
     event_card_font_title = renderCreateFont("Arial", 10, 1)
     event_card_font_name  = renderCreateFont("Arial", 13, 1)
     event_card_font_time  = renderCreateFont("Arial", 11, 1)
     event_card_logo_texture = renderLoadTextureFromFile(getWorkingDirectory() .. "\\resource\\TRPcomm Manager\\images\\trpcomm-logo.png")
+
+    -- Фоновый прогрев ImGui: активируем на 2-3 кадра во время загрузки,
+    -- чтобы скомпилировать шрифт (Cyrillic + FontAwesome) и Direct3D-текстуры в фоне.
+    -- Так как main_window_state.v = false, визуально ничего не появится,
+    -- зато при нажатии клавиши меню откроется МГНОВЕННО (0 мс задержки).
+    loadLogoTexture()
+    imgui.Process = true
+    wait(60)
+    imgui.Process = false
+
+    -- Запуск сетевых запросов в фоновом потоке (effil/async) с задержкой 2 сек,
+    -- чтобы не создавать ни малейшей нагрузки на игру при входе и спавне.
+    lua_thread.create(function()
+        wait(2000)
+        checkForUpdates()
+        loadAllAccessLists()
+        fetchCalendarEvents()
+        fetchBuiltinRoleTemplates()
+        fetchAdRestrictions(true)
+
+        while true do
+            wait(60000)
+            fetchAdRestrictions(false)
+        end
+    end)
 
     sampAddChatMessage('{5B85C4}[TRPcomm Manager]{FFFFFF} Добро пожаловать на сервер, {5B85C4}' .. clientName .. '{FFFFFF}.', -1)
     sampAddChatMessage('{FFFFFF}Для активации скрипта используйте команду — {5B85C4}/trpcomm {FFFFFF}или {5B85C4}' .. hotkey_display.v .. '{FFFFFF}.', -1)
@@ -6160,12 +6728,14 @@ function main()
                     if sampTextdrawGetString(a) == 'gta-trinity.com' then sampTextdrawSetString(a, '') end
                 end
             end
-        else
+            delete_textdraw_was_active = true
+        elseif delete_textdraw_was_active then
             for a = 0, 2304 do 
                 if sampTextdrawIsExists(a) then 
                     if sampTextdrawGetString(a) == '' then sampTextdrawSetString(a, 'gta-trinity.com') end
                 end
             end
+            delete_textdraw_was_active = false
         end
 
         if not waiting_for_key and not waiting_for_key2 and not sampIsChatInputActive() and not sampIsDialogActive() then
