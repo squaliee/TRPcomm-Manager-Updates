@@ -1047,13 +1047,13 @@ function drawAdQuickChips(buffer, tagId)
     if imgui.Button(fa.ICON_MAP_MARKER .. u8" Навигатор##chip_nav_" .. tagId, imgui.ImVec2(0, 22)) then
         appendToAdBuffer(buffer, "Навигатор: ")
     end
-    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Вставить 'Навигатор: '") end
+    if imgui.IsItemHovered() then imgui.SetTooltip(u8"Вставить 'Навигатор: '") end
 
     imgui.SameLine()
     if imgui.Button(fa.ICON_COMMENTING .. u8" Звоните##chip_call_" .. tagId, imgui.ImVec2(0, 22)) then
         appendToAdBuffer(buffer, "Звоните.")
     end
-    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Вставить 'Звоните.'") end
+    if imgui.IsItemHovered() then imgui.SetTooltip(u8"Вставить 'Звоните.'") end
 
     imgui.SameLine()
     if imgui.Button(u8"+ Точка [.]##chip_dot_" .. tagId, imgui.ImVec2(0, 22)) then
@@ -1062,7 +1062,7 @@ function drawAdQuickChips(buffer, tagId)
             buffer.v = safeU8(raw .. ".")
         end
     end
-    if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Поставить точку в конце объявления (если нет)") end
+    if imgui.IsItemHovered() then imgui.SetTooltip(u8"Поставить точку в конце объявления (если нет)") end
 
     imgui.PopStyleColor(3)
     imgui.PopStyleVar()
@@ -1836,7 +1836,7 @@ local function drawHRAdsTab(t)
             end
             imgui.PopStyleColor(4)
             if imgui.IsItemHovered() then
-                imgui.SetTooltip("%s", ad.enabled and u8"Активно (нажмите, чтобы деактивировать)" or u8"Отключено (нажмите, чтобы активировать)")
+                imgui.SetTooltip(ad.enabled and u8"Активно (нажмите, чтобы деактивировать)" or u8"Отключено (нажмите, чтобы активировать)")
             end
 
             -- 6. Полный текст объявления (без обрезки)
@@ -1849,7 +1849,7 @@ local function drawHRAdsTab(t)
 
             if imgui.IsItemHovered() then
                 local tipText = u8"Текст: " .. textUtf8 .. string.format(u8"\nОтправлено: %d раз\n\n[Клик по кружку] - вкл/выкл\n[ПКМ по строке] - меню опций", ad.sentCount or 0)
-                imgui.SetTooltip("%s", tipText)
+                imgui.SetTooltip(tipText)
             end
 
             -- 7. Правые элементы управления (по центру строки)
@@ -2996,14 +2996,10 @@ local function drawHRAnalyticsTab(t)
     imgui.TextColored(t.accent, u8"Аналитика по объявлениям")
     imgui.Spacing()
 
-    local totalSent, topAd, topCount, totalSpent = getAdsStatsSummary()
+    local totalSent, topAd, topCount = getAdsStatsSummary()
     imgui.TextColored(t.textDim, u8"Всего отправлено объявлений: ")
     imgui.SameLine()
     imgui.TextColored(t.accent, tostring(totalSent))
-    imgui.SameLine(imgui.GetWindowWidth() - 250)
-    imgui.TextColored(t.textDim, u8"Затраты (оценка): ")
-    imgui.SameLine()
-    imgui.TextColored(imgui.ImVec4(0.35, 0.85, 0.45, 1.0), string.format("$%d", totalSpent))
 
     if topAd then
         imgui.TextColored(t.textDim, u8"Самое частое: ")
@@ -4063,7 +4059,7 @@ local function drawSettingsTab(t)
                     updateHotkeyDisplay()
                     saveSettings()
                 end
-                if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Сбросить клавишу меню на Alt + P") end
+                if imgui.IsItemHovered() then imgui.SetTooltip(u8"Сбросить клавишу меню на Alt + P") end
             end
 
             if waiting_for_key then
@@ -4114,7 +4110,7 @@ local function drawSettingsTab(t)
                     updateHotkey2Display()
                     saveSettings()
                 end
-                if imgui.IsItemHovered() then imgui.SetTooltip("%s", u8"Очистить горячую клавишу радио") end
+                if imgui.IsItemHovered() then imgui.SetTooltip(u8"Очистить горячую клавишу радио") end
             end
 
             if waiting_for_key2 then
@@ -4187,7 +4183,7 @@ local function drawSettingsTab(t)
                 if imgui.Button(eyeIcon .. "##gh_show_tok", imgui.ImVec2(28, 25)) then
                     github_token_show.v = not github_token_show.v
                 end
-                if imgui.IsItemHovered() then imgui.SetTooltip("%s", github_token_show.v and u8"Скрыть токен" or u8"Показать токен") end
+                if imgui.IsItemHovered() then imgui.SetTooltip(github_token_show.v and u8"Скрыть токен" or u8"Показать токен") end
 
                 imgui.SameLine()
                 if imgui.Button(fa.ICON_CHECK .. u8" Сохранить##btn_save_ghtoken", imgui.ImVec2(85, 25)) then
@@ -6147,13 +6143,13 @@ function imgui.OnDrawFrame()
         imgui.PopStyleColor(4)
         imgui.PopStyleVar(2)
         if imgui.IsItemHovered() then
-            imgui.SetTooltip("%s", u8"Закрыть меню (ESC)")
+            imgui.SetTooltip(u8"Закрыть меню (ESC)")
         end
 
         imgui.Separator()
         imgui.Spacing()
 
-        -- ---------- Строка вкладок (как в браузере) ----------
+        -- ---------- Строка вкладок ----------
         imgui.BeginChild("TabStrip", imgui.ImVec2(0, 28), false)
             imgui.PushStyleVar(imgui.StyleVar.FrameRounding, 3.0)
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(10, 4))
@@ -6310,7 +6306,8 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     local cleanText = text and text:gsub("{%x%x%x%x%x%x}", "") or ""
     local cleanTitle = title and title:gsub("{%x%x%x%x%x%x}", "") or ""
 
-    if cleanText:find("находится в очереди") or cleanText:find("в очереди на публикацию") or cleanText:find("в очереди на модерацию") or cleanTitle:find("в очереди") then
+    -- 1. Предыдущее объявление ещё в очереди (ошибка очереди / уже в очереди)
+    if cleanText:find("уже находится в очереди") or cleanText:find("уже в очереди") or (dialogId == 45 and cleanText:find("уже находится")) then
         ad_pending = false
         ad_pending_deadline = 0
         ad_awaiting_next_city = false
@@ -6324,34 +6321,54 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
         return false
     end
 
+    -- 2. В процессе отправки объявления
     if ad_pending then
-        if dialogId == 3409 and title and title:find("Создание объявления") then
+        if dialogId == 3409 and (cleanTitle:find("Создание объявления") or cleanTitle:find("Создание")) then
             ad_pending_deadline = os.time() + 2
             sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
-        if dialogId == 3410 and title and title:find("Отправка рекламы на радио") then
+        if dialogId == 3410 and (cleanTitle:find("Отправка рекламы") or cleanTitle:find("радио")) then
             ad_pending_deadline = 0
             sampSendDialogResponse(dialogId, 1, 0, ad_pending_text)
-            showToast('Объявление отправлено на модерацию.')
+            showToast('Объявление отправлено.')
             incrementAdSentCount(ad_pending_text)
             logAdHistory(ad_pending_text, ad_pending_source, ad_pending_event_label)
             ad_text.v = ""
-            ad_pending_cities = {}
-            ad_pending_city_pos = 0
             ad_awaiting_next_city = true
             ad_next_city_at = os.time() + 3
             return false
         end
-        if dialogId == 3412 and title and title:find("без модерации") then
+        -- Уведомление об успешной отправке (репортер / в очередь публикации / без модерации / диалог 3412 / диалог 45)
+        if cleanText:find("репортер")
+            or cleanText:find("отправлено в очередь")
+            or cleanText:find("в очередь публикации")
+            or cleanText:find("в очередь на публикацию")
+            or cleanText:find("без модерации")
+            or cleanTitle:find("без модерации")
+            or dialogId == 3412
+            or (dialogId == 45 and cleanText:find("Ваше объявление")) then
             sampSendDialogResponse(dialogId, 1, 0, "")
             advanceAfterNewsPopup()
             return false
         end
     elseif ad_awaiting_next_city then
-        if dialogId == 3412 and title and title:find("без модерации") then
+        if cleanText:find("репортер")
+            or cleanText:find("отправлено в очередь")
+            or cleanText:find("в очередь публикации")
+            or cleanText:find("в очередь на публикацию")
+            or cleanText:find("без модерации")
+            or cleanTitle:find("без модерации")
+            or dialogId == 3412
+            or (dialogId == 45 and cleanText:find("Ваше объявление")) then
             sampSendDialogResponse(dialogId, 1, 0, "")
             advanceAfterNewsPopup()
+            return false
+        end
+    else
+        -- Попап об авто-отправке репортёра, даже если пришёл вне ad_pending
+        if cleanText:find("репортер") and (cleanText:find("очередь публикации") or cleanText:find("отправлено")) then
+            sampSendDialogResponse(dialogId, 1, 0, "")
             return false
         end
     end
@@ -6409,7 +6426,7 @@ sampev.onServerMessage = function(color, text)
         role_approve_distance_error = true
     end
 
-    if text:find("находится в очереди") or text:find("в очереди на") then
+    if text:find("уже находится в очереди") or text:find("уже в очереди") then
         ad_pending = false
         ad_pending_deadline = 0
         ad_awaiting_next_city = false
