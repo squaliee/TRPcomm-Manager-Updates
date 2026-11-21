@@ -1,7 +1,7 @@
--- ============================================================
---  TRPcomm MANAGER | Автор: Богдан Номинов
---  Актуальная версия: 2.9
--- ============================================================
+-- =========================
+--  TRPcomm MANAGER
+--  Актуальная версия: 3.0
+-- =========================
 
 imgui = require 'imgui'
 fa = require 'faIcons'
@@ -26,9 +26,6 @@ TG_BOT_TOKEN = "text"
 TG_CHAT_ID = "-1003174705842"
 TG_THREAD_ID = "9"
 
--- ============================================================
---  ДОСТУПЫ К РАЗДЕЛАМ
--- ============================================================
 local ACCESS_BASE_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/"
 local ACCESS_SECTIONS = { "photographers", "curators", "advertising", "actors" }
 
@@ -41,12 +38,43 @@ local ACCESS_KEY_ALIASES = {
     curators = "curators",
     hr = "advertising",
     advertising = "advertising",
+    quicksms = "advertising",
 }
 
 access_lists = {} -- access_lists["photographers"] = {"Nick_One", ...} ; nil = ещё не загружен
 
 function performHttpGet(url, args, onSuccess, onError)
     args = args or { timeout = 12 }
+    local ok_effil, effil = pcall(require, 'effil')
+    if ok_effil and effil and effil.thread then
+        local runner = effil.thread(function(u, a)
+            local req = require 'requests'
+            local ok, resp = pcall(req.request, "GET", u, a)
+            if ok and resp then
+                return {
+                    status_code = resp.status_code,
+                    text = resp.text,
+                    headers = resp.headers,
+                    url = resp.url
+                }
+            else
+                return nil, tostring(resp)
+            end
+        end)
+        local thread = runner(url, args)
+        lua_thread.create(function()
+            while thread:status() == 'running' do
+                wait(0)
+            end
+            local ok, result, err = pcall(thread.get, thread)
+            if ok and result then
+                if onSuccess then onSuccess(result) end
+            else
+                if onError then onError(err or result) end
+            end
+        end)
+        return
+    end
     local asyncHttpAvailable, asyncHttp = pcall(require, 'asyncHttpRequest')
     if asyncHttpAvailable and asyncHttp and asyncHttp.request then
         asyncHttp.request("GET", url, args, function(response)
@@ -120,10 +148,7 @@ local function hasAccess(sectionKey)
     return false
 end
 
--- ============================================================
---  АВТООБНОВЛЕНИЕ
--- ============================================================
-SCRIPT_VERSION = "2.9"
+SCRIPT_VERSION = "3.0"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -572,19 +597,324 @@ local themes = {
         accent     = imgui.ImVec4(0.40, 0.60, 0.80, 1.00),
         text       = imgui.ImVec4(0.92, 0.96, 1.00, 1.00),
         textDim    = imgui.ImVec4(0.60, 0.65, 0.70, 1.00),
+    },
+
+    -- 16. Сакура (Нежно-розовый цветущий сакуровый оттенок на темно-сливовом фоне)
+    {
+        name       = u8"Сакура",
+        windowBg   = imgui.ImVec4(0.08, 0.05, 0.07, 0.97),
+        titleBg    = imgui.ImVec4(0.48, 0.22, 0.34, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.08, 0.11, 1.00),
+        button     = imgui.ImVec4(0.48, 0.22, 0.34, 1.00),
+        buttonHov  = imgui.ImVec4(0.60, 0.28, 0.43, 1.00),
+        buttonAct  = imgui.ImVec4(0.36, 0.15, 0.25, 1.00),
+        header     = imgui.ImVec4(0.48, 0.22, 0.34, 1.00),
+        headerHov  = imgui.ImVec4(0.60, 0.28, 0.43, 1.00),
+        headerAct  = imgui.ImVec4(0.36, 0.15, 0.25, 1.00),
+        frameBg    = imgui.ImVec4(0.17, 0.10, 0.14, 1.00),
+        border     = imgui.ImVec4(0.75, 0.38, 0.55, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.55, 0.72, 1.00),
+        text       = imgui.ImVec4(1.00, 0.94, 0.96, 1.00),
+        textDim    = imgui.ImVec4(0.78, 0.60, 0.68, 1.00),
+    },
+
+    -- 17. Коралловая (Теплый закатный коралл и лососевый неон)
+    {
+        name       = u8"Коралловая",
+        windowBg   = imgui.ImVec4(0.08, 0.05, 0.05, 0.97),
+        titleBg    = imgui.ImVec4(0.55, 0.22, 0.18, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.08, 0.08, 1.00),
+        button     = imgui.ImVec4(0.55, 0.22, 0.18, 1.00),
+        buttonHov  = imgui.ImVec4(0.68, 0.28, 0.24, 1.00),
+        buttonAct  = imgui.ImVec4(0.42, 0.16, 0.13, 1.00),
+        header     = imgui.ImVec4(0.55, 0.22, 0.18, 1.00),
+        headerHov  = imgui.ImVec4(0.68, 0.28, 0.24, 1.00),
+        headerAct  = imgui.ImVec4(0.42, 0.16, 0.13, 1.00),
+        frameBg    = imgui.ImVec4(0.18, 0.11, 0.10, 1.00),
+        border     = imgui.ImVec4(0.80, 0.35, 0.30, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.45, 0.38, 1.00),
+        text       = imgui.ImVec4(1.00, 0.95, 0.93, 1.00),
+        textDim    = imgui.ImVec4(0.78, 0.60, 0.56, 1.00),
+    },
+
+    -- 18. Вулканическая (Раскаленная магма и обсидиан)
+    {
+        name       = u8"Вулканическая",
+        windowBg   = imgui.ImVec4(0.06, 0.04, 0.03, 0.98),
+        titleBg    = imgui.ImVec4(0.58, 0.18, 0.05, 1.00),
+        panelBg    = imgui.ImVec4(0.11, 0.07, 0.05, 1.00),
+        button     = imgui.ImVec4(0.58, 0.18, 0.05, 1.00),
+        buttonHov  = imgui.ImVec4(0.72, 0.24, 0.08, 1.00),
+        buttonAct  = imgui.ImVec4(0.44, 0.12, 0.03, 1.00),
+        header     = imgui.ImVec4(0.58, 0.18, 0.05, 1.00),
+        headerHov  = imgui.ImVec4(0.72, 0.24, 0.08, 1.00),
+        headerAct  = imgui.ImVec4(0.44, 0.12, 0.03, 1.00),
+        frameBg    = imgui.ImVec4(0.16, 0.09, 0.06, 1.00),
+        border     = imgui.ImVec4(0.82, 0.28, 0.08, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.36, 0.10, 1.00),
+        text       = imgui.ImVec4(1.00, 0.94, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.75, 0.56, 0.48, 1.00),
+    },
+
+    -- 19. Солнечная (Ярко-желтый кибер-акцент на графитовом фоне)
+    {
+        name       = u8"Солнечная",
+        windowBg   = imgui.ImVec4(0.06, 0.06, 0.04, 0.98),
+        titleBg    = imgui.ImVec4(0.52, 0.44, 0.06, 1.00),
+        panelBg    = imgui.ImVec4(0.10, 0.10, 0.07, 1.00),
+        button     = imgui.ImVec4(0.52, 0.44, 0.06, 1.00),
+        buttonHov  = imgui.ImVec4(0.66, 0.56, 0.10, 1.00),
+        buttonAct  = imgui.ImVec4(0.38, 0.32, 0.04, 1.00),
+        header     = imgui.ImVec4(0.52, 0.44, 0.06, 1.00),
+        headerHov  = imgui.ImVec4(0.66, 0.56, 0.10, 1.00),
+        headerAct  = imgui.ImVec4(0.38, 0.32, 0.04, 1.00),
+        frameBg    = imgui.ImVec4(0.15, 0.14, 0.09, 1.00),
+        border     = imgui.ImVec4(0.78, 0.68, 0.12, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.86, 0.15, 1.00),
+        text       = imgui.ImVec4(1.00, 0.98, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.74, 0.70, 0.52, 1.00),
+    },
+
+    -- 20. Мятная (Свежий пастельно-аквамариновый ментол)
+    {
+        name       = u8"Мятная",
+        windowBg   = imgui.ImVec4(0.04, 0.08, 0.07, 0.97),
+        titleBg    = imgui.ImVec4(0.14, 0.46, 0.36, 1.00),
+        panelBg    = imgui.ImVec4(0.07, 0.13, 0.11, 1.00),
+        button     = imgui.ImVec4(0.14, 0.46, 0.36, 1.00),
+        buttonHov  = imgui.ImVec4(0.18, 0.58, 0.46, 1.00),
+        buttonAct  = imgui.ImVec4(0.10, 0.34, 0.26, 1.00),
+        header     = imgui.ImVec4(0.14, 0.46, 0.36, 1.00),
+        headerHov  = imgui.ImVec4(0.18, 0.58, 0.46, 1.00),
+        headerAct  = imgui.ImVec4(0.10, 0.34, 0.26, 1.00),
+        frameBg    = imgui.ImVec4(0.10, 0.17, 0.15, 1.00),
+        border     = imgui.ImVec4(0.24, 0.68, 0.54, 0.45),
+        accent     = imgui.ImVec4(0.32, 0.95, 0.74, 1.00),
+        text       = imgui.ImVec4(0.92, 1.00, 0.97, 1.00),
+        textDim    = imgui.ImVec4(0.56, 0.76, 0.68, 1.00),
+    },
+
+    -- 21. Оливковая (Тактический милитари хаки)
+    {
+        name       = u8"Оливковая",
+        windowBg   = imgui.ImVec4(0.06, 0.07, 0.04, 0.97),
+        titleBg    = imgui.ImVec4(0.28, 0.34, 0.16, 1.00),
+        panelBg    = imgui.ImVec4(0.10, 0.11, 0.07, 1.00),
+        button     = imgui.ImVec4(0.28, 0.34, 0.16, 1.00),
+        buttonHov  = imgui.ImVec4(0.36, 0.44, 0.20, 1.00),
+        buttonAct  = imgui.ImVec4(0.20, 0.25, 0.11, 1.00),
+        header     = imgui.ImVec4(0.28, 0.34, 0.16, 1.00),
+        headerHov  = imgui.ImVec4(0.36, 0.44, 0.20, 1.00),
+        headerAct  = imgui.ImVec4(0.20, 0.25, 0.11, 1.00),
+        frameBg    = imgui.ImVec4(0.14, 0.16, 0.10, 1.00),
+        border     = imgui.ImVec4(0.45, 0.54, 0.26, 0.45),
+        accent     = imgui.ImVec4(0.68, 0.78, 0.38, 1.00),
+        text       = imgui.ImVec4(0.94, 0.96, 0.88, 1.00),
+        textDim    = imgui.ImVec4(0.64, 0.68, 0.54, 1.00),
+    },
+
+    -- 22. Лавандовая (Мягкий пастельный сиренево-голубой)
+    {
+        name       = u8"Лавандовая",
+        windowBg   = imgui.ImVec4(0.06, 0.06, 0.10, 0.97),
+        titleBg    = imgui.ImVec4(0.32, 0.30, 0.56, 1.00),
+        panelBg    = imgui.ImVec4(0.10, 0.10, 0.16, 1.00),
+        button     = imgui.ImVec4(0.32, 0.30, 0.56, 1.00),
+        buttonHov  = imgui.ImVec4(0.42, 0.40, 0.70, 1.00),
+        buttonAct  = imgui.ImVec4(0.24, 0.22, 0.44, 1.00),
+        header     = imgui.ImVec4(0.32, 0.30, 0.56, 1.00),
+        headerHov  = imgui.ImVec4(0.42, 0.40, 0.70, 1.00),
+        headerAct  = imgui.ImVec4(0.24, 0.22, 0.44, 1.00),
+        frameBg    = imgui.ImVec4(0.14, 0.14, 0.22, 1.00),
+        border     = imgui.ImVec4(0.50, 0.48, 0.82, 0.45),
+        accent     = imgui.ImVec4(0.68, 0.65, 1.00, 1.00),
+        text       = imgui.ImVec4(0.95, 0.95, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.65, 0.64, 0.82, 1.00),
+    },
+
+    -- 23. Ультрамарин (Электрический кобальт и глубокий космос)
+    {
+        name       = u8"Ультрамарин",
+        windowBg   = imgui.ImVec4(0.03, 0.04, 0.10, 0.98),
+        titleBg    = imgui.ImVec4(0.14, 0.22, 0.68, 1.00),
+        panelBg    = imgui.ImVec4(0.06, 0.08, 0.17, 1.00),
+        button     = imgui.ImVec4(0.14, 0.22, 0.68, 1.00),
+        buttonHov  = imgui.ImVec4(0.20, 0.30, 0.84, 1.00),
+        buttonAct  = imgui.ImVec4(0.10, 0.16, 0.52, 1.00),
+        header     = imgui.ImVec4(0.14, 0.22, 0.68, 1.00),
+        headerHov  = imgui.ImVec4(0.20, 0.30, 0.84, 1.00),
+        headerAct  = imgui.ImVec4(0.10, 0.16, 0.52, 1.00),
+        frameBg    = imgui.ImVec4(0.09, 0.12, 0.24, 1.00),
+        border     = imgui.ImVec4(0.25, 0.38, 0.95, 0.45),
+        accent     = imgui.ImVec4(0.32, 0.52, 1.00, 1.00),
+        text       = imgui.ImVec4(0.92, 0.95, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.56, 0.64, 0.88, 1.00),
+    },
+
+    -- 24. Небесная (Кристально-голубой лазурный неон)
+    {
+        name       = u8"Небесная",
+        windowBg   = imgui.ImVec4(0.04, 0.07, 0.10, 0.97),
+        titleBg    = imgui.ImVec4(0.12, 0.44, 0.64, 1.00),
+        panelBg    = imgui.ImVec4(0.07, 0.12, 0.17, 1.00),
+        button     = imgui.ImVec4(0.12, 0.44, 0.64, 1.00),
+        buttonHov  = imgui.ImVec4(0.18, 0.56, 0.78, 1.00),
+        buttonAct  = imgui.ImVec4(0.08, 0.32, 0.48, 1.00),
+        header     = imgui.ImVec4(0.12, 0.44, 0.64, 1.00),
+        headerHov  = imgui.ImVec4(0.18, 0.56, 0.78, 1.00),
+        headerAct  = imgui.ImVec4(0.08, 0.32, 0.48, 1.00),
+        frameBg    = imgui.ImVec4(0.10, 0.16, 0.22, 1.00),
+        border     = imgui.ImVec4(0.24, 0.66, 0.90, 0.45),
+        accent     = imgui.ImVec4(0.35, 0.80, 1.00, 1.00),
+        text       = imgui.ImVec4(0.92, 0.98, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.58, 0.74, 0.85, 1.00),
+    },
+
+    -- 25. Сливовая (Глубокий бархатный пурпур и орхидея)
+    {
+        name       = u8"Сливовая",
+        windowBg   = imgui.ImVec4(0.08, 0.04, 0.08, 0.97),
+        titleBg    = imgui.ImVec4(0.44, 0.14, 0.44, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.07, 0.13, 1.00),
+        button     = imgui.ImVec4(0.44, 0.14, 0.44, 1.00),
+        buttonHov  = imgui.ImVec4(0.56, 0.20, 0.56, 1.00),
+        buttonAct  = imgui.ImVec4(0.32, 0.10, 0.32, 1.00),
+        header     = imgui.ImVec4(0.44, 0.14, 0.44, 1.00),
+        headerHov  = imgui.ImVec4(0.56, 0.20, 0.56, 1.00),
+        headerAct  = imgui.ImVec4(0.32, 0.10, 0.32, 1.00),
+        frameBg    = imgui.ImVec4(0.17, 0.09, 0.17, 1.00),
+        border     = imgui.ImVec4(0.68, 0.26, 0.68, 0.45),
+        accent     = imgui.ImVec4(0.88, 0.38, 0.88, 1.00),
+        text       = imgui.ImVec4(0.98, 0.92, 0.98, 1.00),
+        textDim    = imgui.ImVec4(0.74, 0.56, 0.74, 1.00),
+    },
+
+    -- 26. Медная (Теплая состаренная бронза и терракота)
+    {
+        name       = u8"Медная",
+        windowBg   = imgui.ImVec4(0.08, 0.05, 0.04, 0.97),
+        titleBg    = imgui.ImVec4(0.48, 0.26, 0.16, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.09, 0.07, 1.00),
+        button     = imgui.ImVec4(0.48, 0.26, 0.16, 1.00),
+        buttonHov  = imgui.ImVec4(0.60, 0.34, 0.22, 1.00),
+        buttonAct  = imgui.ImVec4(0.36, 0.19, 0.11, 1.00),
+        header     = imgui.ImVec4(0.48, 0.26, 0.16, 1.00),
+        headerHov  = imgui.ImVec4(0.60, 0.34, 0.22, 1.00),
+        headerAct  = imgui.ImVec4(0.36, 0.19, 0.11, 1.00),
+        frameBg    = imgui.ImVec4(0.17, 0.12, 0.09, 1.00),
+        border     = imgui.ImVec4(0.72, 0.42, 0.26, 0.45),
+        accent     = imgui.ImVec4(0.90, 0.56, 0.36, 1.00),
+        text       = imgui.ImVec4(0.98, 0.93, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.74, 0.60, 0.52, 1.00),
+    },
+
+    -- 27. Песочная (Пустынный дюнный беж и теплое шампанское)
+    {
+        name       = u8"Песочная",
+        windowBg   = imgui.ImVec4(0.08, 0.07, 0.05, 0.97),
+        titleBg    = imgui.ImVec4(0.42, 0.36, 0.24, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.11, 0.09, 1.00),
+        button     = imgui.ImVec4(0.42, 0.36, 0.24, 1.00),
+        buttonHov  = imgui.ImVec4(0.54, 0.46, 0.32, 1.00),
+        buttonAct  = imgui.ImVec4(0.32, 0.27, 0.18, 1.00),
+        header     = imgui.ImVec4(0.42, 0.36, 0.24, 1.00),
+        headerHov  = imgui.ImVec4(0.54, 0.46, 0.32, 1.00),
+        headerAct  = imgui.ImVec4(0.32, 0.27, 0.18, 1.00),
+        frameBg    = imgui.ImVec4(0.17, 0.15, 0.12, 1.00),
+        border     = imgui.ImVec4(0.64, 0.56, 0.40, 0.45),
+        accent     = imgui.ImVec4(0.92, 0.82, 0.58, 1.00),
+        text       = imgui.ImVec4(0.98, 0.96, 0.90, 1.00),
+        textDim    = imgui.ImVec4(0.72, 0.68, 0.58, 1.00),
+    },
+
+    -- 28. Малиновая (Яркая сочная фуксия-малина)
+    {
+        name       = u8"Малиновая",
+        windowBg   = imgui.ImVec4(0.08, 0.03, 0.05, 0.97),
+        titleBg    = imgui.ImVec4(0.56, 0.10, 0.28, 1.00),
+        panelBg    = imgui.ImVec4(0.13, 0.06, 0.09, 1.00),
+        button     = imgui.ImVec4(0.56, 0.10, 0.28, 1.00),
+        buttonHov  = imgui.ImVec4(0.70, 0.14, 0.36, 1.00),
+        buttonAct  = imgui.ImVec4(0.42, 0.07, 0.20, 1.00),
+        header     = imgui.ImVec4(0.56, 0.10, 0.28, 1.00),
+        headerHov  = imgui.ImVec4(0.70, 0.14, 0.36, 1.00),
+        headerAct  = imgui.ImVec4(0.42, 0.07, 0.20, 1.00),
+        frameBg    = imgui.ImVec4(0.18, 0.08, 0.12, 1.00),
+        border     = imgui.ImVec4(0.82, 0.18, 0.44, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.20, 0.50, 1.00),
+        text       = imgui.ImVec4(1.00, 0.92, 0.95, 1.00),
+        textDim    = imgui.ImVec4(0.78, 0.52, 0.62, 1.00),
+    },
+
+    -- 29. Нефритовая (Глубокий восточный нефрит и морская хвоя)
+    {
+        name       = u8"Нефритовая",
+        windowBg   = imgui.ImVec4(0.03, 0.07, 0.06, 0.97),
+        titleBg    = imgui.ImVec4(0.08, 0.38, 0.30, 1.00),
+        panelBg    = imgui.ImVec4(0.06, 0.11, 0.10, 1.00),
+        button     = imgui.ImVec4(0.08, 0.38, 0.30, 1.00),
+        buttonHov  = imgui.ImVec4(0.12, 0.48, 0.38, 1.00),
+        buttonAct  = imgui.ImVec4(0.05, 0.28, 0.22, 1.00),
+        header     = imgui.ImVec4(0.08, 0.38, 0.30, 1.00),
+        headerHov  = imgui.ImVec4(0.12, 0.48, 0.38, 1.00),
+        headerAct  = imgui.ImVec4(0.05, 0.28, 0.22, 1.00),
+        frameBg    = imgui.ImVec4(0.08, 0.15, 0.13, 1.00),
+        border     = imgui.ImVec4(0.16, 0.58, 0.46, 0.45),
+        accent     = imgui.ImVec4(0.22, 0.78, 0.62, 1.00),
+        text       = imgui.ImVec4(0.90, 0.98, 0.95, 1.00),
+        textDim    = imgui.ImVec4(0.52, 0.72, 0.66, 1.00),
+    },
+
+    -- 30. Арктическая (Морозный бело-голубой неон на темном сланце)
+    {
+        name       = u8"Арктическая",
+        windowBg   = imgui.ImVec4(0.05, 0.07, 0.09, 0.98),
+        titleBg    = imgui.ImVec4(0.22, 0.34, 0.44, 1.00),
+        panelBg    = imgui.ImVec4(0.09, 0.11, 0.14, 1.00),
+        button     = imgui.ImVec4(0.22, 0.34, 0.44, 1.00),
+        buttonHov  = imgui.ImVec4(0.30, 0.44, 0.56, 1.00),
+        buttonAct  = imgui.ImVec4(0.16, 0.25, 0.34, 1.00),
+        header     = imgui.ImVec4(0.22, 0.34, 0.44, 1.00),
+        headerHov  = imgui.ImVec4(0.30, 0.44, 0.56, 1.00),
+        headerAct  = imgui.ImVec4(0.16, 0.25, 0.34, 1.00),
+        frameBg    = imgui.ImVec4(0.12, 0.15, 0.19, 1.00),
+        border     = imgui.ImVec4(0.45, 0.65, 0.80, 0.45),
+        accent     = imgui.ImVec4(0.72, 0.92, 1.00, 1.00),
+        text       = imgui.ImVec4(0.96, 0.99, 1.00, 1.00),
+        textDim    = imgui.ImVec4(0.66, 0.76, 0.84, 1.00),
+    },
+
+    -- 31. Гранатовая (Рубиново-алый неон на угольно-черном фоне)
+    {
+        name       = u8"Гранатовая",
+        windowBg   = imgui.ImVec4(0.05, 0.02, 0.03, 0.98),
+        titleBg    = imgui.ImVec4(0.46, 0.06, 0.14, 1.00),
+        panelBg    = imgui.ImVec4(0.09, 0.04, 0.06, 1.00),
+        button     = imgui.ImVec4(0.46, 0.06, 0.14, 1.00),
+        buttonHov  = imgui.ImVec4(0.60, 0.10, 0.20, 1.00),
+        buttonAct  = imgui.ImVec4(0.34, 0.04, 0.10, 1.00),
+        header     = imgui.ImVec4(0.46, 0.06, 0.14, 1.00),
+        headerHov  = imgui.ImVec4(0.60, 0.10, 0.20, 1.00),
+        headerAct  = imgui.ImVec4(0.34, 0.04, 0.10, 1.00),
+        frameBg    = imgui.ImVec4(0.14, 0.06, 0.08, 1.00),
+        border     = imgui.ImVec4(0.75, 0.12, 0.24, 0.45),
+        accent     = imgui.ImVec4(1.00, 0.16, 0.30, 1.00),
+        text       = imgui.ImVec4(1.00, 0.92, 0.94, 1.00),
+        textDim    = imgui.ImVec4(0.76, 0.50, 0.56, 1.00),
     }
 }
-
 currentThemeIdx = 1
 local function getTheme() return themes[currentThemeIdx] end
 
-THEME_COLOR_COUNT = 14 -- сколько цветов пушим в pushThemeColors(), для симметричного PopStyleColor
-THEME_ROUNDING_COUNT = 4 -- сколько StyleVar пушим для скруглений, для симметричного PopStyleVar
+THEME_COLOR_COUNT = 16
+THEME_ROUNDING_COUNT = 4
 
 local function pushThemeColors()
     local t = getTheme()
     imgui.PushStyleColor(imgui.Col.WindowBg,       t.windowBg)
     imgui.PushStyleColor(imgui.Col.ChildWindowBg,  t.panelBg)
+    imgui.PushStyleColor(imgui.Col.PopupBg,        imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.98))
+    imgui.PushStyleColor(imgui.Col.ModalWindowDarkening, imgui.ImVec4(0.02, 0.04, 0.07, 0.74))
     imgui.PushStyleColor(imgui.Col.TitleBgActive,  t.titleBg)
     imgui.PushStyleColor(imgui.Col.Button,         t.button)
     imgui.PushStyleColor(imgui.Col.ButtonHovered,  t.buttonHov)
@@ -598,7 +928,6 @@ local function pushThemeColors()
     imgui.PushStyleColor(imgui.Col.ScrollbarGrab,  t.accent)
     imgui.PushStyleColor(imgui.Col.Separator,      t.border)
 end
-
 local function pushThemeRounding()
     imgui.PushStyleVar(imgui.StyleVar.WindowRounding,       12.0)
     imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding,  10.0)
@@ -1367,7 +1696,7 @@ local function drawAdAddForm(t)
 
         imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.18, 0.22, 0.30, 0.85))
         imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.26, 0.32, 0.42, 1.0))
-        if imgui.Button(fa.ICON_TIMES .. u8"  Отмена##ad_add_cancel", imgui.ImVec2(110, 30)) then
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##ad_add_cancel", imgui.ImVec2(120, 30)) then
             ad_add_form_open = false
             ad_edit_idx = nil
         end
@@ -1520,16 +1849,12 @@ end
 
 local hr_subtab = "ads" -- "ads" | "messages"
 
--- ============================================================
---  УПРАВЛЕНИЕ ОГРАНИЧЕНИЯМИ РЕКЛАМЫ (Sean_Verstein & Brooks_Wade)
--- ============================================================
 AD_MANAGERS = {
     ["sean_verstein"] = true,
     ["brooks_wade"]   = true,
 }
 AD_RESTRICTIONS_RAW_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/ad_restrictions.json"
 AD_RESTRICTIONS_API_URL = "https://api.github.com/repos/squaliee/TRPcomm-Manager-Updates/contents/ad_restrictions.json"
--- GitHub токен задаётся в настройках скрипта (trpcomm-manager.ini) и не хранится в коде
 
 ad_restrictions = {
     auto_send_disabled = false,
@@ -2537,19 +2862,29 @@ local function drawHRCalendarTab(t)
     imgui.Spacing()
 
     -- ---------- Заголовки дней недели ----------
+    local firstWeekday = weekdayOfFirst(calendar_view_year, calendar_view_month)
+    local totalDays = daysInMonth(calendar_view_year, calendar_view_month)
+    local totalRows = math.ceil((firstWeekday + totalDays) / 7)
+
+    local avail = imgui.GetContentRegionAvail()
+    local cellW = math.floor((avail.x - CAL_GAP * 6) / 7)
+    if cellW < 80 then cellW = CAL_CELL_W end
+
     for col = 1, 7 do
         if col > 1 then imgui.SameLine(0, CAL_GAP) end
-        imgui.BeginChild("cal_wd_" .. col, imgui.ImVec2(CAL_CELL_W, 20), false)
+        imgui.BeginChild("cal_wd_" .. col, imgui.ImVec2(cellW, 20), false)
+            local tw = imgui.CalcTextSize(WEEKDAY_NAMES[col]).x
+            imgui.SetCursorPosX(math.max(0, (cellW - tw) * 0.5))
             imgui.TextColored(t.textDim, WEEKDAY_NAMES[col])
         imgui.EndChild()
     end
 
     imgui.Spacing()
 
-    -- ---------- Сетка дней ----------
-    local firstWeekday = weekdayOfFirst(calendar_view_year, calendar_view_month)
-    local totalDays = daysInMonth(calendar_view_year, calendar_view_month)
-    local totalRows = math.ceil((firstWeekday + totalDays) / 7)
+    local availH = imgui.GetContentRegionAvail().y
+    local spacingY = imgui.GetStyle().ItemSpacing.y
+    local cellH = math.floor((availH - (totalRows - 1) * (spacingY * 2)) / math.max(1, totalRows))
+    if cellH < 44 then cellH = 44 elseif cellH > 82 then cellH = 82 end
 
     for row = 0, totalRows - 1 do
         for col = 0, 6 do
@@ -2585,7 +2920,7 @@ local function drawHRCalendarTab(t)
                     pushed = 2
                 end
 
-                imgui.Button(tostring(cellDay), imgui.ImVec2(CAL_CELL_W, CAL_CELL_H))
+                imgui.Button(tostring(cellDay), imgui.ImVec2(cellW, cellH))
 
                 if pushed > 0 then imgui.PopStyleColor(pushed) end
 
@@ -2619,7 +2954,7 @@ local function drawHRCalendarTab(t)
                     imgui.EndTooltip()
                 end
             else
-                imgui.Dummy(imgui.ImVec2(CAL_CELL_W, CAL_CELL_H))
+                imgui.Dummy(imgui.ImVec2(cellW, cellH))
             end
 
             imgui.PopID()
@@ -3740,7 +4075,12 @@ roleCreateSkinId = imgui.ImInt(0)
 roleCatalogPage = 0
 
 local function drawSkinCatalogPopup(t)
-    if imgui.BeginPopupModal("Каталог скинов##skin_catalog_popup", nil, imgui.WindowFlags.AlwaysAutoResize) then
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.65))
+    if imgui.BeginPopupModal("Каталог скинов##skin_catalog_popup", nil, imgui.WindowFlags.AlwaysAutoResize + imgui.WindowFlags.NoTitleBar) then
+        imgui.TextColored(t.accent, fa.ICON_USERS .. u8"  КАТАЛОГ СКИНОВ GTA:SA")
+        imgui.Separator()
+        imgui.Spacing()
+
         local totalSkins = ROLE_SKIN_MAX - ROLE_SKIN_MIN + 1
         local totalPages = math.ceil(totalSkins / ROLE_SKINS_PER_PAGE)
         local pageStart  = ROLE_SKIN_MIN + roleCatalogPage * ROLE_SKINS_PER_PAGE
@@ -3770,25 +4110,25 @@ local function drawSkinCatalogPopup(t)
 
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-        if imgui.Button(u8"<< Назад##catalog_prev", imgui.ImVec2(90, 26)) then
+        if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад##catalog_prev", imgui.ImVec2(105, 26)) then
             if roleCatalogPage > 0 then roleCatalogPage = roleCatalogPage - 1 end
         end
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8"Страница " .. (roleCatalogPage + 1) .. u8" из " .. totalPages)
+        imgui.TextColored(t.textDim, u8"  Страница " .. (roleCatalogPage + 1) .. u8" из " .. totalPages .. "  ")
         imgui.SameLine()
-        if imgui.Button(u8"Вперёд >>##catalog_next", imgui.ImVec2(90, 26)) then
+        if imgui.Button(u8"Вперёд " .. fa.ICON_ARROW_RIGHT .. "##catalog_next", imgui.ImVec2(105, 26)) then
             if roleCatalogPage < totalPages - 1 then roleCatalogPage = roleCatalogPage + 1 end
         end
 
         imgui.Spacing()
-        if imgui.Button(u8"Закрыть##close_catalog", imgui.ImVec2(-1, 26)) then
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##close_catalog", imgui.ImVec2(-1, 28)) then
             imgui.CloseCurrentPopup()
         end
 
         imgui.EndPopup()
     end
+    imgui.PopStyleColor()
 end
-
 -- ------------------------------------------------------------
 -- отрисовка вкладки "Роли"
 -- ------------------------------------------------------------
@@ -3822,7 +4162,6 @@ local function drawBuiltinRoleRow(t, tmpl)
         end
     imgui.EndChild()
 end
-
 local function drawCustomRoleRow(t, idx, tmpl)
     imgui.BeginChild("custom_role_" .. idx, imgui.ImVec2(0, 60), true)
         local tex = loadSkinTexture(tmpl.skinId)
@@ -3877,19 +4216,24 @@ end
 
 local function drawAddRolePopup(t)
     local popupTitle = roles_edit_idx and u8"Редактировать шаблон" or u8"Новый шаблон"
-    if imgui.BeginPopupModal(popupTitle .. "###add_role_popup", nil, imgui.WindowFlags.AlwaysAutoResize) then
-        imgui.TextColored(t.textDim, u8"Название:")
-        imgui.PushItemWidth(240)
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.65))
+    if imgui.BeginPopupModal(popupTitle .. "###add_role_popup", nil, imgui.WindowFlags.AlwaysAutoResize + imgui.WindowFlags.NoTitleBar) then
+        imgui.TextColored(t.accent, (roles_edit_idx and fa.ICON_PENCIL or fa.ICON_PLUS) .. "  " .. popupTitle)
+        imgui.Separator()
+        imgui.Spacing()
+
+        imgui.TextColored(t.textDim, fa.ICON_TAG .. u8"  Название роли:")
+        imgui.PushItemWidth(280)
         imgui.InputText("##new_role_name", roles_new_name)
         imgui.PopItemWidth()
 
-                imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"ID скина:")
-        imgui.PushItemWidth(100)
+        imgui.Spacing()
+        imgui.TextColored(t.textDim, fa.ICON_USER .. u8"  ID скина:")
+        imgui.PushItemWidth(110)
         imgui.InputInt("##new_role_skin_id", roleCreateSkinId, 0, 0)
         imgui.PopItemWidth()
         imgui.SameLine()
-        if imgui.Button(u8"Каталог##open_skin_catalog", imgui.ImVec2(100, 24)) then
+        if imgui.Button(fa.ICON_TH .. u8" Каталог##open_skin_catalog", imgui.ImVec2(115, 24)) then
             roleCatalogPage = 0
             imgui.OpenPopup("Каталог скинов##skin_catalog_popup")
         end
@@ -3903,14 +4247,14 @@ local function drawAddRolePopup(t)
         imgui.Checkbox(u8"Без скина##new_role_no_skin", roles_new_no_skin)
 
         imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"Оружие:")
-        imgui.PushItemWidth(260)
+        imgui.TextColored(t.textDim, fa.ICON_CROSSHAIRS .. u8"  Оружие:")
+        imgui.PushItemWidth(280)
         imgui.Combo("##new_role_weapon", roles_new_weapon_combo, weapon_list)
         imgui.PopItemWidth()
 
         imgui.Spacing()
-        imgui.TextColored(t.textDim, u8"Клист (цвет ника):")
-        imgui.PushItemWidth(260)
+        imgui.TextColored(t.textDim, fa.ICON_PAINT_BRUSH .. u8"  Клист (цвет ника):")
+        imgui.PushItemWidth(280)
         imgui.Combo("##new_role_color", roles_new_color_combo, color_list)
         imgui.PopItemWidth()
 
@@ -3919,7 +4263,9 @@ local function drawAddRolePopup(t)
 
         imgui.Spacing(); imgui.Separator(); imgui.Spacing()
 
-                if imgui.Button(u8"Сохранить##save_new_role", imgui.ImVec2(120, 28)) then
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+        if imgui.Button(fa.ICON_CHECK .. u8"  Сохранить##save_new_role", imgui.ImVec2(145, 30)) then
             if roles_new_name.v ~= "" then
                 local finalSkinId  = roles_new_no_skin.v and -1 or roleCreateSkinId.v
                 local finalColorId = (roles_new_color_combo.v == 0) and -1 or (roles_new_color_combo.v - 1)
@@ -3946,8 +4292,10 @@ local function drawAddRolePopup(t)
                 imgui.CloseCurrentPopup()
             end
         end
-        imgui.SameLine()
-        if imgui.Button(u8"Отмена##cancel_new_role", imgui.ImVec2(100, 28)) then
+        imgui.PopStyleColor(2)
+
+        imgui.SameLine(0, 8)
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##cancel_new_role", imgui.ImVec2(125, 30)) then
             roles_edit_idx = nil
             imgui.CloseCurrentPopup()
         end
@@ -3956,8 +4304,8 @@ local function drawAddRolePopup(t)
 
         imgui.EndPopup()
     end
+    imgui.PopStyleColor()
 end
-
 local function drawRolesTab(t)
     imgui.TextColored(t.accent, u8"Роли")
     imgui.SameLine(imgui.GetWindowWidth() - 150)
@@ -4011,47 +4359,98 @@ end
 -- ============================================================
 
 local function drawSettingsTab(t)
-    local colW = (imgui.GetWindowWidth() - 30) * 0.5
-    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.75)
+    local avail = imgui.GetContentRegionAvail()
+    local gap = 12
+    local colW = math.floor((avail.x - gap) * 0.5)
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
     local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
-    local pillDefaultBg = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.85)
+    local pillDefaultBg = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.90)
+    local rowBg = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.45)
+
+    local function drawCardHeader(icon, title)
+        imgui.TextColored(t.accent, icon .. "  " .. title)
+        imgui.Separator()
+        imgui.Spacing()
+    end
+
+    local function drawToggleRow(id, icon, label, boolVar, onToggle)
+        local dl = imgui.GetWindowDrawList()
+        local p = imgui.GetCursorScreenPos()
+        local w = imgui.GetContentRegionAvailWidth()
+        local h = 28
+        imgui.InvisibleButton("##tgl_" .. id, imgui.ImVec2(w, h))
+        local hov = imgui.IsItemHovered()
+        if imgui.IsItemClicked(0) then
+            boolVar.v = not boolVar.v
+            if onToggle then onToggle(boolVar.v) end
+        end
+
+        local bgAlpha = hov and 0.75 or (boolVar.v and 0.50 or 0.30)
+        local bgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, bgAlpha))
+        dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h), bgCol, 6.0)
+        if boolVar.v then
+            local barCol = imgui.ColorConvertFloat4ToU32(t.accent)
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + 3, p.y + h), barCol, 3.0)
+        end
+
+        local icCol = imgui.ColorConvertFloat4ToU32(boolVar.v and t.accent or t.textDim)
+        local txtCol = imgui.ColorConvertFloat4ToU32(boolVar.v and t.text or t.textDim)
+        dl:AddText(imgui.ImVec2(p.x + 12, p.y + 6), icCol, icon)
+        dl:AddText(imgui.ImVec2(p.x + 34, p.y + 6), txtCol, label)
+
+        -- Стилизованный тумблер (pill switch) справа
+        local swW, swH = 34, 18
+        local swX = p.x + w - swW - 10
+        local swY = p.y + (h - swH) * 0.5
+        local swBg = boolVar.v
+            and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.90))
+            or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.22, 0.25, 0.30, 0.90))
+        dl:AddRectFilled(imgui.ImVec2(swX, swY), imgui.ImVec2(swX + swW, swY + swH), swBg, swH * 0.5)
+        local knobX = boolVar.v and (swX + swW - swH * 0.5) or (swX + swH * 0.5)
+        local knobY = swY + swH * 0.5
+        dl:AddCircleFilled(imgui.ImVec2(knobX, knobY), (swH * 0.5) - 2.5, imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1, 1, 1, 0.95)), 16)
+    end
 
     -- ============================================================
-    --  ЛЕВАЯ КОЛОНКА (КЛАВИШИ, ТЕМА, АДМИН-ТОКЕН)
+    --  ЛЕВАЯ КОЛОНКА (КЛАВИШИ, ТЕМА, РАДИОСВЯЗЬ)
     -- ============================================================
-    imgui.BeginChild("SettingsColLeft", imgui.ImVec2(colW, 0), false)
+    imgui.BeginGroup()
 
-        -- 1. Карточка горячих клавиш
+        -- 1. Карточка горячих клавиш (компактная, в одну строку на бинд)
         imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
         imgui.PushStyleColor(imgui.Col.Border, cardBorder)
         imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-        imgui.BeginChild("card_hotkeys", imgui.ImVec2(0, 195), true)
+        imgui.BeginChild("card_hotkeys", imgui.ImVec2(colW, 114), true)
 
-            imgui.TextColored(t.accent, fa.ICON_KEYBOARD_O .. u8"  Управление и клавиши")
-            imgui.Spacing()
+            drawCardHeader(fa.ICON_KEYBOARD_O, u8"Управление и клавиши")
 
             -- Главное меню
-            imgui.TextColored(t.text, u8"Главное меню TRPcomm:")
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.text, u8"Главное меню:")
+            imgui.SameLine(235)
+
             local isHk1Wait = waiting_for_key
             local hk1Col = isHk1Wait and imgui.ImVec4(0.95, 0.65, 0.20, 1.0) or t.accent
             local hk1Bg = isHk1Wait and imgui.ImVec4(0.35, 0.25, 0.10, 0.85) or pillDefaultBg
+            local pillW = math.max(95, colW - 385)
+
             imgui.PushStyleColor(imgui.Col.Button, hk1Bg)
             imgui.PushStyleColor(imgui.Col.Text, hk1Col)
-            imgui.Button((isHk1Wait and (fa.ICON_SPINNER .. u8" Нажмите клавишу...") or hotkey_display.v) .. "##hk1_disp", imgui.ImVec2(175, 25))
+            imgui.Button((isHk1Wait and (fa.ICON_SPINNER .. u8" Клавиша...") or hotkey_display.v) .. "##hk1_disp", imgui.ImVec2(pillW, 24))
             imgui.PopStyleColor(2)
 
-            imgui.SameLine()
+            imgui.SameLine(0, 4)
             if isHk1Wait then
-                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk1_cancel", imgui.ImVec2(80, 25)) then
+                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk1_cancel", imgui.ImVec2(126, 24)) then
                     waiting_for_key = false
                 end
             else
-                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk1_change", imgui.ImVec2(80, 25)) then
+                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk1_change", imgui.ImVec2(72, 24)) then
                     waiting_for_key2 = false
                     waiting_for_key = true
                 end
-                imgui.SameLine()
-                if imgui.Button(fa.ICON_UNDO .. u8" Сброс##hk1_reset", imgui.ImVec2(75, 25)) then
+                imgui.SameLine(0, 4)
+                if imgui.Button(fa.ICON_UNDO .. "##hk1_reset", imgui.ImVec2(50, 24)) then
                     hotkey_alt.v   = true
                     hotkey_ctrl.v  = false
                     hotkey_shift.v = false
@@ -4078,31 +4477,35 @@ local function drawSettingsTab(t)
                 end
             end
 
-            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+            imgui.Spacing()
 
             -- Радио + Мегафон
-            imgui.TextColored(t.text, u8"Слушать радио + мегафон:")
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.text, u8"Телепорт + подключение к рации:")
+            imgui.SameLine(235)
+
             local isHk2Wait = waiting_for_key2
-            local hk2Text = hotkey2_key.v == 0 and u8"Не назначено" or hotkey2_display.v
+            local hk2Text = hotkey2_key.v == 0 and u8"Не задано" or hotkey2_display.v
             local hk2Col = isHk2Wait and imgui.ImVec4(0.95, 0.65, 0.20, 1.0) or (hotkey2_key.v == 0 and t.textDim or t.accent)
             local hk2Bg = isHk2Wait and imgui.ImVec4(0.35, 0.25, 0.10, 0.85) or pillDefaultBg
+
             imgui.PushStyleColor(imgui.Col.Button, hk2Bg)
             imgui.PushStyleColor(imgui.Col.Text, hk2Col)
-            imgui.Button((isHk2Wait and (fa.ICON_SPINNER .. u8" Нажмите клавишу...") or hk2Text) .. "##hk2_disp", imgui.ImVec2(175, 25))
+            imgui.Button((isHk2Wait and (fa.ICON_SPINNER .. u8" Клавиша...") or hk2Text) .. "##hk2_disp", imgui.ImVec2(pillW, 24))
             imgui.PopStyleColor(2)
 
-            imgui.SameLine()
+            imgui.SameLine(0, 4)
             if isHk2Wait then
-                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk2_cancel", imgui.ImVec2(80, 25)) then
+                if imgui.Button(fa.ICON_TIMES .. u8" Отмена##hk2_cancel", imgui.ImVec2(126, 24)) then
                     waiting_for_key2 = false
                 end
             else
-                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk2_change", imgui.ImVec2(80, 25)) then
+                if imgui.Button(fa.ICON_PENCIL .. u8" Задать##hk2_change", imgui.ImVec2(72, 24)) then
                     waiting_for_key = false
                     waiting_for_key2 = true
                 end
-                imgui.SameLine()
-                if imgui.Button(fa.ICON_TRASH .. u8" Сброс##hk2_clear", imgui.ImVec2(75, 25)) then
+                imgui.SameLine(0, 4)
+                if imgui.Button(fa.ICON_TRASH .. "##hk2_clear", imgui.ImVec2(50, 24)) then
                     hotkey2_alt.v   = false
                     hotkey2_ctrl.v  = false
                     hotkey2_shift.v = false
@@ -4135,16 +4538,18 @@ local function drawSettingsTab(t)
 
         imgui.Spacing()
 
-        -- 2. Карточка оформления интерфейса (без палитры)
+        -- 2. Карточка оформления интерфейса (компактная + быстрые цветовые точки тем)
         imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
         imgui.PushStyleColor(imgui.Col.Border, cardBorder)
         imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-        imgui.BeginChild("card_theme", imgui.ImVec2(0, 85), true)
+        imgui.BeginChild("card_theme", imgui.ImVec2(colW, 134), true)
 
-            imgui.TextColored(t.accent, fa.ICON_PAINT_BRUSH .. u8"  Оформление интерфейса")
-            imgui.Spacing()
+            drawCardHeader(fa.ICON_PAINT_BRUSH, u8"Оформление интерфейса")
 
-            imgui.TextColored(t.textDim, u8"Тема оформления:")
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.textDim, u8"Тема:")
+            imgui.SameLine(65)
+
             local theme_names = {}
             for _, th in ipairs(themes) do theme_names[#theme_names + 1] = th.name end
             imgui.PushItemWidth(-1)
@@ -4154,90 +4559,39 @@ local function drawSettingsTab(t)
             end
             imgui.PopItemWidth()
 
-        imgui.EndChild()
-        imgui.PopStyleVar()
-        imgui.PopStyleColor(2)
-
-        -- 3. Карточка GitHub API (Только руководство)
-        if isAdManager() then
             imgui.Spacing()
-            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
-            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
-            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-            imgui.BeginChild("card_github", imgui.ImVec2(0, 135), true)
-
-                imgui.TextColored(t.accent, fa.ICON_GITHUB .. u8"  GitHub API Token (Руководство)")
-                imgui.Spacing()
-                imgui.TextColored(t.textDim, u8"Синхронизация глобальных ограничений:")
-
-                local ghW = colW - 145
-                imgui.PushItemWidth(math.max(120, ghW))
-                local inputFlags = github_token_show.v and 0 or (imgui.InputTextFlags.Password or 32768)
-                if imgui.InputText("##github_token_field", github_admin_token_buf, inputFlags) then
+            -- Быстрая палитра тем в два ряда по 16 цветов
+            local dl = imgui.GetWindowDrawList()
+            local availW = imgui.GetContentRegionAvailWidth()
+            local perRow = 16
+            local dotGap = 6
+            local dotW = math.floor((availW - (perRow - 1) * dotGap) / perRow)
+            local dotH = 18
+            for idx, th in ipairs(themes) do
+                local colIdx = (idx - 1) % perRow
+                if colIdx > 0 then
+                    imgui.SameLine(0, dotGap)
+                elseif idx > 1 then
+                    imgui.Dummy(imgui.ImVec2(1, 2))
+                end
+                local p = imgui.GetCursorScreenPos()
+                imgui.InvisibleButton("##th_dot_" .. idx, imgui.ImVec2(dotW, dotH))
+                local hov = imgui.IsItemHovered()
+                if imgui.IsItemClicked(0) then
+                    currentThemeIdx = idx
+                    selected_theme_combo.v = idx - 1
                     saveSettings()
                 end
-                imgui.PopItemWidth()
+                if hov then imgui.SetTooltip(th.name) end
 
-                imgui.SameLine()
-                local eyeIcon = github_token_show.v and fa.ICON_EYE_SLASH or fa.ICON_EYE
-                if imgui.Button(eyeIcon .. "##gh_show_tok", imgui.ImVec2(28, 25)) then
-                    github_token_show.v = not github_token_show.v
+                local isSel = (idx == currentThemeIdx)
+                local colU32 = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(th.accent.x, th.accent.y, th.accent.z, isSel and 1.0 or (hov and 0.85 or 0.55)))
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + dotW, p.y + dotH), colU32, 4.0)
+                if isSel then
+                    local brdU32 = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1, 1, 1, 0.95))
+                    dl:AddRect(p, imgui.ImVec2(p.x + dotW, p.y + dotH), brdU32, 4.0)
                 end
-                if imgui.IsItemHovered() then imgui.SetTooltip(github_token_show.v and u8"Скрыть токен" or u8"Показать токен") end
-
-                imgui.SameLine()
-                if imgui.Button(fa.ICON_CHECK .. u8" Сохранить##btn_save_ghtoken", imgui.ImVec2(85, 25)) then
-                    saveSettings()
-                    showToast("GitHub токен сохранен")
-                end
-
-                imgui.Spacing()
-                imgui.TextColored(imgui.ImVec4(0.55, 0.58, 0.65, 0.85), u8"Доступен только доверенным администраторам TRPcomm.")
-
-            imgui.EndChild()
-            imgui.PopStyleVar()
-            imgui.PopStyleColor(2)
-        end
-
-    imgui.EndChild()
-
-    -- ============================================================
-    --  ПРАВАЯ КОЛОНКА (РАДИОСВЯЗЬ И ОПТИМИЗАЦИЯ)
-    -- ============================================================
-    imgui.SameLine(0, 12)
-    imgui.BeginChild("SettingsColRight", imgui.ImVec2(colW, 0), false)
-
-        -- 4. Карточка радиосвязи и служебных доступов
-        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
-        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
-        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-        imgui.BeginChild("card_radio", imgui.ImVec2(0, 195), true)
-
-            imgui.TextColored(t.accent, fa.ICON_RSS .. u8"  Радиосвязь и доступы")
-            imgui.Spacing()
-
-            imgui.TextColored(t.textDim, fa.ICON_VOLUME_UP .. u8" Частота рации:")
-            imgui.PushItemWidth(-1)
-            if imgui.InputText("##radio_freq", radio_freq) then
-                saveSettings()
             end
-            imgui.PopItemWidth()
-
-            imgui.Spacing()
-            imgui.TextColored(t.textDim, fa.ICON_LOCK .. u8" Пароль от волны:")
-            imgui.PushItemWidth(-1)
-            if imgui.InputText("##radio_pass", radio_pass) then
-                saveSettings()
-            end
-            imgui.PopItemWidth()
-
-            imgui.Spacing()
-            imgui.TextColored(t.textDim, fa.ICON_MAP_MARKER .. u8" Пароль телепорта к фракции:")
-            imgui.PushItemWidth(-1)
-            if imgui.InputText("##teleport_pass", teleport_pass) then
-                saveSettings()
-            end
-            imgui.PopItemWidth()
 
         imgui.EndChild()
         imgui.PopStyleVar()
@@ -4245,18 +4599,80 @@ local function drawSettingsTab(t)
 
         imgui.Spacing()
 
-        -- 5. Карточка игрового процесса и оптимизации
+        -- 3. Карточка радиосвязи и служебных доступов (горизонтальные поля ввода)
+        local leftRemH = math.max(160, imgui.GetContentRegionAvail().y)
         imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
         imgui.PushStyleColor(imgui.Col.Border, cardBorder)
         imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-        imgui.BeginChild("card_tweaks", imgui.ImVec2(0, 215), true)
+        imgui.BeginChild("card_radio", imgui.ImVec2(colW, leftRemH), true)
 
-            imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8"  Игровой процесс и оптимизация")
-            imgui.Spacing()
+            drawCardHeader(fa.ICON_RSS, u8"Радиосвязь и доступы")
 
-            if imgui.Checkbox(fa.ICON_USERS .. u8"  Скрыть аксессуары других игроков", acs_rem) then
+            local labelColW = 195
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.textDim, fa.ICON_VOLUME_UP .. u8"  Частота рации:")
+            imgui.SameLine(labelColW)
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##radio_freq", radio_freq) then
                 saveSettings()
-                if acs_rem.v then
+            end
+            imgui.PopItemWidth()
+
+            imgui.Spacing()
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.textDim, fa.ICON_LOCK .. u8"  Пароль от волны:")
+            imgui.SameLine(labelColW)
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##radio_pass", radio_pass) then
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+            imgui.Spacing()
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.textDim, fa.ICON_MAP_MARKER .. u8"  Пароль телепорта:")
+            imgui.SameLine(labelColW)
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##teleport_pass", teleport_pass) then
+                saveSettings()
+            end
+            imgui.PopItemWidth()
+
+            imgui.Spacing()
+            imgui.TextColored(imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.65),
+                u8"Автоматически используются для подключения к волне и телепорта на ивенты.")
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+    imgui.EndGroup()
+
+    -- ============================================================
+    --  ПРАВАЯ КОЛОНКА (ОПТИМИЗАЦИЯ, МЕССЕНДЖЕР, АДМИН-ТОКЕН)
+    -- ============================================================
+    imgui.SameLine(0, gap)
+    imgui.BeginGroup()
+
+        local showSmsCard = hasAccess("advertising")
+        local showGhCard  = isAdManager()
+
+        -- 4. Карточка игрового процесса и оптимизации (стильные строки-тумблеры)
+        local tweaksH = 214
+        if not showSmsCard and not showGhCard then
+            tweaksH = math.max(214, imgui.GetContentRegionAvail().y)
+        end
+
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("card_tweaks", imgui.ImVec2(colW, tweaksH), true)
+
+            drawCardHeader(fa.ICON_SLIDERS, u8"Игровой процесс и оптимизация")
+
+            drawToggleRow("acs_rem", fa.ICON_USERS, u8"Скрыть аксессуары других игроков", acs_rem, function(val)
+                saveSettings()
+                if val then
                     for k, v in ipairs(getAllChars()) do
                         local res, id = sampGetPlayerIdByCharHandle(v)
                         if v ~= 1 and res and not sampIsPlayerNpc(id) then deleteAllAcs(id) end
@@ -4264,41 +4680,110 @@ local function drawSettingsTab(t)
                 else
                     sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Аксессуары снова отображаются (после рестрима)', -1)
                 end
-            end
+            end)
 
-            imgui.Spacing()
-            if imgui.Checkbox(fa.ICON_USER .. u8"  Скрыть аксессуары на своем персонаже", acs_rem_me) then
+            imgui.Dummy(imgui.ImVec2(1, 2))
+            drawToggleRow("acs_rem_me", fa.ICON_USER, u8"Скрыть аксессуары на своем персонаже", acs_rem_me, function(val)
                 saveSettings()
-                if acs_rem_me.v then
+                if val then
                     local res, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
                     if res then deleteAllAcs(id) end
                 else
                     sampAddChatMessage('{5B85C4}[TRPcomm] {FFFFFF}Аксессуары вернутся после смены скина или респавна', -1)
                 end
-            end
+            end)
 
-            imgui.Spacing()
-            if imgui.Checkbox(fa.ICON_SHIELD .. u8"  Скрыть бронежилет на персонаже", remove_armour) then
+            imgui.Dummy(imgui.ImVec2(1, 2))
+            drawToggleRow("rem_armour", fa.ICON_SHIELD, u8"Скрыть бронежилет на персонаже", remove_armour, function()
                 saveSettings()
-            end
+            end)
 
-            imgui.Spacing()
-            if imgui.Checkbox(fa.ICON_GLOBE .. u8"  Удалить логотип сервера (gta-trinity.com)", delete_textdraw) then
+            imgui.Dummy(imgui.ImVec2(1, 2))
+            drawToggleRow("del_td", fa.ICON_GLOBE, u8"Удалить логотип сервера (gta-trinity.com)", delete_textdraw, function()
                 saveSettings()
-            end
+            end)
 
-            imgui.Spacing()
-            if imgui.Checkbox(fa.ICON_BELL .. u8"  Всплывающие уведомления (Toasts)", notifications_enabled) then
+            imgui.Dummy(imgui.ImVec2(1, 2))
+            drawToggleRow("toasts", fa.ICON_BELL, u8"Всплывающие уведомления (Toasts)", notifications_enabled, function()
                 saveSettings()
-            end
+            end)
 
         imgui.EndChild()
         imgui.PopStyleVar()
         imgui.PopStyleColor(2)
 
-    imgui.EndChild()
-end
+        -- 5. Карточка Мессенджера (доступна сотрудникам Рекламного отдела)
+        if showSmsCard then
+            imgui.Spacing()
+            local smsH = showGhCard and 112 or math.max(112, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("card_quicksms", imgui.ImVec2(colW, smsH), true)
 
+                drawCardHeader(fa.ICON_ENVELOPE, u8"Мессенджер (/smss)")
+
+                if qsms and qsms.img then
+                    drawToggleRow("qsms_ooc", fa.ICON_COMMENT_O, u8"Отправлять OOC SMS (( текст ))", qsms.img.ooc, function(val)
+                        qsms.set.ooc = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+
+                    imgui.Dummy(imgui.ImVec2(1, 2))
+                    drawToggleRow("qsms_overlay", fa.ICON_WINDOW_MAXIMIZE, u8"Всплывающая панель под чатом (/sms, /t)", qsms.img.show_overlay, function(val)
+                        qsms.set.show_chat_overlay = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+                end
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+        end
+
+        -- 6. Карточка GitHub API (Только руководство)
+        if showGhCard then
+            imgui.Spacing()
+            local ghH = math.max(98, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("card_github", imgui.ImVec2(colW, ghH), true)
+
+                drawCardHeader(fa.ICON_GITHUB, u8"GitHub API Token (Руководство)")
+
+                local ghInputW = colW - 155
+                imgui.PushItemWidth(math.max(120, ghInputW))
+                local inputFlags = github_token_show.v and 0 or (imgui.InputTextFlags.Password or 32768)
+                if imgui.InputText("##github_token_field", github_admin_token_buf, inputFlags) then
+                    saveSettings()
+                end
+                imgui.PopItemWidth()
+
+                imgui.SameLine(0, 6)
+                local eyeIcon = github_token_show.v and fa.ICON_EYE_SLASH or fa.ICON_EYE
+                if imgui.Button(eyeIcon .. "##gh_show_tok", imgui.ImVec2(30, 24)) then
+                    github_token_show.v = not github_token_show.v
+                end
+                if imgui.IsItemHovered() then imgui.SetTooltip(github_token_show.v and u8"Скрыть токен" or u8"Показать токен") end
+
+                imgui.SameLine(0, 6)
+                if imgui.Button(fa.ICON_CHECK .. u8" Сохранить##btn_save_ghtoken", imgui.ImVec2(95, 24)) then
+                    saveSettings()
+                    showToast("GitHub токен сохранен")
+                end
+
+                imgui.Spacing()
+                imgui.TextColored(imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.70),
+                    u8"Синхронизация глобальных ограничений (доступно руководителям).")
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+        end
+
+    imgui.EndGroup()
+end
 -- ============================================================
 -- Папка со скриншотами SAMP — стандартная папка "Документы" пользователя
 local SCREENS_DIR = (os.getenv("USERPROFILE") or "") .. "\\Documents\\GTA San Andreas User Files\\SAMP\\screens\\"
@@ -4621,40 +5106,77 @@ local function drawGallerySendReportForm(t)
     if not gallery_send_form_open then return end
 
     local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(400, 180), imgui.Cond.Always)
+    local bgFlags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoSavedSettings
+
+    -- 1. Полноэкранный затемняющий фон
+    imgui.SetNextWindowPos(imgui.ImVec2(0, 0), imgui.Cond.Always)
+    imgui.SetNextWindowSize(imgui.ImVec2(sw, sh), imgui.Cond.Always)
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(0.02, 0.04, 0.07, 0.74))
+    imgui.PushStyleVar(imgui.StyleVar.WindowRounding, 0.0)
+    imgui.Begin("##gal_send_backdrop", nil, bgFlags)
+    if imgui.IsWindowHovered() and imgui.IsMouseClicked(0) then
+        gallery_send_form_open = false
+    end
+    imgui.End()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor()
+
+    -- 2. Модальное окно без крестика и стандартного заголовка
+    local modalW, modalH = 440, 215
+    imgui.SetNextWindowSize(imgui.ImVec2(modalW, modalH), imgui.Cond.Always)
     imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
 
     pushThemeColors()
     pushThemeRounding()
+    imgui.PushStyleVar(imgui.StyleVar.WindowPadding, imgui.ImVec2(18, 14))
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.99))
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.65))
 
-    local open = imgui.ImBool(true)
-    imgui.Begin(u8"Отправка отчёта##gallery_send_form", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then gallery_send_form_open = false end
+    imgui.Begin("##gallery_send_form_modal", nil, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoScrollbar)
 
-    imgui.TextColored(t.textDim, u8"Название ивента:")
-    imgui.PushItemWidth(360)
-    imgui.InputText("##gallery_send_event_name", gallery_send_event_name)
-    imgui.PopItemWidth()
+        imgui.TextColored(t.accent, fa.ICON_PAPER_PLANE .. u8"  ОТПРАВКА ФОТООТЧЁТА")
+        imgui.Separator()
+        imgui.Spacing()
 
-    imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Скриншотов: " .. #gallery_pending_files)
+        imgui.TextColored(t.textDim, fa.ICON_TAG .. u8"  Название ивента:")
+        imgui.PushItemWidth(-1)
+        imgui.InputText("##gallery_send_event_name", gallery_send_event_name)
+        imgui.PopItemWidth()
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+        imgui.Spacing()
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.55))
+        imgui.BeginChild("##gal_send_info_pill", imgui.ImVec2(-1, 32), false)
+            imgui.SetCursorPos(imgui.ImVec2(10, 7))
+            imgui.TextColored(t.textDim, fa.ICON_PICTURE_O .. u8"  Выбрано скриншотов:")
+            imgui.SameLine(0, 6)
+            imgui.TextColored(t.accent, tostring(#gallery_pending_files) .. u8" шт.")
+            imgui.SameLine(230)
+            imgui.TextColored(t.textDim, fa.ICON_CLOCK_O .. "  " .. os.date("%d.%m.%Y %H:%M"))
+        imgui.EndChild()
+        imgui.PopStyleColor()
 
-    if imgui.Button(u8"Отправить##gallery_send_confirm", imgui.ImVec2(160, 30)) then
-        local nameText = u8:decode(gallery_send_event_name.v)
-        local eventNameUtf8 = (nameText == "") and u8"Без названия" or u8(nameText)
-        sendGalleryReport(gallery_pending_files, eventNameUtf8)
-        gallery_send_event_name.v = ""
-        gallery_send_form_open = false
-    end
-    imgui.SameLine()
-    if imgui.Button(u8"Отмена##gallery_send_cancel", imgui.ImVec2(120, 30)) then
-        gallery_send_form_open = false
-    end
+        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+        local btnW = math.floor((modalW - 36 - 8) * 0.5)
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+        if imgui.Button(fa.ICON_CHECK .. u8"  Отправить отчёт##gallery_send_confirm", imgui.ImVec2(btnW + 15, 32)) then
+            local nameText = u8:decode(gallery_send_event_name.v)
+            local eventNameUtf8 = (nameText == "") and u8"Без названия" or u8(nameText)
+            sendGalleryReport(gallery_pending_files, eventNameUtf8)
+            gallery_send_event_name.v = ""
+            gallery_send_form_open = false
+        end
+        imgui.PopStyleColor(2)
+
+        imgui.SameLine(0, 8)
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##gallery_send_cancel", imgui.ImVec2(btnW - 15, 32)) then
+            gallery_send_form_open = false
+        end
 
     imgui.End()
+    imgui.PopStyleColor(2)
+    imgui.PopStyleVar()
     imgui.PopStyleVar(THEME_ROUNDING_COUNT)
     imgui.PopStyleColor(THEME_COLOR_COUNT)
 end
@@ -4675,29 +5197,53 @@ local function drawGalleryPreview(t)
     end
 
     local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.75, sh * 0.80), imgui.Cond.Always)
+    local bgFlags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoSavedSettings
+
+    -- 1. Полноэкранный затемняющий фон
+    imgui.SetNextWindowPos(imgui.ImVec2(0, 0), imgui.Cond.Always)
+    imgui.SetNextWindowSize(imgui.ImVec2(sw, sh), imgui.Cond.Always)
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(0.02, 0.04, 0.07, 0.78))
+    imgui.PushStyleVar(imgui.StyleVar.WindowRounding, 0.0)
+    imgui.Begin("##gal_prev_backdrop", nil, bgFlags)
+    if imgui.IsWindowHovered() and imgui.IsMouseClicked(0) then
+        gallery_preview_open = false
+    end
+    imgui.End()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor()
+
+    -- 2. Модальное окно просмотра скриншота без крестика
+    imgui.SetNextWindowSize(imgui.ImVec2(sw * 0.75, sh * 0.82), imgui.Cond.Always)
     imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
 
     pushThemeColors()
     pushThemeRounding()
+    imgui.PushStyleVar(imgui.StyleVar.WindowPadding, imgui.ImVec2(16, 12))
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.99))
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.65))
 
-    local open = imgui.ImBool(true)
-    imgui.Begin(fa.ICON_DESKTOP .. u8"  Просмотр в полном качестве: " .. u8(gallery_preview_file) .. "##gallery_preview", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then gallery_preview_open = false end
+    imgui.Begin("##gallery_preview_modal", nil, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar)
 
-    local avail = imgui.GetContentRegionAvail()
-    imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 42))
+        imgui.TextColored(t.accent, fa.ICON_PICTURE_O .. u8"  Просмотр скриншота: ")
+        imgui.SameLine(0, 4)
+        imgui.TextColored(t.text, u8(gallery_preview_file))
+        imgui.Separator()
+        imgui.Spacing()
 
-    if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##gallery_preview_close", imgui.ImVec2(-1, 32)) then
-        gallery_preview_open = false
-    end
+        local avail = imgui.GetContentRegionAvail()
+        imgui.Image(tex, imgui.ImVec2(avail.x, avail.y - 40))
+
+        imgui.Spacing()
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть окно просмотра##gallery_preview_close", imgui.ImVec2(-1, 32)) then
+            gallery_preview_open = false
+        end
 
     imgui.End()
+    imgui.PopStyleColor(2)
+    imgui.PopStyleVar()
     imgui.PopStyleVar(THEME_ROUNDING_COUNT)
     imgui.PopStyleColor(THEME_COLOR_COUNT)
 end
-
 photographer_subtab = "gallery" -- "gallery" | "reports"
 local drawGalleryTab   -- форвард-объявление, тела ниже
 local drawReportsTab
@@ -4807,67 +5353,146 @@ local function updateTrackerRadius()
 end
 
 local function drawTrackerRadiusTab(t)
-
-    if tracker_active then
-        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.35, 0.35, 1.0))
-        if imgui.Button(fa.ICON_TIMES .. u8" Остановить сбор##tracker_toggle", imgui.ImVec2(200, 32)) then
-            tracker_active = false
-        end
-        imgui.PopStyleColor(2)
-    else
-        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.25, 0.65, 0.35, 1.0))
-        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.35, 0.75, 0.45, 1.0))
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##tracker_toggle", imgui.ImVec2(200, 32)) then
-            tracker_active = true
-        end
-        imgui.PopStyleColor(2)
-    end
-
-    imgui.SameLine()
-    if imgui.Button(u8"Сбросить##tracker_reset", imgui.ImVec2(120, 32)) then
-        tracker_players = {}
-    end
-
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
     local ids = {}
-    for pid in pairs(tracker_players) do ids[#ids + 1] = pid end
+    local inRadCount = 0
+    for pid, entry in pairs(tracker_players) do
+        ids[#ids + 1] = pid
+        if entry.inRadius then inRadCount = inRadCount + 1 end
+    end
     table.sort(ids)
 
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+    -- Панель управления и живых счётчиков
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+    imgui.BeginChild("##tr_ctrl_card", imgui.ImVec2(0, 68), true)
+        local dl = imgui.GetWindowDrawList()
+        local p = imgui.GetCursorScreenPos()
+
+        -- Индикатор статуса
+        local stCol = tracker_active and imgui.ImVec4(0.25, 0.85, 0.45, 1.0) or t.textDim
+        dl:AddCircleFilled(imgui.ImVec2(p.x + 8, p.y + 9), 5, imgui.ColorConvertFloat4ToU32(stCol), 16)
+        imgui.SetCursorPosX(imgui.GetCursorPosX() + 18)
+        imgui.TextColored(stCol, tracker_active and u8"Сканирование активно (радиус 300 м)" or u8"Сканирование остановлено")
+
+        imgui.SameLine(310)
+        imgui.TextColored(t.textDim, fa.ICON_USERS .. u8" Всего собрано: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(t.accent, tostring(#ids))
+
+        imgui.SameLine(465)
+        imgui.TextColored(t.textDim, fa.ICON_STREET_VIEW .. u8" Сейчас рядом: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(imgui.ImVec4(0.30, 0.85, 0.45, 1.0), tostring(inRadCount))
+
+        imgui.Spacing()
+
+        if tracker_active then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.75, 0.22, 0.22, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.85, 0.30, 0.30, 1.0))
+            if imgui.Button(fa.ICON_STOP .. u8" Остановить сбор##tracker_toggle", imgui.ImVec2(170, 26)) then
+                tracker_active = false
+            end
+            imgui.PopStyleColor(2)
+        else
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+            if imgui.Button(fa.ICON_PLAY .. u8" Начать сбор##tracker_toggle", imgui.ImVec2(170, 26)) then
+                tracker_active = true
+            end
+            imgui.PopStyleColor(2)
+        end
+
+        imgui.SameLine(0, 6)
+        if imgui.Button(fa.ICON_FILE_TEXT_O .. u8" Сохранить в отчёт##tracker_to_rep", imgui.ImVec2(165, 26)) then
+            tracker_report_form_open = true
+        end
+        if imgui.IsItemHovered() then imgui.SetTooltip(u8"Сохранить текущий список участников в отчёт") end
+
+        imgui.SameLine(0, 6)
+        if imgui.Button(fa.ICON_TRASH_O .. u8" Очистить список##tracker_reset", imgui.ImVec2(145, 26)) then
+            tracker_players = {}
+            ids = {}
+            inRadCount = 0
+        end
+    imgui.EndChild()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor(2)
+
+    imgui.Spacing()
+
     if #ids == 0 then
-        imgui.TextColored(t.textDim, u8"Пока никто не попал в радиус.")
+        local avail = imgui.GetContentRegionAvail()
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.BeginChild("##tr_empty_state", imgui.ImVec2(0, avail.y), true)
+            local dl = imgui.GetWindowDrawList()
+            local wp = imgui.GetCursorScreenPos()
+            local cx, cy = wp.x + avail.x * 0.5, wp.y + avail.y * 0.42
+            dl:AddCircleFilled(imgui.ImVec2(cx, cy - 18), 26, imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.14)), 28)
+            local icSz = imgui.CalcTextSize(fa.ICON_CROSSHAIRS)
+            dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - 18 - icSz.y * 0.5), imgui.ColorConvertFloat4ToU32(t.accent), fa.ICON_CROSSHAIRS)
+
+            local msg1 = tracker_active and u8"Ожидание игроков в радиусе 300 метров..." or u8"Список участников в радиусе пуст"
+            local msg2 = u8"Нажмите «Начать сбор», чтобы автоматически фиксировать всех игроков рядом и время их присутствия"
+            local sz1 = imgui.CalcTextSize(msg1)
+            local sz2 = imgui.CalcTextSize(msg2)
+            dl:AddText(imgui.ImVec2(cx - sz1.x * 0.5, cy + 18), imgui.ColorConvertFloat4ToU32(t.text), msg1)
+            dl:AddText(imgui.ImVec2(cx - sz2.x * 0.5, cy + 40), imgui.ColorConvertFloat4ToU32(t.textDim), msg2)
+        imgui.EndChild()
+        imgui.PopStyleColor(2)
         return
     end
 
-    for _, pid in ipairs(ids) do
-        local entry = tracker_players[pid]
-        local displaySec = entry.totalSeconds
-        if entry.inRadius then
-            displaySec = displaySec + (os.time() - entry.lastTick)
-        end
-        imgui.BeginChild("tp_" .. pid, imgui.ImVec2(0, 32), true)
-            local nameColor = sampColorToImVec4(sampGetPlayerColor(pid))
-            imgui.TextColored(nameColor, entry.nickname .. u8" (ID " .. pid .. u8")")
-            imgui.SameLine(imgui.GetWindowWidth() - 70)
-            local timeColor = entry.inRadius and t.accent or t.textDim
-            imgui.TextColored(timeColor, formatDuration(displaySec))
-
-            if imgui.BeginPopupContextWindow() then
-                if imgui.MenuItem(fa.ICON_STICKY_NOTE .. u8" Скопировать никнейм") then
-                    imgui.SetClipboardText(entry.nickname)
-                end
-                imgui.Separator()
-                if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить из списка") then
-                    tracker_players[pid] = nil
-                end
-                imgui.EndPopup()
+    imgui.BeginChild("##tr_players_scroll", imgui.ImVec2(0, 0), false)
+        for idx, pid in ipairs(ids) do
+            local entry = tracker_players[pid]
+            local displaySec = entry.totalSeconds
+            if entry.inRadius then
+                displaySec = displaySec + (os.time() - entry.lastTick)
             end
-        imgui.EndChild()
-        imgui.Spacing()
-    end
-end
 
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, entry.inRadius and imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.55) or cardBorder)
+            imgui.BeginChild("tp_" .. pid, imgui.ImVec2(0, 36), true)
+                local dl = imgui.GetWindowDrawList()
+                local p = imgui.GetCursorScreenPos()
+                local dotCol = entry.inRadius and imgui.ImVec4(0.25, 0.85, 0.45, 1.0) or imgui.ImVec4(0.55, 0.55, 0.60, 0.7)
+                dl:AddCircleFilled(imgui.ImVec2(p.x + 6, p.y + 10), 4, imgui.ColorConvertFloat4ToU32(dotCol), 14)
+
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + 16)
+                local nameColor = sampColorToImVec4(sampGetPlayerColor(pid))
+                imgui.TextColored(nameColor, entry.nickname)
+                imgui.SameLine(0, 6)
+                imgui.TextColored(t.textDim, u8"[ID: " .. pid .. "]")
+
+                imgui.SameLine(imgui.GetWindowWidth() - 185)
+                imgui.TextColored(entry.inRadius and imgui.ImVec4(0.30, 0.85, 0.45, 1.0) or t.textDim,
+                    entry.inRadius and u8"В радиусе" or u8"Вне радиуса")
+
+                imgui.SameLine(imgui.GetWindowWidth() - 80)
+                local timeColor = entry.inRadius and t.accent or t.textDim
+                imgui.TextColored(timeColor, fa.ICON_CLOCK_O .. " " .. formatDuration(displaySec))
+
+                if imgui.BeginPopupContextWindow() then
+                    if imgui.MenuItem(fa.ICON_STICKY_NOTE .. u8" Скопировать никнейм") then
+                        imgui.SetClipboardText(entry.nickname)
+                    end
+                    imgui.Separator()
+                    if imgui.MenuItem(fa.ICON_TRASH .. u8" Удалить из списка") then
+                        tracker_players[pid] = nil
+                    end
+                    imgui.EndPopup()
+                end
+            imgui.EndChild()
+            imgui.PopStyleColor(2)
+            imgui.Dummy(imgui.ImVec2(1, 2))
+        end
+    imgui.EndChild()
+end
 -- ============================================================
 --  ОТЧЁТЫ СЛЕДЯЩЕГО: хранение
 --  moonloader\config\TRPcomm Manager Config\tracker_reports\index.ini
@@ -4948,141 +5573,233 @@ local function drawTrackerCreateReportForm(t)
     if not tracker_report_form_open then return end
 
     local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(420, 260), imgui.Cond.Always)
+    local bgFlags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoSavedSettings
+
+    -- 1. Полноэкранный затемняющий фон
+    imgui.SetNextWindowPos(imgui.ImVec2(0, 0), imgui.Cond.Always)
+    imgui.SetNextWindowSize(imgui.ImVec2(sw, sh), imgui.Cond.Always)
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(0.02, 0.04, 0.07, 0.74))
+    imgui.PushStyleVar(imgui.StyleVar.WindowRounding, 0.0)
+    imgui.Begin("##trk_rep_backdrop", nil, bgFlags)
+    if imgui.IsWindowHovered() and imgui.IsMouseClicked(0) then
+        tracker_report_form_open = false
+    end
+    imgui.End()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor()
+
+    -- 2. Модальное окно создания отчёта без крестика
+    local modalW, modalH = 440, 222
+    imgui.SetNextWindowSize(imgui.ImVec2(modalW, modalH), imgui.Cond.Always)
     imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
 
     pushThemeColors()
     pushThemeRounding()
+    imgui.PushStyleVar(imgui.StyleVar.WindowPadding, imgui.ImVec2(18, 14))
+    imgui.PushStyleColor(imgui.Col.WindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.99))
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.65))
 
-    local open = imgui.ImBool(true)
-    imgui.Begin(u8"Новый отчёт##tracker_report_form", open,
-        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-    if not open.v then tracker_report_form_open = false end
+    imgui.Begin("##tracker_report_form_modal", nil, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar)
 
-    imgui.TextColored(t.textDim, u8"Название ивента:")
-    imgui.PushItemWidth(380)
-    imgui.InputText("##tracker_report_name", tracker_report_name)
-    imgui.PopItemWidth()
+        imgui.TextColored(t.accent, fa.ICON_FILE_TEXT_O .. u8"  СОЗДАНИЕ НОВОГО ОТЧЁТА")
+        imgui.Separator()
+        imgui.Spacing()
 
-    imgui.Spacing()
-    imgui.TextColored(t.textDim, u8"Дата и время: " .. os.date("%d.%m.%Y  %H:%M"))
+        imgui.TextColored(t.textDim, fa.ICON_TAG .. u8"  Название ивента:")
+        imgui.PushItemWidth(-1)
+        imgui.InputText("##tracker_report_name", tracker_report_name)
+        imgui.PopItemWidth()
 
-    imgui.Spacing()
-    local count = 0
-    for _ in pairs(tracker_players) do count = count + 1 end
-    imgui.TextColored(t.textDim, u8"Игроков собрано: " .. count)
+        imgui.Spacing()
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+        local count = 0
+        for _ in pairs(tracker_players) do count = count + 1 end
 
-    if imgui.Button(u8"Сохранить отчёт##tracker_report_save", imgui.ImVec2(180, 30)) then
-        local nameText = u8:decode(tracker_report_name.v)
-        if nameText == "" then nameText = u8"Без названия" end
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.55))
+        imgui.BeginChild("##trk_rep_info_pill", imgui.ImVec2(-1, 34), false)
+            imgui.SetCursorPos(imgui.ImVec2(12, 8))
+            imgui.TextColored(t.textDim, fa.ICON_USERS .. u8"  Игроков собрано:")
+            imgui.SameLine(0, 6)
+            imgui.TextColored(t.accent, tostring(count) .. u8" чел.")
+            imgui.SameLine(225)
+            imgui.TextColored(t.textDim, fa.ICON_CALENDAR .. "  " .. os.date("%d.%m.%Y  %H:%M"))
+        imgui.EndChild()
+        imgui.PopStyleColor()
 
-        local players = {}
-        for pid, entry in pairs(tracker_players) do
-            local sec = entry.totalSeconds
-            if entry.inRadius then
-                sec = sec + (os.time() - entry.lastTick)
+        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+
+        local btnW = math.floor((modalW - 36 - 8) * 0.5)
+        imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+        if imgui.Button(fa.ICON_CHECK .. u8"  Сохранить отчёт##tracker_report_save", imgui.ImVec2(btnW + 20, 32)) then
+            local nameText = u8:decode(tracker_report_name.v)
+            if nameText == "" then nameText = u8"Без названия" end
+
+            local players = {}
+            for pid, entry in pairs(tracker_players) do
+                local sec = entry.totalSeconds
+                if entry.inRadius then
+                    sec = sec + (os.time() - entry.lastTick)
+                end
+                players[#players + 1] = { nickname = entry.nickname, seconds = sec }
             end
-            players[#players + 1] = { nickname = entry.nickname, seconds = sec }
-        end
-        table.sort(players, function(a, b) return a.seconds > b.seconds end)
+            table.sort(players, function(a, b) return a.seconds > b.seconds end)
 
-        addTrackerReport(u8(nameText), players)
-        tracker_players = {}
-        tracker_report_name.v = ""
-        tracker_report_form_open = false
-    end
-    imgui.SameLine()
-    if imgui.Button(u8"Отмена##tracker_report_cancel", imgui.ImVec2(120, 30)) then
-        tracker_report_form_open = false
-    end
+            addTrackerReport(u8(nameText), players)
+            tracker_players = {}
+            tracker_report_name.v = ""
+            tracker_report_form_open = false
+        end
+        imgui.PopStyleColor(2)
+
+        imgui.SameLine(0, 8)
+        if imgui.Button(fa.ICON_TIMES .. u8"  Закрыть##tracker_report_cancel", imgui.ImVec2(btnW - 20, 32)) then
+            tracker_report_form_open = false
+        end
 
     imgui.End()
+    imgui.PopStyleColor(2)
+    imgui.PopStyleVar()
     imgui.PopStyleVar(THEME_ROUNDING_COUNT)
     imgui.PopStyleColor(THEME_COLOR_COUNT)
 end
-
 -- ---------- Окно просмотра отчёта ----------
 local tracker_report_viewer_idx = nil
 
 local function drawTrackerReportsTab(t)
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
     if tracker_report_viewer_idx then
         local r = trackerReports[tracker_report_viewer_idx]
         if not r then
             tracker_report_viewer_idx = nil
         else
-            if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад##tracker_report_back", imgui.ImVec2(110, 28)) then
+            if imgui.Button(fa.ICON_ARROW_LEFT .. u8" Назад к списку##tracker_report_back", imgui.ImVec2(150, 28)) then
                 tracker_report_viewer_idx = nil
             end
+            imgui.SameLine()
+            if imgui.Button(fa.ICON_STICKY_NOTE .. u8" Скопировать всех##tracker_rep_copy_all", imgui.ImVec2(160, 28)) then
+                local lines = {}
+                for _, p in ipairs(r.players) do
+                    lines[#lines + 1] = p.nickname .. " (" .. formatDuration(p.seconds) .. ")"
+                end
+                imgui.SetClipboardText(table.concat(lines, "\n"))
+                showToast("Список участников скопирован")
+            end
+
             imgui.Spacing()
-            imgui.TextColored(t.accent, r.event)
-            imgui.TextColored(t.textDim, os.date("%d.%m.%Y  %H:%M", r.time))
-            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.BeginChild("##tr_rep_head", imgui.ImVec2(0, 42), true)
+                imgui.TextColored(t.accent, fa.ICON_CALENDAR_CHECK_O .. "  " .. r.event)
+                imgui.SameLine(imgui.GetWindowWidth() - 250)
+                imgui.TextColored(t.textDim, fa.ICON_CLOCK_O .. " " .. os.date("%d.%m.%Y %H:%M", r.time) .. u8"  |  Участников: " .. #r.players)
+            imgui.EndChild()
+            imgui.PopStyleColor(2)
+            imgui.Spacing()
 
             if #r.players == 0 then
-                imgui.TextColored(t.textDim, u8"Список пуст.")
-            end
-            for i, p in ipairs(r.players) do
-                imgui.BeginChild("trp_" .. i, imgui.ImVec2(0, 32), true)
-                    imgui.Text(p.nickname)
-                    imgui.SameLine(imgui.GetWindowWidth() - 70)
-                    imgui.Text(formatDuration(p.seconds))
+                imgui.TextColored(t.textDim, u8"Список участников в этом отчёте пуст.")
+            else
+                imgui.BeginChild("##tr_rep_players_scroll", imgui.ImVec2(0, 0), false)
+                    for i, p in ipairs(r.players) do
+                        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+                        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+                        imgui.BeginChild("trp_" .. i, imgui.ImVec2(0, 34), true)
+                            imgui.TextColored(t.textDim, tostring(i) .. ".")
+                            imgui.SameLine(34)
+                            imgui.Text(p.nickname)
+                            imgui.SameLine(imgui.GetWindowWidth() - 85)
+                            imgui.TextColored(t.accent, fa.ICON_CLOCK_O .. " " .. formatDuration(p.seconds))
+                        imgui.EndChild()
+                        imgui.PopStyleColor(2)
+                        imgui.Dummy(imgui.ImVec2(1, 2))
+                    end
                 imgui.EndChild()
-                imgui.Spacing()
             end
             return
         end
     end
 
-    if imgui.Button(fa.ICON_BULLHORN .. u8" Создать отчёт##tracker_create_report", imgui.ImVec2(180, 32)) then
-        tracker_report_form_open = true
-    end
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.BeginChild("##tr_rep_top", imgui.ImVec2(0, 46), true)
+        imgui.AlignTextToFramePadding()
+        imgui.TextColored(t.textDim, fa.ICON_ARCHIVE .. u8" Сохранено отчётов по радиусу: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(t.accent, tostring(#trackerReports))
+        imgui.SameLine(imgui.GetWindowWidth() - 185)
+        if imgui.Button(fa.ICON_PLUS .. u8" Создать отчёт##tracker_create_report", imgui.ImVec2(170, 28)) then
+            tracker_report_form_open = true
+        end
+    imgui.EndChild()
+    imgui.PopStyleColor(2)
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+    imgui.Spacing()
 
     if #trackerReports == 0 then
-        imgui.TextColored(t.textDim, u8"Отчётов пока нет.")
+        local avail = imgui.GetContentRegionAvail()
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.BeginChild("##tr_rep_empty", imgui.ImVec2(0, avail.y), true)
+            local dl = imgui.GetWindowDrawList()
+            local wp = imgui.GetCursorScreenPos()
+            local cx, cy = wp.x + avail.x * 0.5, wp.y + avail.y * 0.45
+            local msg = u8"Сохранённых отчётов пока нет. Нажмите «Создать отчёт», чтобы сохранить собранных игроков."
+            local sz = imgui.CalcTextSize(msg)
+            dl:AddText(imgui.ImVec2(cx - sz.x * 0.5, cy), imgui.ColorConvertFloat4ToU32(t.textDim), msg)
+        imgui.EndChild()
+        imgui.PopStyleColor(2)
         return
     end
 
-    for i = #trackerReports, 1, -1 do
-        local r = trackerReports[i]
-        imgui.PushID("tracker_report_" .. i)
-        local label = r.event .. u8"   |   Время " .. os.date("%H:%M", r.time) .. u8"   |   Дата " .. os.date("%d.%m.%Y", r.time)
-        if imgui.Button(label, imgui.ImVec2(-1, 32)) then
-            tracker_report_viewer_idx = i
+    imgui.BeginChild("##tr_rep_list_scroll", imgui.ImVec2(0, 0), false)
+        for i = #trackerReports, 1, -1 do
+            local r = trackerReports[i]
+            imgui.PushID("tracker_report_" .. i)
+            local pCount = r.players and #r.players or 0
+            local label = fa.ICON_FILE_TEXT_O .. "  " .. r.event .. u8"   |   " .. os.date("%d.%m.%Y в %H:%M", r.time) .. u8"   |   Участников: " .. pCount
+            if imgui.Button(label, imgui.ImVec2(-1, 36)) then
+                tracker_report_viewer_idx = i
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(u8"ЛКМ — открыть отчёт | Колёсико мыши — удалить отчёт")
+            end
+            if imgui.IsItemClicked(2) then
+                deleteTrackerReport(i)
+            end
+            imgui.PopID()
+            imgui.Dummy(imgui.ImVec2(1, 2))
         end
-        if imgui.IsItemClicked(2) then
-            deleteTrackerReport(i)
-        end
-        imgui.PopID()
-        imgui.Spacing()
-    end
+    imgui.EndChild()
 end
 
 local CURATOR_SECTIONS = {
-    fa.ICON_CROSSHAIRS .. u8" Сбор участников",
-    fa.ICON_USER .. u8" Кураторы (авто)",
-    fa.ICON_STAR .. u8" Актёры (авто)",
-    fa.ICON_SLIDERS .. u8" Менеджер ролей",
+    { icon = fa.ICON_CROSSHAIRS, title = u8"Сбор участников", sub = u8"Радиус 300м и таймер" },
+    { icon = fa.ICON_USER,       title = u8"Кураторы (авто)", sub = u8"Посещаемость кураторов" },
+    { icon = fa.ICON_STAR,       title = u8"Актёры (авто)",   sub = u8"Сбор из /rwave в таблицу" },
+    { icon = fa.ICON_SLIDERS,    title = u8"Менеджер ролей",  sub = u8"Выдача скинов и оружия" },
 }
 local curators_selected_section = 1
 
--- пункт 1: старый функционал "Радиус"/"Отчётность" целиком, без изменений
 local function drawCuratorsCollectSection(t)
+    imgui.AlignTextToFramePadding()
+    imgui.TextColored(t.accent, fa.ICON_CROSSHAIRS .. u8"  Мониторинг участников ивента в радиусе")
+    imgui.SameLine(imgui.GetWindowWidth() - 285)
+
     local pushed = 0
     if tracker_subtab == "radius" then
         imgui.PushStyleColor(imgui.Col.Button, t.accent)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"Радиус##tracker_sub_radius", imgui.ImVec2(140, 30)) then
+    if imgui.Button(fa.ICON_STREET_VIEW .. u8" Радиус##tracker_sub_radius", imgui.ImVec2(130, 26)) then
         tracker_subtab = "radius"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-    imgui.SameLine()
+    imgui.SameLine(0, 6)
 
     pushed = 0
     if tracker_subtab == "reports" then
@@ -5090,12 +5807,13 @@ local function drawCuratorsCollectSection(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"Отчётность##tracker_sub_reports", imgui.ImVec2(140, 30)) then
+    if imgui.Button(fa.ICON_ARCHIVE .. u8" Отчётность (" .. #trackerReports .. ")##tracker_sub_reports", imgui.ImVec2(140, 26)) then
         tracker_subtab = "reports"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+    imgui.Separator()
+    imgui.Spacing()
 
     if tracker_subtab == "radius" then
         drawTrackerRadiusTab(t)
@@ -5103,7 +5821,6 @@ local function drawCuratorsCollectSection(t)
         drawTrackerReportsTab(t)
     end
 end
-
 -- ============================================================
 --  КУРАТОРЫ: автозаполнение посещаемости (пункт 2)
 -- ============================================================
@@ -5319,52 +6036,97 @@ end
 curator_fill_subtab = "fill" -- "fill" | "reports"
 
 local function drawCuratorFillMainTab(t)
-    imgui.SameLine()
-    imgui.TextColored(t.textDim, u8"В списке: " .. #curator_list)
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+    imgui.BeginChild("##cur_auto_ctrl", imgui.ImVec2(0, 82), true)
+        imgui.AlignTextToFramePadding()
+        imgui.TextColored(t.textDim, fa.ICON_TAG .. u8"  Название ивента:")
+        imgui.SameLine(160)
+        imgui.PushItemWidth(260)
+        imgui.InputText("##curator_event_name", curator_event_name)
+        imgui.PopItemWidth()
 
-    imgui.TextColored(t.textDim, u8"Название ивента:")
-    imgui.PushItemWidth(300)
-    imgui.InputText("##curator_event_name", curator_event_name)
-    imgui.PopItemWidth()
-
-    imgui.Spacing()
-
-    if curator_active then
-        if imgui.Button(fa.ICON_BULLHORN .. u8" Завершить и отправить##curator_finish", imgui.ImVec2(230, 32)) then
-            sendCuratorReport()
-        end
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8"Идёт сбор...")
-    else
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" Начать сбор##curator_start", imgui.ImVec2(230, 32)) then
-            local nameText = u8:decode(curator_event_name.v)
-            if nameText == "" then
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала укажи название ивента.', -1)
-            else
-                curator_active = true
-                curator_captured = {}
-                showToast('Мониторинг кураторов запущен: ' .. nameText)
+        if curator_active then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+            if imgui.Button(fa.ICON_CLOUD_UPLOAD .. u8" Завершить и отправить##curator_finish", imgui.ImVec2(210, 26)) then
+                sendCuratorReport()
+            end
+            imgui.PopStyleColor(2)
+        else
+            if imgui.Button(fa.ICON_PLAY .. u8" Начать мониторинг##curator_start", imgui.ImVec2(190, 26)) then
+                local nameText = u8:decode(curator_event_name.v)
+                if nameText == "" then
+                    sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала укажи название ивента.', -1)
+                else
+                    curator_active = true
+                    curator_captured = {}
+                    showToast('Мониторинг кураторов запущен: ' .. nameText)
+                end
             end
         end
-    end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+        imgui.Spacing()
+        imgui.TextColored(t.textDim, fa.ICON_DATABASE .. u8" База кураторов: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(t.accent, tostring(#curator_list) .. u8" чел.")
+        imgui.SameLine(200)
+        imgui.TextColored(t.textDim, fa.ICON_CHECK_CIRCLE .. u8" Зафиксировано на ивенте: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(imgui.ImVec4(0.30, 0.85, 0.45, 1.0), tostring(#curator_captured) .. u8" чел.")
+        if curator_active then
+            imgui.SameLine(430)
+            imgui.TextColored(imgui.ImVec4(0.95, 0.75, 0.25, 1.0), fa.ICON_SPINNER .. u8" Идёт автоматический сбор...")
+        end
+    imgui.EndChild()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor(2)
 
-    imgui.TextColored(t.textDim, u8"Зафиксированные кураторы:")
     imgui.Spacing()
+
     if #curator_captured == 0 then
-        imgui.TextColored(t.textDim, u8"Пока никого.")
+        local avail = imgui.GetContentRegionAvail()
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.BeginChild("##cur_auto_empty", imgui.ImVec2(0, avail.y), true)
+            local dl = imgui.GetWindowDrawList()
+            local wp = imgui.GetCursorScreenPos()
+            local cx, cy = wp.x + avail.x * 0.5, wp.y + avail.y * 0.44
+            local msg1 = curator_active and u8"Ожидание появления кураторов из базы..." or u8"Зафиксированных кураторов пока нет"
+            local msg2 = u8"Укажите название ивента и нажмите «Начать мониторинг» для автозаполнения посещаемости"
+            local sz1 = imgui.CalcTextSize(msg1)
+            local sz2 = imgui.CalcTextSize(msg2)
+            dl:AddText(imgui.ImVec2(cx - sz1.x * 0.5, cy - 10), imgui.ColorConvertFloat4ToU32(t.text), msg1)
+            dl:AddText(imgui.ImVec2(cx - sz2.x * 0.5, cy + 14), imgui.ColorConvertFloat4ToU32(t.textDim), msg2)
+        imgui.EndChild()
+        imgui.PopStyleColor(2)
+        return
     end
-    for i, name in ipairs(curator_captured) do
-        imgui.Text(i .. ". " .. name)
-    end
+
+    imgui.BeginChild("##cur_captured_scroll", imgui.ImVec2(0, 0), false)
+        for i, name in ipairs(curator_captured) do
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.BeginChild("cur_cap_" .. i, imgui.ImVec2(0, 34), true)
+                imgui.TextColored(imgui.ImVec4(0.30, 0.85, 0.45, 1.0), fa.ICON_CHECK_CIRCLE)
+                imgui.SameLine(30)
+                imgui.Text(i .. ".  " .. name)
+            imgui.EndChild()
+            imgui.PopStyleColor(2)
+            imgui.Dummy(imgui.ImVec2(1, 2))
+        end
+    imgui.EndChild()
 end
 
 local function drawCuratorsFillCuratorsSection(t)
-    imgui.TextColored(t.accent, fa.ICON_USER .. u8" Автозаполнение кураторов")
-    imgui.Spacing()
+    imgui.AlignTextToFramePadding()
+    imgui.TextColored(t.accent, fa.ICON_USER .. u8"  Автозаполнение посещаемости кураторов")
+    imgui.SameLine(imgui.GetWindowWidth() - 305)
 
     local pushed = 0
     if curator_fill_subtab == "fill" then
@@ -5372,12 +6134,12 @@ local function drawCuratorsFillCuratorsSection(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"Автозаполнение##curator_fill_sub_fill", imgui.ImVec2(150, 30)) then
+    if imgui.Button(fa.ICON_PLAY_CIRCLE .. u8" Мониторинг##curator_fill_sub_fill", imgui.ImVec2(145, 26)) then
         curator_fill_subtab = "fill"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-    imgui.SameLine()
+    imgui.SameLine(0, 6)
 
     pushed = 0
     if curator_fill_subtab == "reports" then
@@ -5385,12 +6147,13 @@ local function drawCuratorsFillCuratorsSection(t)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
         pushed = 2
     end
-    if imgui.Button(u8"Отчётность##curator_fill_sub_reports", imgui.ImVec2(140, 30)) then
+    if imgui.Button(fa.ICON_ARCHIVE .. u8" Отчётность (" .. #curatorFillReports .. ")##curator_fill_sub_reports", imgui.ImVec2(145, 26)) then
         curator_fill_subtab = "reports"
     end
     if pushed > 0 then imgui.PopStyleColor(pushed) end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+    imgui.Separator()
+    imgui.Spacing()
 
     if curator_fill_subtab == "fill" then
         drawCuratorFillMainTab(t)
@@ -5398,8 +6161,6 @@ local function drawCuratorsFillCuratorsSection(t)
         drawCuratorFillReportsTab(t)
     end
 end
-
--- ============================================================
 -- ============================================================
 --  КУРАТОРЫ: АВТОЗАПОЛНЕНИЕ ПОСЕЩАЕМОСТИ АКТЁРОВ (v3.0)
 -- ============================================================
@@ -5428,7 +6189,7 @@ local function sendActorsReport()
     end
     local json_data = cjson.encode({ event = eventTitle, members = membersUtf8 })
 
-    local targetUrl = (actors_google_url_buf and actors_google_url_buf.v ~= "") and u8:decode(actors_google_url_buf.v) or ACTORS_DEFAULT_URL
+    local targetUrl = ACTORS_DEFAULT_URL
     targetUrl = targetUrl:gsub("^%s+", ""):gsub("%s+$", "")
 
     actors_sending = true
@@ -5451,7 +6212,7 @@ local function sendActorsReport()
             local p_ok, dec = pcall(u8.decode, u8, eventTitle)
             if p_ok and dec then displayTitle = dec end
             showToast('Успешно! Колонка ' .. col .. ' (' .. count .. ' чел.)')
-            sampAddChatMessage(string.format('{5B85C4}[TRPcomm] {FFFFFF}Успешно! Ивент {5B85C4}"%s"{FFFFFF} записан в колонку {5B85C4}%s{FFFFFF} (отмечено {5B85C4}%s{FFFFFF} из {5B85C4}%s{FFFFFF} чел.).', displayTitle, col, count, total), -1)
+            sampAddChatMessage(string.format('{5B85C4}[TRPcomm] {FFFFFF}Успешно! Ивент "%s" записан в колонку {5B85C4}%s{FFFFFF} (отмечено {5B85C4}%s/%s{FFFFFF} чел.).', displayTitle, col, count, total), -1)
             actors_captured = {}
         elseif ok_json and type(resData) == "table" and resData.status == "error" then
             local msg = tostring(resData.message or "Неизвестная ошибка")
@@ -5547,108 +6308,130 @@ local function startActorsCollection()
 end
 
 local function drawCuratorsFillActorsSection(t)
-    imgui.TextColored(t.accent, fa.ICON_STAR .. u8" Посещаемость актёров (лист 'Активность актеров и фотографов')")
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+    imgui.AlignTextToFramePadding()
+    imgui.TextColored(t.accent, fa.ICON_STAR .. u8"  Посещаемость актёров и фотографов (Google Таблица)")
+    imgui.Separator()
     imgui.Spacing()
 
-    imgui.TextColored(t.textDim, u8"Название ивента:")
-    imgui.PushItemWidth(350)
-    imgui.InputText("##actors_event_name", actors_event_name)
-    imgui.PopItemWidth()
+    -- Карточка шагов 1 и 2
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+    imgui.BeginChild("##actors_ctrl_card", imgui.ImVec2(0, 118), true)
+        imgui.AlignTextToFramePadding()
+        imgui.TextColored(t.textDim, fa.ICON_TAG .. u8"  Название ивента:")
+        imgui.SameLine(160)
+        imgui.PushItemWidth(270)
+        imgui.InputText("##actors_event_name", actors_event_name)
+        imgui.PopItemWidth()
 
-    imgui.Spacing()
+        imgui.SameLine(445)
+        imgui.TextColored(t.textDim, fa.ICON_USERS .. u8" Собрано: ")
+        imgui.SameLine(0, 2)
+        imgui.TextColored(t.accent, tostring(#actors_captured) .. u8" чел.")
 
-    -- Шаг 1: Сбор участников
-    if actors_active then
-        imgui.TextColored(t.textDim, fa.ICON_SPINNER .. u8" Идёт сбор ников из /rwave members (2.5 сек)...")
-    else
-        if imgui.Button(fa.ICON_CROSSHAIRS .. u8" 1. Собрать участников (/rwave members)##actors_start", imgui.ImVec2(280, 32)) then
-            startActorsCollection()
-        end
-    end
+        imgui.Spacing()
 
-    imgui.Spacing()
-
-    -- Шаг 2: Отправка в таблицу
-    if actors_sending then
-        imgui.TextColored(t.accent, fa.ICON_REFRESH .. u8" Отправка данных в Google Таблицу...")
-    else
-        local canSend = (#actors_captured > 0) and not actors_active
-        if not canSend then
-            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
-            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
-            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
-        end
-        if imgui.Button(fa.ICON_CLOUD_UPLOAD .. u8" 2. Отправить в Google Таблицу##actors_send", imgui.ImVec2(280, 34)) then
-            if canSend then
-                sendActorsReport()
-            else
-                sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала соберите участников кнопки 1!', -1)
+        if actors_active then
+            imgui.Button(fa.ICON_SPINNER .. u8" Сбор ников из /rwave members (2.5 сек)...", imgui.ImVec2(285, 30))
+        else
+            if imgui.Button(fa.ICON_CROSSHAIRS .. u8" 1. Собрать из /rwave members##actors_start", imgui.ImVec2(285, 30)) then
+                startActorsCollection()
             end
         end
-        if not canSend then
+
+        imgui.SameLine(0, 8)
+
+        if actors_sending then
+            imgui.Button(fa.ICON_REFRESH .. u8" Отправка в Google Таблицу...", imgui.ImVec2(285, 30))
+        else
+            local canSend = (#actors_captured > 0) and not actors_active
+            if not canSend then
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.2, 0.22, 0.28, 0.5))
+                imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.5, 0.5, 0.5, 0.6))
+            else
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+                imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 1))
+            end
+            if imgui.Button(fa.ICON_CLOUD_UPLOAD .. u8" 2. Отправить в Google Таблицу##actors_send", imgui.ImVec2(285, 30)) then
+                if canSend then
+                    sendActorsReport()
+                else
+                    sampAddChatMessage('{FF6B6B}[TRPcomm] {FFFFFF}Сначала соберите участников кнопкой 1!', -1)
+                end
+            end
             imgui.PopStyleColor(3)
         end
-    end
 
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-
-    -- Ручное добавление и управление списком
-    imgui.TextColored(t.textDim, u8"Добавить участника вручную (если кого-то нет в /rwave):")
-    imgui.PushItemWidth(200)
-    imgui.InputText("##actors_manual_add", actors_manual_nick_buf)
-    imgui.PopItemWidth()
-    imgui.SameLine()
-    if imgui.Button(u8"+ Добавить##actors_btn_add", imgui.ImVec2(90, 24)) then
-        local addNick = u8:decode(actors_manual_nick_buf.v)
-        addNick = addNick:gsub("^%s+", ""):gsub("%s+$", "")
-        if addNick ~= "" then
-            actors_captured[#actors_captured + 1] = addNick
-            actors_manual_nick_buf.v = ""
-            showToast('Добавлен: ' .. addNick)
+        imgui.Spacing()
+        imgui.AlignTextToFramePadding()
+        imgui.TextColored(t.textDim, fa.ICON_USER_PLUS .. u8"  Добавить вручную:")
+        imgui.SameLine(160)
+        imgui.PushItemWidth(220)
+        imgui.InputText("##actors_manual_add", actors_manual_nick_buf)
+        imgui.PopItemWidth()
+        imgui.SameLine(0, 6)
+        if imgui.Button(fa.ICON_PLUS .. u8" Добавить##actors_btn_add", imgui.ImVec2(100, 24)) then
+            local addNick = u8:decode(actors_manual_nick_buf.v)
+            addNick = addNick:gsub("^%s+", ""):gsub("%s+$", "")
+            if addNick ~= "" then
+                actors_captured[#actors_captured + 1] = addNick
+                actors_manual_nick_buf.v = ""
+                showToast('Добавлен: ' .. addNick)
+            end
         end
-    end
-    if #actors_captured > 0 then
-        imgui.SameLine()
-        if imgui.Button(fa.ICON_TRASH .. u8" Очистить список##actors_clear", imgui.ImVec2(130, 24)) then
-            actors_captured = {}
+        if #actors_captured > 0 then
+            imgui.SameLine(0, 6)
+            if imgui.Button(fa.ICON_TRASH_O .. u8" Очистить##actors_clear", imgui.ImVec2(105, 24)) then
+                actors_captured = {}
+            end
         end
-    end
+    imgui.EndChild()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor(2)
 
     imgui.Spacing()
-    imgui.TextColored(t.accent, u8"Собранные участники ивента (" .. #actors_captured .. u8" чел.):")
-    imgui.Spacing()
 
+    local listH = imgui.GetContentRegionAvail().y
     if #actors_captured == 0 then
-        imgui.TextColored(t.textDim, u8"Список пуст. Нажмите кнопку '1. Собрать участников' или введите ники вручную.")
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.BeginChild("##actors_empty_box", imgui.ImVec2(0, math.max(100, listH)), true)
+            local dl = imgui.GetWindowDrawList()
+            local wp = imgui.GetCursorScreenPos()
+            local avail = imgui.GetContentRegionAvail()
+            local cx, cy = wp.x + avail.x * 0.5, wp.y + avail.y * 0.45
+            local msg = u8"Список участников пуст. Нажмите «1. Собрать из /rwave members» или добавьте ники вручную."
+            local sz = imgui.CalcTextSize(msg)
+            dl:AddText(imgui.ImVec2(cx - sz.x * 0.5, cy), imgui.ColorConvertFloat4ToU32(t.textDim), msg)
+        imgui.EndChild()
+        imgui.PopStyleColor(2)
     else
-        imgui.BeginChild("##actors_captured_list", imgui.ImVec2(380, 140), true)
-        for i, name in ipairs(actors_captured) do
-            imgui.TextColored(imgui.ImVec4(0.3, 0.85, 0.45, 1.0), fa.ICON_CHECK_CIRCLE .. " ")
-            imgui.SameLine()
-            imgui.Text(string.format("%d. %s", i, name))
-        end
+        imgui.BeginChild("##actors_captured_list", imgui.ImVec2(0, math.max(100, listH)), false)
+            for i, name in ipairs(actors_captured) do
+                imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+                imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+                imgui.BeginChild("act_cap_" .. i, imgui.ImVec2(0, 32), true)
+                    imgui.TextColored(imgui.ImVec4(0.3, 0.85, 0.45, 1.0), fa.ICON_CHECK_CIRCLE)
+                    imgui.SameLine(28)
+                    imgui.Text(string.format("%d.  %s", i, name))
+                    imgui.SameLine(imgui.GetWindowWidth() - 42)
+                    if imgui.Button(fa.ICON_TIMES .. "##del_act_" .. i, imgui.ImVec2(26, 20)) then
+                        table.remove(actors_captured, i)
+                    end
+                imgui.EndChild()
+                imgui.PopStyleColor(2)
+                imgui.Dummy(imgui.ImVec2(1, 2))
+            end
         imgui.EndChild()
     end
 
-    -- Настройки ссылки Google Script
-    imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-    if imgui.TreeNode(u8"Настройки ссылки Google Apps Script") then
-        imgui.TextColored(t.textDim, u8"URL веб-приложения:")
-        imgui.PushItemWidth(450)
-        if imgui.InputText("##actors_gas_url", actors_google_url_buf) then
-            saveSettings()
-        end
-        imgui.PopItemWidth()
-        imgui.SameLine()
-        if imgui.Button(u8"Сброс##actors_url_reset") then
-            actors_google_url_buf.v = u8(ACTORS_DEFAULT_URL)
-            saveSettings()
-            showToast('Ссылка сброшена по умолчанию')
-        end
-        imgui.TreePop()
-    end
 end
-
 -- ============================================================
 --  УПРАВЛЕНИЕ РОЛЯМИ АКТЁРОВ (Вкладка 4 в "Кураторы")
 -- ============================================================
@@ -5714,85 +6497,190 @@ local function approveRoleRequest(index)
 end
 
 local function drawCuratorsRoleManagerSection(t)
-        imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8" Менеджер выдачи ролей актёрам")
-    imgui.Spacing()
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
 
-    if #role_requests == 0 then
-        imgui.TextColored(t.textDim, u8"Активных заявок нет.")
-        return
-    end
-
-        for i, req in ipairs(role_requests) do
-        imgui.PushID("role_req_" .. i)
-
-                local tex = req.skin and loadSkinTexture(tonumber(req.skin))
-        if tex then
-            imgui.Image(tex, imgui.ImVec2(48, 48))
-            imgui.SameLine()
-        end
-
-        imgui.BeginGroup()
-            imgui.Text(req.nick .. u8" (ID: " .. req.id .. ")")
-            local skinText   = req.skin or u8"нет"
-            local weaponText = req.weapon and (req.weapon .. " - " .. req.weaponName) or req.weaponName
-            local colorText  = req.color or u8"нет"
-            local armorText  = req.armor and u8"да" or u8"нет"
-            imgui.TextColored(t.textDim, u8"Скин: " .. skinText .. u8"  |  Оружие: " .. weaponText .. u8"  |  Цвет: " .. colorText .. u8"  |  Броня: " .. armorText)
-
-            local onCooldown = os.clock() < role_approve_cooldown_until
-            if onCooldown then
-                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
-                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
-            else
-                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.30, 1.0))
-                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.25, 0.75, 0.35, 1.0))
-            end
-            if imgui.Button(fa.ICON_CHECK .. u8" Одобрить##approve", imgui.ImVec2(120, 28)) and not onCooldown then
-                approveRoleRequest(i)
-            end
-            imgui.PopStyleColor(2)
-
-            imgui.SameLine()
-
-            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.65, 0.20, 0.20, 1.0))
-            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.75, 0.25, 0.25, 1.0))
-            if imgui.Button(fa.ICON_TIMES .. "##cancel", imgui.ImVec2(36, 28)) then
-                removeRoleRequest(i)
-            end
-            imgui.PopStyleColor(2)
-        imgui.EndGroup()
-
-        imgui.Spacing(); imgui.Separator(); imgui.Spacing()
-        imgui.PopID()
-    end
-end
-
-local function drawTrackerTab(t)
-    imgui.TextColored(t.accent, fa.ICON_CROSSHAIRS .. u8" КУРАТОРЫ")
+    imgui.AlignTextToFramePadding()
+    imgui.TextColored(t.accent, fa.ICON_SLIDERS .. u8"  Менеджер выдачи ролей актёрам")
+    imgui.SameLine(imgui.GetWindowWidth() - 180)
+    imgui.TextColored(t.textDim, u8"Активных заявок: ")
+    imgui.SameLine(0, 2)
+    imgui.TextColored(t.accent, tostring(#role_requests))
     imgui.Separator()
     imgui.Spacing()
 
-    -- ------- левая колонка: список разделов -------
-    imgui.BeginChild("CuratorsList", imgui.ImVec2(240, 0), true)
-        for i, name in ipairs(CURATOR_SECTIONS) do
-            local isActive = (curators_selected_section == i)
-            local pushed = 0
-            if isActive then
-                imgui.PushStyleColor(imgui.Col.Button, t.accent)
-                imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
-                pushed = 2
-            end
-            if imgui.Button(name .. "##curator_sec_" .. i, imgui.ImVec2(-1, 36)) then
-                curators_selected_section = i
-            end
-            if pushed > 0 then imgui.PopStyleColor(pushed) end
-            imgui.Spacing()
+    if #role_requests == 0 then
+        local avail = imgui.GetContentRegionAvail()
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.45))
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.BeginChild("##rm_empty", imgui.ImVec2(0, avail.y), true)
+            local dl = imgui.GetWindowDrawList()
+            local wp = imgui.GetCursorScreenPos()
+            local cx, cy = wp.x + avail.x * 0.5, wp.y + avail.y * 0.42
+            dl:AddCircleFilled(imgui.ImVec2(cx, cy - 18), 26, imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.14)), 28)
+            local icSz = imgui.CalcTextSize(fa.ICON_SLIDERS)
+            dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - 18 - icSz.y * 0.5), imgui.ColorConvertFloat4ToU32(t.accent), fa.ICON_SLIDERS)
+
+            local msg1 = u8"Очередь заявок на выдачу ролей пуста"
+            local msg2 = u8"Когда актёры отправят запрос на роль в рацию, заявка со скином и оружием появится здесь"
+            local sz1 = imgui.CalcTextSize(msg1)
+            local sz2 = imgui.CalcTextSize(msg2)
+            dl:AddText(imgui.ImVec2(cx - sz1.x * 0.5, cy + 18), imgui.ColorConvertFloat4ToU32(t.text), msg1)
+            dl:AddText(imgui.ImVec2(cx - sz2.x * 0.5, cy + 40), imgui.ColorConvertFloat4ToU32(t.textDim), msg2)
+        imgui.EndChild()
+        imgui.PopStyleColor(2)
+        return
+    end
+
+    imgui.BeginChild("##rm_list_scroll", imgui.ImVec2(0, 0), false)
+        for i, req in ipairs(role_requests) do
+            imgui.PushID("role_req_" .. i)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("role_card_" .. i, imgui.ImVec2(0, 68), true)
+                local tex = req.skin and loadSkinTexture(tonumber(req.skin))
+                if tex then
+                    imgui.Image(tex, imgui.ImVec2(48, 48))
+                    imgui.SameLine(0, 12)
+                end
+
+                imgui.BeginGroup()
+                    imgui.TextColored(t.accent, req.nick)
+                    imgui.SameLine(0, 6)
+                    imgui.TextColored(t.textDim, u8"[ID: " .. req.id .. "]")
+
+                    local skinText   = req.skin or u8"нет"
+                    local weaponText = req.weapon and (req.weapon .. " - " .. req.weaponName) or req.weaponName
+                    local colorText  = req.color or u8"нет"
+                    local armorText  = req.armor and u8"да" or u8"нет"
+                    imgui.TextColored(t.textDim, u8"Скин: " .. skinText .. u8"   |   Оружие: " .. weaponText .. u8"   |   Клиcт: " .. colorText .. u8"   |   Броня: " .. armorText)
+                imgui.EndGroup()
+
+                imgui.SameLine(imgui.GetWindowWidth() - 175)
+                local onCooldown = os.clock() < role_approve_cooldown_until
+                if onCooldown then
+                    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
+                    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.35, 0.35, 0.35, 1.0))
+                else
+                    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.65, 0.35, 1.0))
+                    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.75, 0.44, 1.0))
+                end
+                if imgui.Button(fa.ICON_CHECK .. u8" Выдать##approve", imgui.ImVec2(115, 32)) and not onCooldown then
+                    approveRoleRequest(i)
+                end
+                imgui.PopStyleColor(2)
+
+                imgui.SameLine(0, 6)
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.65, 0.20, 0.20, 1.0))
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.78, 0.28, 0.28, 1.0))
+                if imgui.Button(fa.ICON_TIMES .. "##cancel", imgui.ImVec2(36, 32)) then
+                    removeRoleRequest(i)
+                end
+                imgui.PopStyleColor(2)
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+            imgui.Dummy(imgui.ImVec2(1, 4))
+            imgui.PopID()
         end
     imgui.EndChild()
+end
 
-    imgui.SameLine()
+local function drawTrackerTab(t)
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+    -- ------- левая колонка: стильное навигационное меню и сводка -------
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+    imgui.BeginChild("CuratorsList", imgui.ImVec2(245, 0), true)
+        imgui.TextColored(t.accent, fa.ICON_CROSSHAIRS .. u8"  КУРАТОРЫ ИВЕНТОВ")
+        imgui.Separator()
+        imgui.Spacing()
+
+        local dl = imgui.GetWindowDrawList()
+        local w = imgui.GetContentRegionAvailWidth()
+
+        local radCount = 0
+        for _ in pairs(tracker_players) do radCount = radCount + 1 end
+        local badges = {
+            radCount > 0 and tostring(radCount) or (tracker_active and "ON" or nil),
+            #curator_captured > 0 and tostring(#curator_captured) or (curator_active and "ON" or nil),
+            #actors_captured > 0 and tostring(#actors_captured) or nil,
+            #role_requests > 0 and tostring(#role_requests) or nil,
+        }
+
+        for i, sec in ipairs(CURATOR_SECTIONS) do
+            local isActive = (curators_selected_section == i)
+            local p = imgui.GetCursorScreenPos()
+            local h = 50
+            imgui.InvisibleButton("##curator_nav_" .. i, imgui.ImVec2(w, h))
+            local hov = imgui.IsItemHovered()
+            if imgui.IsItemClicked(0) then
+                curators_selected_section = i
+            end
+
+            local bgAlpha = isActive and 0.65 or (hov and 0.50 or 0.28)
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h),
+                imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, bgAlpha)), 6.0)
+
+            if isActive then
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + 3.5, p.y + h), imgui.ColorConvertFloat4ToU32(t.accent), 3.0)
+            end
+
+            local cx, cy = p.x + 24, p.y + h * 0.5
+            dl:AddCircleFilled(imgui.ImVec2(cx, cy), 13,
+                imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, isActive and 0.28 or 0.14)), 20)
+            local icSz = imgui.CalcTextSize(sec.icon)
+            dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - icSz.y * 0.5),
+                imgui.ColorConvertFloat4ToU32(isActive and t.accent or t.textDim), sec.icon)
+
+            dl:AddText(imgui.ImVec2(p.x + 45, p.y + 8),
+                imgui.ColorConvertFloat4ToU32(isActive and t.text or t.textDim), sec.title)
+            dl:AddText(imgui.ImVec2(p.x + 45, p.y + 27),
+                imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.72)), sec.sub)
+
+            local bText = badges[i]
+            if bText then
+                local bSz = imgui.CalcTextSize(bText)
+                local bW = math.max(22, bSz.x + 10)
+                local bH = 18
+                local bX = p.x + w - bW - 8
+                local bY = p.y + 8
+                dl:AddRectFilled(imgui.ImVec2(bX, bY), imgui.ImVec2(bX + bW, bY + bH),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.28)), 9.0)
+                dl:AddText(imgui.ImVec2(bX + (bW - bSz.x) * 0.5, bY + 2), imgui.ColorConvertFloat4ToU32(t.accent), bText)
+            end
+
+            imgui.Dummy(imgui.ImVec2(1, 3))
+        end
+
+        -- Мини-сводка внизу боковой панели
+        local remY = imgui.GetContentRegionAvail().y
+        if remY > 90 then
+            imgui.Dummy(imgui.ImVec2(1, remY - 88))
+            imgui.Separator()
+            imgui.Spacing()
+            imgui.TextColored(t.textDim, fa.ICON_INFO_CIRCLE .. u8" Статус систем:")
+            imgui.TextColored(tracker_active and imgui.ImVec4(0.30, 0.85, 0.45, 1.0) or t.textDim,
+                u8"• Сбор радиуса: " .. (tracker_active and u8"Активен" or u8"Выкл"))
+            imgui.TextColored(curator_active and imgui.ImVec4(0.30, 0.85, 0.45, 1.0) or t.textDim,
+                u8"• Сбор кураторов: " .. (curator_active and u8"Активен" or u8"Выкл"))
+            imgui.TextColored(#role_requests > 0 and imgui.ImVec4(0.95, 0.75, 0.25, 1.0) or t.textDim,
+                u8"• Заявок на роли: " .. tostring(#role_requests))
+        end
+    imgui.EndChild()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor(2)
+
+    imgui.SameLine(0, 10)
 
     -- ------- правая колонка: содержимое выбранного раздела -------
+    imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+    imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+    imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
     imgui.BeginChild("CuratorsContent", imgui.ImVec2(0, 0), true)
         if curators_selected_section == 1 then
             drawCuratorsCollectSection(t)
@@ -5804,8 +6692,9 @@ local function drawTrackerTab(t)
             drawCuratorsRoleManagerSection(t)
         end
     imgui.EndChild()
+    imgui.PopStyleVar()
+    imgui.PopStyleColor(2)
 end
-
 drawGalleryTab = function(t)
     if imgui.Button(fa.ICON_RANDOM .. u8" Обновить##gallery_refresh", imgui.ImVec2(150, 28)) then
         scanGallery()
@@ -6104,10 +6993,348 @@ function imgui.BeforeDrawFrame()
     end
 end
 
+-- ============================================================
+--  ЛОГ РАЦИИ ИВЕНТА (/r и /rc) + ОТМЕТКИ РУКОВОДСТВА TRPCOMM
+-- ============================================================
+rlog = {
+    messages = {},
+    unread = false,
+    filter_buf = imgui.ImBuffer("", 64),
+    chat_input_buf = imgui.ImBuffer("", 144),
+    only_staff = imgui.ImBool(false),
+    only_ic = imgui.ImBool(false),
+    auto_scroll = true,
+    do_scroll = false,
+    staff = {
+        ["winfered_brown"]     = { role = u8"Глава TRPcomm",                color = imgui.ImVec4(0.96, 0.32, 0.32, 1.0), icon = fa.ICON_STAR },
+        ["marquis_inferno"]    = { role = u8"Заместитель главы TRPcomm",    color = imgui.ImVec4(0.96, 0.56, 0.22, 1.0), icon = fa.ICON_STAR },
+        ["sean_verstein"]      = { role = u8"Куратор актёров",              color = imgui.ImVec4(0.38, 0.76, 1.00, 1.0), icon = fa.ICON_USERS },
+        ["hajimurad_ghaziyev"] = { role = u8"Заместитель куратора актёров", color = imgui.ImVec4(0.32, 0.86, 0.68, 1.0), icon = fa.ICON_USER_PLUS },
+        ["brooks_wade"]        = { role = u8"Куратор HR отдела",            color = imgui.ImVec4(0.76, 0.52, 0.98, 1.0), icon = fa.ICON_BULLHORN },
+    },
+    staff_order = {
+        { nick = "Winfered_Brown",     key = "winfered_brown" },
+        { nick = "Marquis_Inferno",    key = "marquis_inferno" },
+        { nick = "Sean_Verstein",      key = "sean_verstein" },
+        { nick = "Hajimurad_Ghaziyev", key = "hajimurad_ghaziyev" },
+        { nick = "Brooks_Wade",        key = "brooks_wade" },
+    }
+}
+
+function rlog.reset()
+    rlog.messages = {}
+    rlog.unread = false
+end
+
+function rlog.onServerMessage(color, text)
+    local clean = text:gsub("{%x%x%x%x%x%x}", "")
+    if clean:find("^Connecting to ") or clean:find("^Connected%. Joining the game") or clean:find("Добро пожаловать на Trinity") then
+        rlog.reset()
+        return
+    end
+    local tag, nick, body = clean:match("^%[(R[C]?)%]%s*([^:]+):%s*(.+)$")
+    if not tag then
+        local freq, fnick, fbody = clean:match("^%[([%d%.]+%s*Hz)%]%s*([^:]+):%s*(.+)$")
+        if freq then
+            tag, nick, body = freq, fnick, fbody
+        end
+    end
+    if not tag or not nick or not body then return end
+
+    -- Извлекаем чистый Ник_Игрока (на случай если перед ним звание или после него [ID])
+    local pureNick = nick:match("([%a%d]+_[%a%d]+)") or nick:gsub("^%s+", ""):gsub("%s+$", "")
+    local isOoc = (body:match("^%(%(.*%)%)$") ~= nil)
+    local staffInfo = rlog.staff[pureNick:lower()]
+
+    rlog.messages[#rlog.messages + 1] = {
+        time = os.date("%H:%M:%S"),
+        tag = tag,
+        nick = pureNick,
+        rawNick = nick:gsub("^%s+", ""):gsub("%s+$", ""),
+        text = body,
+        isOoc = isOoc,
+        isStaff = (staffInfo ~= nil),
+    }
+    if #rlog.messages > 300 then
+        table.remove(rlog.messages, 1)
+    end
+    rlog.do_scroll = true
+
+    local activeTab = open_tabs[active_tab_idx]
+    if not main_window_state.v or not activeTab or activeTab.kind ~= "radiolog" then
+        rlog.unread = true
+    end
+end
+
+function rlog.drawTab(t)
+    rlog.unread = false
+    local avail = imgui.GetContentRegionAvail()
+    local gap = 12
+    local rightW = 265
+    local leftW = avail.x - rightW - gap
+    local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+    local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+    local online = {}
+    for id = 0, sampGetMaxPlayerId(false) do
+        if sampIsPlayerConnected(id) and not sampIsPlayerNpc(id) then
+            local n = sampGetPlayerNickname(id)
+            online[n:lower()] = id
+        end
+    end
+
+    -- ============================================================
+    --  ЛЕВАЯ КОЛОНКА: ПАНЕЛЬ ФИЛЬТРОВ, ЛЕНТА РАЦИИ И БЫСТРАЯ ОТПРАВКА
+    -- ============================================================
+    imgui.BeginGroup()
+
+        -- 1. Верхняя панель управления логом
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("##rlog_toolbar", imgui.ImVec2(leftW, 44), true)
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.accent, fa.ICON_BULLHORN .. u8" Рация")
+            imgui.SameLine(85)
+            imgui.PushItemWidth(175)
+            imgui.InputText("##rlog_filter", rlog.filter_buf)
+            imgui.PopItemWidth()
+            if imgui.IsItemHovered() then imgui.SetTooltip(u8"Поиск по нику или тексту сообщения в рации") end
+
+            imgui.SameLine(0, 8)
+            if imgui.Checkbox(u8"Только руководство##rlog_only_staff", rlog.only_staff) then end
+            imgui.SameLine(0, 8)
+            if imgui.Checkbox(u8"Без OOC (/rc!)##rlog_only_ic", rlog.only_ic) then end
+
+            imgui.SameLine(leftW - 102)
+            if imgui.Button(fa.ICON_TRASH_O .. u8" Очистить##rlog_clear", imgui.ImVec2(92, 24)) then
+                rlog.messages = {}
+            end
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+        imgui.Spacing()
+
+        -- 2. Лента сообщений рации
+        local feedH = imgui.GetContentRegionAvail().y - 46
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("##rlog_feed", imgui.ImVec2(leftW, feedH), true)
+
+            local rawFilter = u8:decode(rlog.filter_buf.v):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+            local shown = 0
+            local dl = imgui.GetWindowDrawList()
+
+            for idx, m in ipairs(rlog.messages) do
+                local passStaff = (not rlog.only_staff.v) or m.isStaff
+                local passIc    = (not rlog.only_ic.v) or (not m.isOoc)
+                local passText  = (rawFilter == "") or m.nick:lower():find(rawFilter, 1, true) or m.text:lower():find(rawFilter, 1, true)
+
+                if passStaff and passIc and passText then
+                    shown = shown + 1
+                    local st = rlog.staff[m.nick:lower()]
+                    local rowBgCol = st
+                        and imgui.ImVec4(st.color.x * 0.25, st.color.y * 0.25, st.color.z * 0.25, 0.55)
+                        or imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.35)
+                    local brdCol = st
+                        and imgui.ImVec4(st.color.x, st.color.y, st.color.z, 0.65)
+                        or imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.30)
+
+                    imgui.PushStyleColor(imgui.Col.ChildWindowBg, rowBgCol)
+                    imgui.PushStyleColor(imgui.Col.Border, brdCol)
+                    imgui.BeginChild("##rlog_msg_" .. idx, imgui.ImVec2(-1, 50), true)
+                        local p = imgui.GetCursorScreenPos()
+                        if st then
+                            dl:AddRectFilled(imgui.ImVec2(p.x - 8, p.y - 6), imgui.ImVec2(p.x - 4, p.y + 42),
+                                imgui.ColorConvertFloat4ToU32(st.color), 2.0)
+                        end
+
+                        -- Строка 1: Время, канал [R]/[RC], Никнейм и бейдж должности
+                        imgui.TextColored(t.textDim, m.time)
+                        imgui.SameLine(0, 6)
+                        local tagCol = m.isOoc and imgui.ImVec4(0.65, 0.72, 0.82, 0.9) or imgui.ImVec4(0.35, 0.88, 0.50, 1.0)
+                        imgui.TextColored(tagCol, "[" .. u8(m.tag) .. "]")
+                        imgui.SameLine(0, 6)
+                        imgui.TextColored(st and st.color or t.text, u8(m.nick))
+
+                        if st then
+                            imgui.SameLine(0, 8)
+                            local badgeStr = st.icon .. " " .. st.role
+                            local bSz = imgui.CalcTextSize(badgeStr)
+                            local bp = imgui.GetCursorScreenPos()
+                            dl:AddRectFilled(imgui.ImVec2(bp.x, bp.y - 1), imgui.ImVec2(bp.x + bSz.x + 12, bp.y + 17),
+                                imgui.ColorConvertFloat4ToU32(imgui.ImVec4(st.color.x, st.color.y, st.color.z, 0.24)), 4.0)
+                            dl:AddText(imgui.ImVec2(bp.x + 6, bp.y), imgui.ColorConvertFloat4ToU32(st.color), badgeStr)
+                            imgui.Dummy(imgui.ImVec2(bSz.x + 14, 16))
+                        end
+
+                        -- Строка 2: Текст сообщения
+                        imgui.TextColored(m.isOoc and t.textDim or imgui.ImVec4(0.96, 0.98, 1.0, 1.0), u8(m.text))
+
+                        if imgui.IsWindowHovered() and imgui.IsMouseClicked(1) then
+                            imgui.SetClipboardText(u8(m.nick .. ": " .. m.text))
+                            showToast("Сообщение скопировано")
+                        end
+                    imgui.EndChild()
+                    imgui.PopStyleColor(2)
+                    imgui.Dummy(imgui.ImVec2(1, 2))
+                end
+            end
+
+            if shown == 0 then
+                local eAvail = imgui.GetContentRegionAvail()
+                local wp = imgui.GetCursorScreenPos()
+                local cx, cy = wp.x + eAvail.x * 0.5, wp.y + eAvail.y * 0.42
+                dl:AddCircleFilled(imgui.ImVec2(cx, cy - 16), 24,
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.14)), 24)
+                local icSz = imgui.CalcTextSize(fa.ICON_COMMENTS_O)
+                dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - 16 - icSz.y * 0.5),
+                    imgui.ColorConvertFloat4ToU32(t.accent), fa.ICON_COMMENTS_O)
+                local msg1 = u8"Сообщений в логе рации пока нет"
+                local msg2 = u8"Все сообщения из рации (/rc и /rc!) автоматически записываются сюда с отметками руководства"
+                local sz1, sz2 = imgui.CalcTextSize(msg1), imgui.CalcTextSize(msg2)
+                dl:AddText(imgui.ImVec2(cx - sz1.x * 0.5, cy + 16), imgui.ColorConvertFloat4ToU32(t.text), msg1)
+                dl:AddText(imgui.ImVec2(cx - sz2.x * 0.5, cy + 36), imgui.ColorConvertFloat4ToU32(t.textDim), msg2)
+            end
+
+            if rlog.do_scroll then
+                imgui.SetScrollHere(1.0)
+                rlog.do_scroll = false
+            end
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+        imgui.Spacing()
+
+        -- 3. Нижняя строка быстрой отправки в рацию (/r или /rc)
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("##rlog_send_bar", imgui.ImVec2(leftW, 38), true)
+            imgui.PushItemWidth(leftW - 210)
+            local enterPressed = imgui.InputText("##rlog_input_msg", rlog.chat_input_buf, imgui.InputTextFlags.EnterReturnsTrue)
+            imgui.PopItemWidth()
+
+            local function sendToRadio(cmdPrefix)
+                local raw = u8:decode(rlog.chat_input_buf.v):gsub("^%s+", ""):gsub("%s+$", "")
+                if raw ~= "" then
+                    sampSendChat(cmdPrefix .. " " .. raw)
+                    rlog.chat_input_buf.v = ""
+                end
+            end
+
+            if enterPressed then sendToRadio("/rc") end
+
+            imgui.SameLine(0, 6)
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.20, 0.62, 0.35, 1.0))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.28, 0.72, 0.44, 1.0))
+            if imgui.Button(fa.ICON_PAPER_PLANE .. u8" В /rc##rlog_btn_r", imgui.ImVec2(88, 24)) then
+                sendToRadio("/rc")
+            end
+            imgui.PopStyleColor(2)
+
+            imgui.SameLine(0, 6)
+            if imgui.Button(fa.ICON_COMMENT_O .. u8" В /rc!##rlog_btn_rc", imgui.ImVec2(88, 24)) then
+                sendToRadio("/rc!")
+            end
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+    imgui.EndGroup()
+
+    -- ============================================================
+    --  ПРАВАЯ КОЛОНКА: ОТМЕТКИ РУКОВОДСТВА И КУРАТОРОВ TRPCOMM
+    -- ============================================================
+    imgui.SameLine(0, gap)
+    imgui.BeginGroup()
+
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+        imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+        imgui.BeginChild("##rlog_staff_panel", imgui.ImVec2(rightW, 0), true)
+
+            imgui.TextColored(t.accent, fa.ICON_SHIELD .. u8"  РУКОВОДСТВО TRPCOMM")
+            imgui.Separator()
+            imgui.Spacing()
+
+            local dl = imgui.GetWindowDrawList()
+            local w = imgui.GetContentRegionAvailWidth()
+
+            for i, item in ipairs(rlog.staff_order) do
+                local st = rlog.staff[item.key]
+                local pid = online[item.key]
+                local isOn = (pid ~= nil)
+                local p = imgui.GetCursorScreenPos()
+                local h = 52
+                imgui.InvisibleButton("##staff_card_" .. i, imgui.ImVec2(w, h))
+                local hov = imgui.IsItemHovered()
+                if imgui.IsItemClicked(0) then
+                    -- Клик по карточке фильтрует лог по этому руководителю (повторный клик сбрасывает)
+                    local curF = u8:decode(rlog.filter_buf.v)
+                    if curF:lower() == item.key then
+                        rlog.filter_buf.v = ""
+                    else
+                        rlog.filter_buf.v = u8(item.nick)
+                    end
+                end
+                if hov then
+                    imgui.SetTooltip(u8"ЛКМ — показать в логе только сообщения от " .. item.nick)
+                end
+
+                local bgAlpha = hov and 0.65 or 0.38
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, bgAlpha)), 6.0)
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + 3.5, p.y + h),
+                    imgui.ColorConvertFloat4ToU32(st.color), 3.0)
+
+                -- Иконка в кружке
+                local cx, cy = p.x + 22, p.y + h * 0.5
+                dl:AddCircleFilled(imgui.ImVec2(cx, cy), 13,
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(st.color.x, st.color.y, st.color.z, 0.20)), 20)
+                local icSz = imgui.CalcTextSize(st.icon)
+                dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - icSz.y * 0.5),
+                    imgui.ColorConvertFloat4ToU32(st.color), st.icon)
+
+                -- Никнейм + статус онлайн
+                dl:AddText(imgui.ImVec2(p.x + 42, p.y + 8), imgui.ColorConvertFloat4ToU32(t.text), item.nick)
+
+                -- Индикатор сети справа вверху
+                local dotCol = isOn and imgui.ImVec4(0.28, 0.90, 0.48, 1.0) or imgui.ImVec4(0.50, 0.52, 0.58, 0.65)
+                local statusStr = isOn and ("ID " .. tostring(pid)) or u8"Оффлайн"
+                local stSz = imgui.CalcTextSize(statusStr)
+                dl:AddCircleFilled(imgui.ImVec2(p.x + w - stSz.x - 16, p.y + 15), 3.5, imgui.ColorConvertFloat4ToU32(dotCol), 12)
+                dl:AddText(imgui.ImVec2(p.x + w - stSz.x - 8, p.y + 8), imgui.ColorConvertFloat4ToU32(isOn and dotCol or t.textDim), statusStr)
+
+                -- Должность
+                dl:AddText(imgui.ImVec2(p.x + 42, p.y + 28), imgui.ColorConvertFloat4ToU32(st.color), st.role)
+
+                imgui.Dummy(imgui.ImVec2(1, 3))
+            end
+
+            imgui.Spacing()
+            imgui.Separator()
+            imgui.Spacing()
+            imgui.TextColored(t.textDim, fa.ICON_INFO_CIRCLE .. u8" Подсказка:")
+            imgui.TextWrapped(u8"Сообщения руководства и кураторов автоматически выделяются цветом и именной плашкой в общем потоке рации. ПКМ по сообщению копирует его.")
+
+        imgui.EndChild()
+        imgui.PopStyleVar()
+        imgui.PopStyleColor(2)
+
+    imgui.EndGroup()
+end
 calendar_tab_active_last_frame = false
 curator_section_active_last_frame = false
 
 function imgui.OnDrawFrame()
+    if qsms and qsms.onDrawFrame then
+        qsms.onDrawFrame()
+    end
     if not main_window_state.v then
         calendar_tab_active_last_frame = false
         curator_section_active_last_frame = false
@@ -6117,7 +7344,7 @@ function imgui.OnDrawFrame()
     local t = getTheme()
     local sw, sh = getScreenResolution()
     imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
-    imgui.SetNextWindowSize(imgui.ImVec2(900, 600), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowSize(imgui.ImVec2(1060, 580), imgui.Cond.Always)
 
     pushThemeColors()
     pushThemeRounding()
@@ -6127,7 +7354,7 @@ function imgui.OnDrawFrame()
 
         imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER")
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8 "•  Версия 2.9")
+        imgui.TextColored(t.textDim, u8 "•  Версия 3.0")
 
         -- Компактная квадратная кнопка закрытия
         imgui.SameLine(imgui.GetWindowWidth() - 28)
@@ -6212,13 +7439,37 @@ function imgui.OnDrawFrame()
 
             imgui.PopStyleColor(2)
 
-            imgui.SameLine(imgui.GetWindowWidth() - 100)
-            if imgui.Button(fa.ICON_CALENDAR, imgui.ImVec2(30, 22)) then
-                openTab("calendar", u8"Календарь")
+            imgui.SameLine(imgui.GetWindowWidth() - 132)
+            local hasNewRadio = rlog and rlog.unread
+            if hasNewRadio then
+                imgui.PushStyleColor(imgui.Col.Button, t.accent)
+            end
+            if imgui.Button(fa.ICON_BULLHORN, imgui.ImVec2(30, 22)) then
+                openTab("radiolog", u8"Лог рации")
+            end
+            if hasNewRadio then
+                imgui.PopStyleColor()
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(u8"Лог рации ивента (/rc, /rc!) и руководство TRPcomm")
             end
             imgui.SameLine(0, 2)
-            if imgui.Button(fa.ICON_STICKY_NOTE, imgui.ImVec2(30, 22)) then
-                openTab("notes", u8"Нотатки")
+            local hasNewSms = qsms and qsms.new
+            if hasNewSms then
+                imgui.PushStyleColor(imgui.Col.Button, t.accent)
+            end
+            if imgui.Button(fa.ICON_ENVELOPE, imgui.ImVec2(30, 22)) then
+                openTab("quicksms", u8"Мессенджер")
+            end
+            if hasNewSms then
+                imgui.PopStyleColor()
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(u8"Мессенджер — Сообщения и автоответчик (/smss)")
+            end
+            imgui.SameLine(0, 2)
+            if imgui.Button(fa.ICON_CALENDAR, imgui.ImVec2(30, 22)) then
+                openTab("calendar", u8"Календарь")
             end
             imgui.SameLine(0, 2)
             if imgui.Button(fa.ICON_COG, imgui.ImVec2(30, 22)) then
@@ -6251,13 +7502,14 @@ function imgui.OnDrawFrame()
 
                     imgui.BeginChild("TabContent", imgui.ImVec2(0, 0), true)
             local activeTab = open_tabs[active_tab_idx]
-            local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, advertising = true, roles = true }
+            local RESTRICTED_SECTIONS = { photographer = true, tracker = true, hr = true, advertising = true, roles = true, quicksms = true }
             local ACCESS_KEY_BY_KIND = {
                 roles = "actors",
                 photographer = "photographers",
                 tracker = "curators",
                 hr = "advertising",
                 advertising = "advertising",
+                quicksms = "advertising",
             }
 
             if activeTab and RESTRICTED_SECTIONS[activeTab.kind] then
@@ -6288,6 +7540,14 @@ function imgui.OnDrawFrame()
                     drawHRTab(t)
                 elseif activeTab.kind == "calendar" then
                     drawHRCalendarTab(t)
+                elseif activeTab.kind == "radiolog" then
+                    if rlog and rlog.drawTab then
+                        rlog.drawTab(t)
+                    end
+                elseif activeTab.kind == "quicksms" and (hasAccess("advertising") or hasAccess("hr")) then
+                    if qsms and qsms.drawTab then
+                        qsms.drawTab(t)
+                    end
                 end
             end
         imgui.EndChild()
@@ -6306,8 +7566,8 @@ sampev.onShowDialog = function(dialogId, style, title, button1, button2, text)
     local cleanText = text and text:gsub("{%x%x%x%x%x%x}", "") or ""
     local cleanTitle = title and title:gsub("{%x%x%x%x%x%x}", "") or ""
 
-    -- 1. Предыдущее объявление ещё в очереди (ошибка очереди / уже в очереди)
-    if cleanText:find("уже находится в очереди") or cleanText:find("уже в очереди") or (dialogId == 45 and cleanText:find("уже находится")) then
+    -- 1. Предыдущее объявление ещё в очереди (только когда отправка объявлений TRPcomm активна)
+    if (ad_pending or ad_awaiting_next_city or ad_auto_send.v) and (cleanText:find("уже находится в очереди") or cleanText:find("Одно из ваших объявлений уже") or (dialogId == 45 and cleanText:find("уже находится"))) then
         ad_pending = false
         ad_pending_deadline = 0
         ad_awaiting_next_city = false
@@ -6383,7 +7643,10 @@ sampev.onSetPlayerAttachedObject = function(id, index, create, object)
     end
 end
 
-function onReceivePacket(id, bs) 
+function onReceivePacket(id, bs)
+    if (id == 32 or id == 33 or id == 34 or id == 36 or id == 37) and rlog and rlog.reset then
+        rlog.reset()
+    end
     if id == 220 then
         raknetBitStreamIgnoreBits(bs, 8)
         local type = raknetBitStreamReadInt8(bs)
@@ -6410,6 +7673,14 @@ local function parseRetrySeconds(text)
 end
 
 sampev.onServerMessage = function(color, text)
+    if rlog and rlog.onServerMessage then
+        rlog.onServerMessage(color, text)
+    end
+    if qsms and qsms.onServerMessage then
+        if qsms.onServerMessage(color, text) == false then
+            return false
+        end
+    end
     -- Синхронизация времени сервера (по МСК) при сообщениях сервера / командах
     local th, tm, ts = text:match("([012]?%d):([0-5]%d):?([0-5]?%d?)")
     if (text:find("Время") or text:find("время") or text:find("часах")) and th and tm then
@@ -6426,7 +7697,7 @@ sampev.onServerMessage = function(color, text)
         role_approve_distance_error = true
     end
 
-    if text:find("уже находится в очереди") or text:find("уже в очереди") then
+    if (ad_pending or ad_awaiting_next_city or ad_auto_send.v) and text:find("Одно из ваших объявлений уже находится в очереди") then
         ad_pending = false
         ad_pending_deadline = 0
         ad_awaiting_next_city = false
@@ -6508,6 +7779,2345 @@ end
 -- ============================================================
 --  ТОЧКА ВХОДА
 -- ============================================================
+-- ============================================================
+--  МОДУЛЬ QUICK SMS - TRINITY (ВСТРОЕННЫЙ В МЕНЮ TRPCOMM)
+-- ============================================================
+qsms = {}
+do
+    local lfs = require("lfs")
+    local ok_mcfg, mcfg_mod = pcall(require, "mcfg")
+    if not ok_mcfg or not mcfg_mod then
+        local function draw_string(str) return string.format("%q", str) end
+        local function draw_key(key)
+            if "string" == type(key) and key:match("^[_%a][_%a%d]*$") then return key
+            elseif "number" == type(key) then return "["..key.."]"
+            else return "["..draw_string(key).."]" end
+        end
+        local function draw_table(tbl, tab)
+            tab = tab or ""
+            local result = {}
+            for key, value in pairs(tbl) do
+                if type(value) == "string" then
+                    if type(key) == "number" and key <= #tbl then table.insert(result, draw_string(value))
+                    else table.insert(result, draw_key(key).." = "..draw_string(value)) end
+                elseif type(value) == "number" or type(value) == "boolean" then
+                    if type(key) == "number" and key <= #tbl then table.insert(result, tostring(value))
+                    else table.insert(result, draw_key(key).." = "..tostring(value)) end
+                elseif type(value) == "table" then
+                    if type(key) == "number" and key <= #tbl then table.insert(result, draw_table(value, tab.."\t"))
+                    else table.insert(result, draw_key(key).." = "..draw_table(value, tab.."\t")) end
+                else
+                    if type(key) == "number" and key <= #tbl then table.insert(result, draw_string(tostring(value)))
+                    else table.insert(result, draw_key(key).." = "..draw_string(tostring(value))) end
+                end
+            end
+            if #result == 0 and tab == "" then return ""
+            elseif #result == 0 then return "{}"
+            elseif tab == "" then return table.concat(result, ",\n")..",\n"
+            else return "{\n"..tab..table.concat(result, ", \n"..tab)..",\n"..tab:sub(2).."}" end
+        end
+        local function draw_value(value, tab)
+            if type(value) == "string" then return draw_string(value)
+            elseif type(value) == "number" or type(value) == "boolean" or type(value) == "nil" then return tostring(value)
+            elseif type(value) == "table" then return draw_table(value, tab)
+            else return draw_string(tostring(value)) end
+        end
+        mcfg_mod = {}
+        function mcfg_mod.mkpath(filename)
+            local sep, pStr = package.config:sub(1, 1), ""
+            local path = filename:match("(.+"..sep..").+$") or filename
+            for dir in path:gmatch("[^" .. sep .. "]+") do
+                pStr = pStr .. dir .. sep
+                createDirectory(pStr)
+            end
+        end
+        function mcfg_mod.load(filename)
+            local file = io.open(filename, "r")
+            if file then
+                local text = file:read("*all")
+                file:close()
+                local lua_code = loadstring("return {"..text.."}")
+                if lua_code then
+                    local ok, result = pcall(lua_code)
+                    if ok and type(result) == "table" then return result end
+                end
+            end
+        end
+        function mcfg_mod.save(updated, filename)
+            mcfg_mod.mkpath(filename)
+            local file = io.open(filename, "w+")
+            if file then
+                file:write(draw_table(updated))
+                file:close()
+                return true
+            end
+            return false
+        end
+        function mcfg_mod.append_value(value, filename)
+            mcfg_mod.mkpath(filename)
+            local file = io.open(filename, "a+")
+            if file then
+                file:write(draw_value(value, "\t")..",\n")
+                file:close()
+                return true
+            end
+            return false
+        end
+        function mcfg_mod.update(original, update, rewrite)
+            if rewrite == nil then rewrite = true end
+            local loaded = type(update) == "table" and update or (type(update) == "string" and mcfg_mod.load(update))
+            if loaded then
+                for key, value in pairs(loaded) do
+                    if rewrite or not original[key] then original[key] = value end
+                end
+                return true
+            end
+            return false
+        end
+    end
+    qsms.mcfg = mcfg_mod
+    qsms.lfs = lfs
+    qsms.__name__ = "Quick SMS - Trinity"
+    qsms.MAIN_TITLE = "Мессенджер"
+    qsms.MAIN_CMD = "smss"
+
+    function imgui.ButtonActivated(activated, ...)
+        if activated then
+            local t = getTheme()
+            imgui.PushStyleColor(imgui.Col.Button, t.accent)
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+            imgui.PushStyleColor(imgui.Col.ButtonActive, t.accent)
+            local res = imgui.Button(...)
+            imgui.PopStyleColor(3)
+            return res
+        else
+            return imgui.Button(...)
+        end
+    end
+
+    function imgui.DotGreen(bool)
+        imgui.PushStyleColor(imgui.Col.FrameBgHovered, imgui.GetStyle().Colors[imgui.Col.Button])
+        imgui.PushStyleColor(imgui.Col.FrameBgActive, imgui.GetStyle().Colors[imgui.Col.Button])
+        imgui.PushStyleColor(imgui.Col.CheckMark, imgui.ImVec4(0.20, 0.85, 0.35, 1.00))
+        if bool then
+            imgui.RadioButton("", true)
+        else
+            imgui.RadioButton("", false)
+        end
+        imgui.PopStyleColor(3)
+    end
+
+    function imgui.WrapText(str, width)
+        if imgui.CalcTextSize(str).x < width then
+            return str
+        end
+        local lines = {}
+        for word in str:gmatch("%s*%S*%s*") do
+            if lines[#lines] and imgui.CalcTextSize(lines[#lines]..word).x < width then
+                lines[#lines] = lines[#lines]..word
+            else
+                if imgui.CalcTextSize(word).x > width then
+                    for symbol in u8:decode(word):gmatch(".") do
+                        if lines[#lines] and imgui.CalcTextSize(lines[#lines]..u8(symbol)).x < width then
+                            lines[#lines] = lines[#lines]..u8(symbol)
+                        else
+                            table.insert(lines, u8(symbol))
+                        end
+                    end
+                else
+                    table.insert(lines, word)
+                end
+            end
+        end
+        return table.concat(lines, "\n")
+    end
+
+    imgui.Bubble = {
+        _clicked_clock = nil,
+        _clicked_id = nil,
+        _hovered_clock = nil,
+        _hovered_id = nil,
+    }
+    setmetatable(imgui.Bubble, {__call = function(self, id, color, text, text_hovered, text_clicked, right)
+        local ms = 1500
+        local delay = 600
+        local style = imgui.GetStyle()
+        local border_heigth = (1*2) + (style.WindowPadding.y*2)
+        local border_width = (1*2) + (style.WindowPadding.x*2)
+        local field_width = imgui.GetWindowWidth() - style.ScrollbarSize - 10
+        local bubble_max_width = math.floor(field_width/3*2)
+        text = imgui.WrapText(text, math.max(60, bubble_max_width - border_width))
+        local text_size = imgui.CalcTextSize(text)
+        local bubble_width = math.min(math.max(text_size.x) + border_width, field_width)
+        local bubble_heigth = text_size.y + border_heigth
+        if right then
+            imgui.SetCursorPosX(math.max(0, field_width - bubble_width))
+        end
+        imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8)
+        imgui.PushStyleColor(imgui.Col.ChildWindowBg, color)
+        imgui.BeginChild(id, imgui.ImVec2(bubble_width, bubble_heigth), true, imgui.WindowFlags.NoInputs)
+            imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(0, 0))
+            imgui.PopStyleVar()
+            imgui.Text(text)
+        imgui.EndChild()
+        imgui.PopStyleColor()
+        imgui.PopStyleVar()
+        local clicked = imgui.IsItemClicked()
+        local hovered = imgui.IsItemHovered()
+        if text_clicked then
+            if clicked then
+                self._clicked_clock = os.clock()
+                self._clicked_id = id
+            end
+            if imgui.IsItemHovered() then
+                if self._clicked_clock then
+                    if self._clicked_id == id and (os.clock() - self._clicked_clock) < (ms / 1000) then
+                        imgui.BeginTooltip()
+                        imgui.Text(text_clicked)
+                        imgui.EndTooltip()
+                    else
+                        self._clicked_clock = nil
+                    end
+                end
+            elseif self._clicked_id == id then
+                self._clicked_clock = nil
+            end
+        end
+        if hovered then
+            if self._hovered_id ~= id then
+                self._hovered_clock = nil
+            end
+            if not self._hovered_clock then
+                self._hovered_clock = os.clock()
+                self._hovered_id = id
+            end
+            if text_hovered and not self._clicked_clock then
+                if (os.clock() - self._hovered_clock) > (delay / 1000) then
+                    imgui.BeginTooltip()
+                    imgui.PushTextWrapPos(640)
+                    imgui.TextUnformatted(text_hovered)
+                    imgui.PopTextWrapPos()
+                    imgui.EndTooltip()
+                end
+            end
+        elseif self._hovered_id == id then
+            self._hovered_clock = nil
+        end
+        return clicked
+    end})
+
+    function imgui.ButtonClickable(clickable, ...)
+        if clickable then
+            return imgui.Button(...)
+        else
+            local r, g, b, a = imgui.ImColor(imgui.GetStyle().Colors[imgui.Col.Button]):GetFloat4()
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(r, g, b, a/2))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(r, g, b, a/2))
+            imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(r, g, b, a/2))
+            imgui.PushStyleColor(imgui.Col.Text, imgui.GetStyle().Colors[imgui.Col.TextDisabled])
+                imgui.Button(...)
+            imgui.PopStyleColor(4)
+        end
+    end
+
+    local function initHKeys()
+        local self = {}
+        local vkeys = require 'vkeys'
+        local wm = require 'lib.windows.message'
+        local bitex = require "bitex"
+        self.VK_WHEELDOWN = 0x100
+        self.VK_WHEELUP = 0x101
+        self.KEYS = {
+            VK_WHEELDOWN = self.VK_WHEELDOWN,
+            VK_WHEELUP = self.VK_WHEELUP
+        }
+        self.NAMES = {
+            [self.KEYS.VK_WHEELDOWN] = "Wheel Down",
+            [self.KEYS.VK_WHEELUP] = "Wheel Up",
+        }
+        for key, value in pairs(vkeys) do
+            if key:sub(1, 3) == 'VK_' then
+                self.KEYS[key] = value
+                self[key] = value
+            end
+        end
+        for key, value in pairs(vkeys.key_names) do
+            self.NAMES[key] = value
+        end
+        function self.id_to_name(vkey)
+            local name = self.NAMES[vkey]
+            if type(name) == 'table' then
+                return name[1]
+            end
+            return name
+        end
+        function self.name_to_id(keyname, case_sensitive)
+            if not case_sensitive then
+                keyname = string.upper(keyname)
+            end
+            for id, v in pairs(self.NAMES) do
+                if type(v) == 'table' then
+                    for _, v2 in pairs(v) do
+                        v2 = (case_sensitive) and v2 or string.upper(v2)
+                        if v2 == keyname then
+                            return id
+                        end
+                    end
+                else
+                    local name = (case_sensitive) and v or string.upper(v)
+                    if name == keyname then
+                        return id
+                    end
+                end
+            end
+        end
+        local HK_hotkeys = {}
+        local HK_down_keycombo = {}
+        local HK_last_down_combokey = nil
+        local HK_key_counter = 0
+        local KE_current_name = nil
+        local KE_new_keycombo = nil
+        local KE_tick_clock = os.clock()
+        local KE_tick_state = true
+        local KE_hovered = false
+        local DOWN_MESSAGES = {
+            [wm.WM_KEYDOWN] = true,
+            [wm.WM_SYSKEYDOWN] = true,
+            [wm.WM_LBUTTONDBLCLK] = true,
+            [wm.WM_LBUTTONDOWN] = true,
+            [wm.WM_RBUTTONDOWN] = true,
+            [wm.WM_MBUTTONDOWN] = true,
+            [wm.WM_XBUTTONDOWN] = true,
+            [wm.WM_MOUSEWHEEL] = true
+        }
+        local UP_MESSAGES = {
+            [wm.WM_KEYUP] = true,
+            [wm.WM_SYSKEYUP] = true,
+            [wm.WM_LBUTTONDBLCLK] = true,
+            [wm.WM_LBUTTONUP] = true,
+            [wm.WM_RBUTTONUP] = true,
+            [wm.WM_MBUTTONUP] = true,
+            [wm.WM_XBUTTONUP] = true,
+            [wm.WM_MOUSEWHEEL] = true
+        }
+        local MBUTTON = {
+            [wm.WM_LBUTTONDOWN] = self.VK_LBUTTON,
+            [wm.WM_LBUTTONUP] = self.VK_LBUTTON,
+            [wm.WM_RBUTTONDOWN] = self.VK_RBUTTON,
+            [wm.WM_RBUTTONUP] = self.VK_RBUTTON,
+            [wm.WM_MBUTTONDOWN] = self.VK_MBUTTON,
+            [wm.WM_MBUTTONUP] = self.VK_MBUTTON,
+        }
+        local XBUTTON = {
+            self.VK_XBUTTON1,
+            self.VK_XBUTTON2
+        }
+        local function HIWORD(param)
+            return bit.rshift(bit.band(param, 0xffff0000), 16)
+        end
+        local function compareKeyCombos(keycombo1, keycombo2)
+            if #keycombo1 == 0 or #keycombo2 == 0 then
+                return false
+            end
+            keycombo1 = {table.unpack(keycombo1)}
+            keycombo2 = {table.unpack(keycombo2)}
+            local last_key1 = table.remove(keycombo1, #keycombo1)
+            local last_key2 = table.remove(keycombo2, #keycombo2)
+            table.sort(keycombo1)
+            table.sort(keycombo2)
+            table.insert(keycombo1, last_key1)
+            table.insert(keycombo2, last_key2)
+            for index = 1, #keycombo1 do
+                if keycombo1[index] ~= keycombo2[index] then
+                    return false
+                end
+            end
+            return true
+        end
+        local function isDublicateExist(keycombo, press_type)
+            for index = 1, #HK_hotkeys do
+                if compareKeyCombos(HK_hotkeys[index].keycombo, keycombo) and HK_hotkeys[index].press_type == press_type then
+                    return index
+                end
+            end
+            return false
+        end
+        local function getKeyID(message, wparam, lparam)
+            if message == wm.WM_XBUTTONDOWN or message == wm.WM_XBUTTONUP then
+                local btn = HIWORD(wparam)
+                return XBUTTON[btn]
+            elseif MBUTTON[message] then
+                return MBUTTON[message]
+            elseif message == wm.WM_MOUSEWHEEL then
+                local keystate = bitex.bextract(wparam, 30, 1)
+                if keystate == 1 then
+                    return self.VK_WHEELDOWN
+                elseif keystate == 0 then
+                    return self.VK_WHEELUP
+                end
+            end
+            local newKeyId = wparam
+            local scancode = bitex.bextract(lparam, 16, 8)
+            local extend = bitex.bextract(lparam, 24, 1)
+            if wparam == self.VK_MENU then
+                if extend == 1 then newKeyId = self.VK_RMENU else newKeyId = self.VK_LMENU end
+            elseif wparam == self.VK_SHIFT then
+                if scancode == 42 then newKeyId = self.VK_LSHIFT elseif scancode == 54 then newKeyId = self.VK_RSHIFT end
+            elseif wparam == self.VK_CONTROL then
+                if extend == 1 then newKeyId = self.VK_RCONTROL else newKeyId = self.VK_LCONTROL end
+            end
+            return newKeyId
+        end
+        addEventHandler("onWindowMessage",
+            function(message, wparam, lparam)
+                if DOWN_MESSAGES[message] then
+                    local key_id = getKeyID(message, wparam, lparam)
+                    if not HK_down_keycombo[key_id] then
+                        HK_last_down_combokey = key_id
+                        HK_key_counter = HK_key_counter + 1
+                        HK_down_keycombo[key_id] = HK_key_counter
+                        if KE_current_name then
+                            if key_id == self.VK_ESCAPE then
+                                KE_current_name = nil
+                            end
+                            consumeWindowMessage(true, true)
+                        else
+                            for index = 1, #HK_hotkeys do
+                                if self.is_keycombo_down(HK_hotkeys[index].keycombo) and HK_hotkeys[index].press_type == self.DOWN then
+                                    if HK_hotkeys[index].callback and HK_hotkeys[index].enabled and not (KE_hovered and compareKeyCombos({self.VK_LBUTTON}, HK_down_keycombo)) then
+                                        HK_hotkeys[index].callback(table.unpack(HK_hotkeys[index].args))
+                                    end
+                                    if HK_hotkeys[index].blocked then
+                                        consumeWindowMessage(true, true)
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        if KE_current_name then
+                            consumeWindowMessage(true, true)
+                        else
+                            for index = 1, #HK_hotkeys do
+                                if self.is_keycombo_down(HK_hotkeys[index].keycombo) and HK_hotkeys[index].press_type == self.HOLD then
+                                    if HK_hotkeys[index].callback and HK_hotkeys[index].enabled and not (KE_hovered and compareKeyCombos({self.VK_LBUTTON}, HK_down_keycombo)) then
+                                        HK_hotkeys[index].callback(table.unpack(HK_hotkeys[index].args))
+                                    end
+                                    if HK_hotkeys[index].blocked then
+                                        consumeWindowMessage()
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                if UP_MESSAGES[message] then
+                    local key_id = getKeyID(message, wparam, lparam)
+                    HK_last_down_combokey = key_id
+                    HK_key_counter = HK_key_counter + 1
+                    HK_down_keycombo[key_id] = HK_key_counter
+                    if HK_down_keycombo[key_id] then
+                        if KE_current_name then
+                            KE_new_keycombo = self.get_down_keycombo()
+                            consumeWindowMessage(true, true)
+                        else
+                            for index = 1, #HK_hotkeys do
+                                if self.is_keycombo_down(HK_hotkeys[index].keycombo) and HK_hotkeys[index].press_type == self.UP then
+                                    if HK_hotkeys[index].callback and HK_hotkeys[index].enabled and not (KE_hovered and compareKeyCombos({self.VK_LBUTTON}, HK_down_keycombo)) then
+                                        HK_hotkeys[index].callback(table.unpack(HK_hotkeys[index].args))
+                                    end
+                                    if HK_hotkeys[index].blocked then
+                                        consumeWindowMessage()
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    HK_last_down_combokey = nil
+                    HK_down_keycombo[key_id] = nil
+                    if not next(HK_down_keycombo) then
+                        HK_key_counter = 0
+                    end
+                end
+                if message == wm.WM_CHAR then
+                    if KE_current_name then
+                        consumeWindowMessage(true, true)
+                    else
+                        for index = 1, #HK_hotkeys do
+                            if self.is_keycombo_down(HK_hotkeys[index].keycombo) and (HK_hotkeys[index].press_type == self.DOWN or HK_hotkeys[index].press_type == self.UP or HK_hotkeys[index].press_type == self.HOLD) then
+                                if HK_hotkeys[index].blocked then
+                                    consumeWindowMessage()
+                                end
+                            end
+                        end
+                    end
+                end
+                if message == wm.WM_KILLFOCUS then
+                    HK_last_down_combokey = nil
+                    HK_down_keycombo = {}
+                    HK_key_counter = 0
+                    KE_new_keycombo = nil
+                    KE_current_name = nil
+                    KE_tick_clock = os.clock()
+                    KE_tick_state = true
+                end
+            end
+        )
+
+        self.DOWN = 1
+        self.HOLD = 2
+        self.UP = 3
+        self.ImguiHotkeyEditorPromt = "..."
+        function self.register(keycombo, press_type, blocked, enabled, callback, ...)
+            local hotkey_data = {
+                keycombo = {table.unpack(keycombo)},
+                press_type = press_type,
+                blocked = blocked,
+                enabled = enabled,
+                callback = callback,
+                args = {...}
+            }
+            local index = isDublicateExist(keycombo, hotkey_data.press_type)
+            if index then
+                HK_hotkeys[index].keycombo = {}
+            end
+            table.insert(HK_hotkeys, hotkey_data)
+            return hotkey_data
+        end
+        function self.is_registered(hotkey_data)
+            for index = 1, #HK_hotkeys do
+                if HK_hotkeys[index] == hotkey_data then return true end
+            end
+            return false
+        end
+        function self.is_keycombo_down(keycombo)
+            if HK_last_down_combokey ~= keycombo[#keycombo] then return false end
+            for index = 1, #keycombo do
+                local l_key, r_key
+                if keycombo[index] == self.VK_MENU then l_key, r_key = self.VK_LMENU, self.VK_RMENU
+                elseif keycombo[index] == self.VK_SHIFT then l_key, r_key = self.VK_LSHIFT, self.VK_RSHIFT
+                elseif keycombo[index] == self.VK_CONTROL then l_key, r_key = self.VK_LCONTROL, self.VK_RCONTROL end
+                if l_key and r_key then
+                    if not HK_down_keycombo[l_key] and not HK_down_keycombo[r_key] then return false end
+                else
+                    if not HK_down_keycombo[keycombo[index]] then return false end
+                end
+            end
+            return true
+        end
+        function self.set_keycombo(hotkey_data, keycombo)
+            local index = isDublicateExist(keycombo, hotkey_data.press_type)
+            if index then HK_hotkeys[index].keycombo = {} end
+            if self.is_registered(hotkey_data) then
+                local old_keycombo = {table.unpack(hotkey_data.keycombo)}
+                hotkey_data.keycombo = {table.unpack(keycombo)}
+                return old_keycombo
+            end
+        end
+        function self.get_keycombo(hotkey_data)
+            return {table.unpack(hotkey_data.keycombo)}
+        end
+        function self.get_down_keycombo()
+            local keys = {}
+            for key, _ in pairs(HK_down_keycombo) do table.insert(keys, key) end
+            table.sort(keys, function(a, b) return HK_down_keycombo[a] < HK_down_keycombo[b] end)
+            return keys
+        end
+        function self.get_down_keynames()
+            return self.keycombo_to_keynames(self.get_down_keycombo())
+        end
+        function self.keycombo_to_keynames(keys)
+            local names = {}
+            for index = 1, #keys do table.insert(names, self.id_to_name(keys[index])) end
+            return names
+        end
+        function self.ImguiHotkeyEditor(str_id, str_id2, label, hotkey_data, width)
+            width = width or 200
+            local width2 = (width == 0) and 0 or 22
+            local sKeys
+            if (KE_current_name == str_id) and not KE_new_keycombo then
+                local current_names = self.get_down_keynames()
+                if #current_names ~= 0 then
+                    sKeys = table.concat(current_names, " + ")
+                else
+                    if (os.clock() - KE_tick_clock) > 0.4 then
+                        KE_tick_clock = os.clock()
+                        KE_tick_state = not KE_tick_state
+                    end
+                    sKeys = (KE_tick_state and self.ImguiHotkeyEditorPromt) or " "
+                end
+            elseif (KE_current_name == str_id) and KE_new_keycombo then
+                sKeys = table.concat(self.keycombo_to_keynames(KE_new_keycombo), " + ")
+            else
+                local names = self.keycombo_to_keynames(hotkey_data.keycombo); sKeys = (#names > 0) and table.concat(names, " + ") or u8"Не задано"
+            end
+            imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(2, 0))
+                imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.GetStyle().Colors[imgui.Col.ButtonHovered])
+                imgui.PushStyleVar(imgui.StyleVar.ButtonTextAlign, imgui.ImVec2(0.5, 0.5))
+                    if imgui.Button(sKeys..str_id, imgui.ImVec2(width - width2, 24)) then
+                        if not KE_current_name then
+                            KE_new_keycombo = nil
+                            KE_tick_clock = os.clock()
+                            KE_tick_state = true
+                            KE_current_name = str_id
+                        end
+                    end
+                    if imgui.IsItemHovered() then
+                        if KE_hovered ~= str_id then KE_hovered = str_id end
+                    elseif KE_hovered == str_id then
+                        KE_hovered = nil
+                    end
+                imgui.PopStyleVar()
+                imgui.PopStyleColor()
+                imgui.SameLine()
+            imgui.PopStyleVar()
+            local clear = imgui.Button(" X "..str_id2, imgui.ImVec2(26, 24))
+            if imgui.IsItemHovered() then
+                if KE_hovered ~= " X "..str_id2 then KE_hovered = " X "..str_id2 end
+            elseif KE_hovered == " X "..str_id2 then
+                KE_hovered = nil
+            end
+            if label then
+                imgui.SameLine(0, 8)
+                imgui.Text(label)
+            end
+            if clear then
+                KE_current_name = nil
+                return self.set_keycombo(hotkey_data, {})
+            end
+            if (KE_current_name == str_id) and KE_new_keycombo then
+                KE_current_name = nil
+                return self.set_keycombo(hotkey_data, KE_new_keycombo)
+            end
+        end
+        return self
+    end
+
+    qsms.hkeys = initHKeys()
+    qsms.dirname_resources = getWorkingDirectory().."\\config\\"..qsms.__name__
+    qsms.dirname_chats = qsms.dirname_resources.."\\chats"
+    qsms.filename_set = qsms.dirname_resources.."\\set.cfg"
+    if not doesDirectoryExist(qsms.dirname_resources) then createDirectory(qsms.dirname_resources) end
+    if not doesDirectoryExist(qsms.dirname_chats) then createDirectory(qsms.dirname_chats) end
+
+    qsms.set = {
+        chat_size = {760, 420},
+        current_tab = "all",
+        new_sms = {0xA4, 0x45}, -- VK_LMENU, VK_E
+        reply_sms = {0xA4, 0x51}, -- VK_LMENU, VK_Q
+        ooc = false,
+        show_chat_overlay = true,
+        autoresponder = {
+            enabled = false,
+            text = "Я сейчас отошёл от игры. Вернусь через {time}.",
+            duration = 0,
+            end_time = 0,
+            blist = {},
+            cooldown = 300,
+        }
+    }
+    qsms.mcfg.update(qsms.set, qsms.filename_set)
+    if qsms.set.show_chat_overlay == nil then qsms.set.show_chat_overlay = true end
+    if type(qsms.set.autoresponder) ~= "table" then
+        qsms.set.autoresponder = {
+            enabled = false,
+            text = "Я сейчас отошёл от игры. Вернусь через {time}.",
+            duration = 0,
+            end_time = 0,
+            blist = {},
+            cooldown = 300,
+        }
+    end
+    qsms.set.autoresponder.blist = qsms.set.autoresponder.blist or {}
+    qsms.set.autoresponder.cooldown = qsms.set.autoresponder.cooldown or 300
+    qsms.set.autoresponder.text = qsms.set.autoresponder.text or "Я сейчас отошёл от игры. Вернусь через {time}."
+
+    qsms.indicator = nil
+    qsms.server_name = nil
+    qsms.current_server_name = nil
+    qsms.current_nickname = nil
+    qsms.lcurrent_nickname = nil
+    qsms.last_chat_input_text = nil
+    qsms.do_max_scroll = true
+    qsms.do_min_scroll = true
+    qsms.auto_scroll = false
+    qsms.search = {}
+    qsms.searching = false
+    qsms.new = false
+    qsms.part = nil
+    qsms.who = nil
+    qsms.sms = nil
+    qsms.do_call = false
+    qsms.popup_is_open = false
+    qsms.close_current_popup = false
+    qsms.ar_last_reply = {}
+    qsms.chats = {}
+    qsms.hotkeys = {}
+    qsms.menu_search_buf = imgui.ImBuffer("", 64)
+    qsms.menu_sms_buf = imgui.ImBuffer("", 256)
+
+    qsms.img = {
+        window_menu = imgui.ImBool(false),
+        window_chat = imgui.ImBool(false),
+        checkbox_contacts = imgui.ImBool(false),
+        checkbox_important = imgui.ImBool(false),
+        checkbox_hidden = imgui.ImBool(false),
+        ooc = imgui.ImBool(qsms.set.ooc),
+        show_overlay = imgui.ImBool(qsms.set.show_chat_overlay),
+    }
+
+    qsms.ar_ui = {
+        text_buf = imgui.ImBuffer(1024),
+        duration_idx = imgui.ImInt(0),
+        durations = {
+            {label = "Бессрочно", sec = 0},
+            {label = "5 минут",  sec = 300},
+            {label = "15 минут", sec = 900},
+            {label = "30 минут", sec = 1800},
+            {label = "1 час",    sec = 3600},
+            {label = "2 часа",   sec = 7200},
+            {label = "4 часа",   sec = 14400},
+            {label = "8 часов",  sec = 28800},
+        },
+        _loaded = false,
+    }
+    qsms.ar_ui.text_buf.v = u8(qsms.set.autoresponder.text or "")
+
+    function qsms.getServerName()
+        if not isSampAvailable() then return nil end
+        local srv = sampGetCurrentServerName()
+        if not srv or srv == "SA-MP" then return nil end
+        local name = srv:match("Trinity (.+)")
+        if not name then return nil end
+        name = name:gsub("[%s|]", "")
+        if name ~= "" then
+            return name:lower()
+        end
+        return nil
+    end
+
+    function qsms.sampGetMyNickname()
+        local result, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
+        if result then
+            return sampGetPlayerNickname(id)
+        else
+            return ""
+        end
+    end
+
+    function qsms.safe(str)
+        return str:gsub("%.$", ".%%")
+    end
+
+    function qsms.sort_chats(chats_tbl)
+        local items = {}
+        for key, value in pairs(chats_tbl) do
+            table.insert(items, {key, value})
+        end
+        table.sort(items, function(a, b)
+            return (a[2].set.ctime or 0) > (b[2].set.ctime or 0)
+        end)
+        return items
+    end
+
+    function qsms.new_sms()
+        if not hasAccess("advertising") then return end
+        if not sampIsScoreboardOpen() then
+            sampSetChatInputText("/sms ")
+            sampSetChatInputEnabled(true)
+        end
+    end
+
+    function qsms.reply_sms()
+        if not hasAccess("advertising") then return end
+        if not sampIsScoreboardOpen() then
+            local nickname = ""
+            local sorted_chats = qsms.sort_chats(qsms.chats)
+            if sorted_chats[1] then
+                nickname = sorted_chats[1][2].set.nickname.." "
+            end
+            sampSetChatInputText("/sms "..nickname)
+            sampSetChatInputEnabled(true)
+        end
+    end
+
+    function qsms.format_duration(sec)
+        if sec <= 0 then return "0 сек" end
+        local h = math.floor(sec / 3600)
+        local m = math.floor((sec % 3600) / 60)
+        local s = sec % 60
+        if h > 0 then return string.format("%d ч %d мин", h, m) end
+        if m > 0 then return string.format("%d мин", m) end
+        return string.format("%d сек", s)
+    end
+
+    function qsms.try_autoresponder(nickname, lnickname)
+        local ar = qsms.set.autoresponder
+        if not ar or not ar.enabled then return end
+
+        if ar.end_time > 0 and os.time() >= ar.end_time then
+            ar.enabled = false
+            ar.end_time = 0
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+            return
+        end
+        local my_nick = qsms.sampGetMyNickname()
+        if my_nick and my_nick:lower() == lnickname then return end
+        if ar.blist[lnickname] then return end
+        local now = os.time()
+        if qsms.ar_last_reply[lnickname] and (now - qsms.ar_last_reply[lnickname]) < (ar.cooldown or 300) then
+            return
+        end
+        qsms.ar_last_reply[lnickname] = now
+        local text = (ar.text ~= "" and ar.text) or "Я отошёл."
+        if ar.end_time and ar.end_time > 0 then
+            local remain = ar.end_time - os.time()
+            if remain > 0 then
+                text = text:gsub("%{time%}", qsms.format_duration(remain))
+            else
+                text = text:gsub("%{time%}", "скоро")
+            end
+        else
+            text = text:gsub("%{time%}", "скоро")
+        end
+        lua_thread.create(function()
+            wait(500)
+            if qsms.set.ooc then
+                qsms.sendServerCmd("/t "..nickname.." (( "..text.." ))")
+            else
+                qsms.sendServerCmd("/t "..nickname.." "..text)
+            end
+        end)
+    end
+
+    function qsms.render_list_section(sorted_chats, list, height, t)
+        t = t or getTheme()
+        if not qsms.ar_ui.blist_search_buf then
+            qsms.ar_ui.blist_search_buf = imgui.ImBuffer("", 64)
+        end
+
+        local blockedCount = 0
+        for _, v in pairs(list) do
+            if v then blockedCount = blockedCount + 1 end
+        end
+
+        imgui.AlignTextToFramePadding()
+        imgui.TextColored(t.textDim, fa.ICON_SEARCH .. u8" Фильтр:")
+        imgui.SameLine(80)
+        imgui.PushItemWidth(imgui.GetContentRegionAvailWidth() - (blockedCount > 0 and 115 or 0))
+        imgui.InputText("##ar_blist_search", qsms.ar_ui.blist_search_buf)
+        imgui.PopItemWidth()
+
+        if blockedCount > 0 then
+            imgui.SameLine(0, 6)
+            if imgui.Button(fa.ICON_TRASH_O .. u8" Очистить (" .. blockedCount .. ")##ar_blist_clear", imgui.ImVec2(109, 24)) then
+                for k in pairs(list) do list[k] = nil end
+                pcall(qsms.mcfg.save, qsms.set, qsms.filename_set)
+            end
+        end
+
+        imgui.Spacing()
+
+        local rawFilter = u8:decode(qsms.ar_ui.blist_search_buf.v):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+        local shown = 0
+        local dl = imgui.GetWindowDrawList()
+
+        imgui.BeginChild("##blist_child", imgui.ImVec2(0, height or 200), true)
+            local w = imgui.GetContentRegionAvailWidth()
+            for _, item in ipairs(sorted_chats) do
+                local nickname = item[2] and item[2].set and item[2].set.nickname
+                if nickname then
+                    local lnickname = nickname:lower()
+                    if rawFilter == "" or lnickname:find(rawFilter, 1, true) then
+                        shown = shown + 1
+                        local isBlocked = (list[lnickname] == true)
+                        local p = imgui.GetCursorScreenPos()
+                        local h = 30
+                        imgui.InvisibleButton("##blist_row_" .. qsms.safe(lnickname), imgui.ImVec2(w, h))
+                        local hov = imgui.IsItemHovered()
+                        if imgui.IsItemClicked(0) then
+                            if isBlocked then
+                                list[lnickname] = nil
+                            else
+                                list[lnickname] = true
+                            end
+                            pcall(qsms.mcfg.save, qsms.set, qsms.filename_set)
+                            isBlocked = not isBlocked
+                        end
+
+                        local bgAlpha = hov and 0.72 or (isBlocked and 0.48 or 0.26)
+                        local bgCol = isBlocked
+                            and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.38, 0.14, 0.16, bgAlpha))
+                            or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, bgAlpha))
+                        dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h), bgCol, 6.0)
+
+                        if isBlocked then
+                            dl:AddRectFilled(p, imgui.ImVec2(p.x + 3, p.y + h),
+                                imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.95, 0.35, 0.35, 1.0)), 3.0)
+                        end
+
+                        local ic = isBlocked and fa.ICON_BAN or fa.ICON_USER
+                        local icCol = isBlocked and imgui.ImVec4(0.95, 0.38, 0.38, 1.0) or t.textDim
+                        local txtCol = isBlocked and imgui.ImVec4(1.0, 0.85, 0.85, 1.0) or t.text
+                        dl:AddText(imgui.ImVec2(p.x + 12, p.y + 7), imgui.ColorConvertFloat4ToU32(icCol), ic)
+                        dl:AddText(imgui.ImVec2(p.x + 32, p.y + 7), imgui.ColorConvertFloat4ToU32(txtCol), u8(nickname))
+
+                        local badgeTxt = isBlocked and u8"Игнорируется" or u8"Отвечать"
+                        local bSz = imgui.CalcTextSize(badgeTxt)
+                        local bW = bSz.x + 12
+                        local bH = 18
+                        local bX = p.x + w - bW - 8
+                        local bY = p.y + 6
+                        local bBg = isBlocked
+                            and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.85, 0.25, 0.25, 0.30))
+                            or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.18))
+                        local bFg = isBlocked
+                            and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1.0, 0.45, 0.45, 1.0))
+                            or imgui.ColorConvertFloat4ToU32(t.textDim)
+                        dl:AddRectFilled(imgui.ImVec2(bX, bY), imgui.ImVec2(bX + bW, bY + bH), bBg, 4.0)
+                        dl:AddText(imgui.ImVec2(bX + 6, bY + 2), bFg, badgeTxt)
+
+                        imgui.Dummy(imgui.ImVec2(1, 2))
+                    end
+                end
+            end
+            if shown == 0 then
+                imgui.Spacing()
+                imgui.TextColored(t.textDim, u8"  Контактов не найдено.")
+            end
+        imgui.EndChild()
+    end
+
+    function qsms.render_autoresponder_tab(sorted_chats, isCompactOverlay)
+        local t = getTheme()
+        local ar = qsms.set.autoresponder
+        local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+        local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+        if isCompactOverlay then
+            -- Компактный вид для маленького всплывающего окна под чатом F6
+            local stCol = ar.enabled and imgui.ImVec4(0.25, 0.88, 0.45, 1.0) or imgui.ImVec4(0.90, 0.35, 0.35, 1.0)
+            local stText = ar.enabled
+                and (ar.end_time > 0 and (u8"Активен (осталось " .. u8(qsms.format_duration(math.max(0, ar.end_time - os.time()))) .. ")") or u8"Активен (бессрочно)")
+                or u8"Выключен"
+            imgui.AlignTextToFramePadding()
+            imgui.TextColored(t.textDim, fa.ICON_CLOCK_O .. u8" Автоответчик:")
+            imgui.SameLine()
+            imgui.TextColored(stCol, stText)
+            imgui.SameLine(330)
+            if imgui.Button((ar.enabled and (fa.ICON_POWER_OFF .. u8" Выключить") or (fa.ICON_PLAY .. u8" Включить")) .. "##ov_ar_tgl", imgui.ImVec2(130, 24)) then
+                ar.enabled = not ar.enabled
+                if ar.enabled then
+                    local sec = qsms.ar_ui.durations[qsms.ar_ui.duration_idx.v + 1].sec
+                    ar.end_time = (sec > 0) and (os.time() + sec) or 0
+                else
+                    ar.end_time = 0
+                end
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.Spacing()
+            imgui.TextColored(t.textDim, u8"Текст автоответа ({time} — время до возвращения):")
+            imgui.PushItemWidth(-1)
+            if imgui.InputText("##ar_text_ov", qsms.ar_ui.text_buf, 1024) then
+                ar.text = u8:decode(qsms.ar_ui.text_buf.v)
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.PopItemWidth()
+            return
+        end
+
+        local avail = imgui.GetContentRegionAvail()
+        local gap = 12
+        local leftW = math.floor((avail.x - gap) * 0.56)
+        local rightW = avail.x - leftW - gap
+
+        local function drawCardHeader(icon, title)
+            imgui.TextColored(t.accent, icon .. "  " .. title)
+            imgui.Separator()
+            imgui.Spacing()
+        end
+
+        -- ============================================================
+        --  ЛЕВАЯ КОЛОНКА: СТАТУС, ТАЙМЕР И ШАБЛОН АВТООТВЕТА
+        -- ============================================================
+        imgui.BeginGroup()
+
+            -- 1. Карточка статуса и таймера
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##ar_card_status", imgui.ImVec2(leftW, 196), true)
+
+                drawCardHeader(fa.ICON_CLOCK_O, u8"Управление автоответчиком")
+
+                -- Крупная интерактивная плашка включения/выключения
+                local dl = imgui.GetWindowDrawList()
+                local p = imgui.GetCursorScreenPos()
+                local w = imgui.GetContentRegionAvailWidth()
+                local h = 46
+                imgui.InvisibleButton("##ar_main_toggle_btn", imgui.ImVec2(w, h))
+                local hov = imgui.IsItemHovered()
+                if imgui.IsItemClicked(0) then
+                    ar.enabled = not ar.enabled
+                    if ar.enabled then
+                        local sec = qsms.ar_ui.durations[qsms.ar_ui.duration_idx.v + 1].sec
+                        ar.end_time = (sec > 0) and (os.time() + sec) or 0
+                    else
+                        ar.end_time = 0
+                    end
+                    qsms.mcfg.save(qsms.set, qsms.filename_set)
+                end
+
+                local bannerBg = ar.enabled
+                    and imgui.ImVec4(0.14, 0.36, 0.22, hov and 0.85 or 0.68)
+                    or imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, hov and 0.75 or 0.45)
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h), imgui.ColorConvertFloat4ToU32(bannerBg), 6.0)
+                local barCol = ar.enabled and imgui.ImVec4(0.28, 0.90, 0.48, 1.0) or imgui.ImVec4(0.85, 0.30, 0.30, 0.85)
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + 4, p.y + h), imgui.ColorConvertFloat4ToU32(barCol), 3.0)
+
+                dl:AddCircleFilled(imgui.ImVec2(p.x + 24, p.y + h * 0.5), 13,
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(barCol.x, barCol.y, barCol.z, 0.22)), 20)
+                local pwrSz = imgui.CalcTextSize(fa.ICON_POWER_OFF)
+                dl:AddText(imgui.ImVec2(p.x + 24 - pwrSz.x * 0.5, p.y + h * 0.5 - pwrSz.y * 0.5),
+                    imgui.ColorConvertFloat4ToU32(barCol), fa.ICON_POWER_OFF)
+
+                local statusTitle = ar.enabled and u8"Автоответчик ВКЛЮЧЁН" or u8"Автоответчик ВЫКЛЮЧЕН"
+                local statusSub
+                if ar.enabled then
+                    if ar.end_time > 0 then
+                        local rem = math.max(0, ar.end_time - os.time())
+                        statusSub = u8("Автоматически отключится через: " .. qsms.format_duration(rem))
+                    else
+                        statusSub = u8"Работает в бессрочном режиме (пока вы не отключите)"
+                    end
+                else
+                    statusSub = u8"Нажмите здесь, чтобы активировать автоматические ответы на входящие SMS"
+                end
+
+                dl:AddText(imgui.ImVec2(p.x + 46, p.y + 7), imgui.ColorConvertFloat4ToU32(t.text), statusTitle)
+                dl:AddText(imgui.ImVec2(p.x + 46, p.y + 25), imgui.ColorConvertFloat4ToU32(t.textDim), statusSub)
+
+                -- Тумблер справа
+                local swW, swH = 38, 20
+                local swX = p.x + w - swW - 14
+                local swY = p.y + (h - swH) * 0.5
+                local swBg = ar.enabled
+                    and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.28, 0.85, 0.45, 0.95))
+                    or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.22, 0.25, 0.30, 0.90))
+                dl:AddRectFilled(imgui.ImVec2(swX, swY), imgui.ImVec2(swX + swW, swY + swH), swBg, swH * 0.5)
+                local knobX = ar.enabled and (swX + swW - swH * 0.5) or (swX + swH * 0.5)
+                dl:AddCircleFilled(imgui.ImVec2(knobX, swY + swH * 0.5), (swH * 0.5) - 2.5,
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1, 1, 1, 0.95)), 16)
+
+                imgui.Spacing()
+                imgui.Spacing()
+
+                -- Время работы
+                imgui.AlignTextToFramePadding()
+                imgui.TextColored(t.textDim, fa.ICON_HOURGLASS_HALF .. u8"  Вернусь через:")
+                imgui.SameLine(205)
+                local items = {}
+                for i, d in ipairs(qsms.ar_ui.durations) do
+                    items[i] = u8(d.label)
+                end
+                imgui.PushItemWidth(ar.enabled and (leftW - 335) or -1)
+                local cur_idx = imgui.ImInt(qsms.ar_ui.duration_idx.v)
+                if imgui.Combo("##ar_dur", cur_idx, items, #items) then
+                    qsms.ar_ui.duration_idx.v = cur_idx.v
+                    if ar.enabled then
+                        local d = qsms.ar_ui.durations[cur_idx.v + 1]
+                        ar.end_time = (d.sec > 0) and (os.time() + d.sec) or 0
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end
+                end
+                imgui.PopItemWidth()
+
+                if ar.enabled then
+                    imgui.SameLine(0, 6)
+                    if imgui.Button(fa.ICON_UNDO .. u8" Сброс##ar_reset_timer", imgui.ImVec2(105, 24)) then
+                        local sec = qsms.ar_ui.durations[qsms.ar_ui.duration_idx.v + 1].sec
+                        ar.end_time = (sec > 0) and (os.time() + sec) or 0
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end
+                    if imgui.IsItemHovered() then imgui.SetTooltip(u8"Перезапустить отсчёт времени заново") end
+                end
+
+                imgui.Spacing()
+
+                -- Кулдаун
+                imgui.AlignTextToFramePadding()
+                imgui.TextColored(t.textDim, fa.ICON_SHIELD .. u8"  Кулдаун на игрока (сек):")
+                imgui.SameLine(205)
+                imgui.PushItemWidth(-1)
+                local cool = imgui.ImInt(ar.cooldown or 300)
+                if imgui.InputInt("##ar_cooldown", cool, 30, 300) then
+                    ar.cooldown = math.max(10, cool.v)
+                    qsms.mcfg.save(qsms.set, qsms.filename_set)
+                end
+                imgui.PopItemWidth()
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+            imgui.Spacing()
+
+            -- 2. Карточка текста автоответа и готовых шаблонов
+            local msgCardH = math.max(195, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##ar_card_msg", imgui.ImVec2(leftW, msgCardH), true)
+
+                drawCardHeader(fa.ICON_COMMENTING_O, u8"Текст сообщения и быстрые шаблоны")
+
+                imgui.TextColored(t.textDim, u8"Сообщение автоответа (тег {time} заменится на оставшееся время):")
+                imgui.PushItemWidth(-1)
+                if imgui.InputText("##ar_text", qsms.ar_ui.text_buf, 1024) then
+                    ar.text = u8:decode(qsms.ar_ui.text_buf.v)
+                    qsms.mcfg.save(qsms.set, qsms.filename_set)
+                end
+                imgui.PopItemWidth()
+
+                imgui.Spacing()
+                imgui.TextColored(t.textDim, fa.ICON_BOLT .. u8" Быстрые шаблоны (клик для подстановки):")
+                imgui.Spacing()
+
+                local presets = {
+                    { btn = u8"Отошёл от ПК",   txt = "Я сейчас отошёл от игры. Вернусь через {time}." },
+                    { btn = u8"На ивенте",      txt = "Сейчас провожу ивент, не могу ответить. Освобожусь через {time}." },
+                    { btn = u8"Занят / РП",     txt = "Сейчас занят на ситуации, отвечу вам через {time}." },
+                    { btn = u8"Скоро буду",     txt = "Временно недоступен, напишу вам как только освобожусь!" },
+                }
+                local pW = math.floor((imgui.GetContentRegionAvailWidth() - 18) / 4)
+                for idx, pr in ipairs(presets) do
+                    if idx > 1 then imgui.SameLine(0, 6) end
+                    if imgui.Button(pr.btn .. "##ar_pres_" .. idx, imgui.ImVec2(pW, 24)) then
+                        ar.text = pr.txt
+                        qsms.ar_ui.text_buf.v = u8(pr.txt)
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end
+                end
+
+                imgui.Spacing()
+                -- Живой предпросмотр
+                local previewRaw = (ar.text ~= "" and ar.text) or "Я отошёл."
+                local sampleTime = "15 мин"
+                if ar.enabled and ar.end_time and ar.end_time > 0 then
+                    local rem = math.max(0, ar.end_time - os.time())
+                    sampleTime = qsms.format_duration(rem)
+                else
+                    local selSec = qsms.ar_ui.durations[qsms.ar_ui.duration_idx.v + 1].sec
+                    if selSec > 0 then sampleTime = qsms.format_duration(selSec) else sampleTime = "скоро" end
+                end
+                previewRaw = previewRaw:gsub("%{time%}", sampleTime)
+                if qsms.set.ooc then previewRaw = "(( " .. previewRaw .. " ))" end
+
+                imgui.PushStyleColor(imgui.Col.ChildWindowBg, imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.45))
+                imgui.BeginChild("##ar_live_preview", imgui.ImVec2(-1, 44), false)
+                    imgui.SetCursorPos(imgui.ImVec2(10, 6))
+                    imgui.TextColored(t.textDim, fa.ICON_EYE .. u8" Предпросмотр в игре:")
+                    imgui.SetCursorPos(imgui.ImVec2(10, 23))
+                    imgui.TextColored(imgui.ImVec4(0.95, 0.85, 0.35, 1.0), u8("SMS: " .. previewRaw))
+                imgui.EndChild()
+                imgui.PopStyleColor()
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+        imgui.EndGroup()
+
+        -- ============================================================
+        --  ПРАВАЯ КОЛОНКА: ЧЁРНЫЙ СПИСОК (ИГНОР-ЛИСТ)
+        -- ============================================================
+        imgui.SameLine(0, gap)
+        imgui.BeginGroup()
+
+            local rightH = math.max(400, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##ar_card_blist", imgui.ImVec2(rightW, rightH), true)
+
+                drawCardHeader(fa.ICON_BAN, u8"Чёрный список (не отвечать)")
+                imgui.TextColored(t.textDim, u8"Выберите игроков, которым автоответчик НЕ будет отправлять SMS:")
+                imgui.Spacing()
+
+                qsms.render_list_section(sorted_chats, ar.blist, imgui.GetContentRegionAvail().y - 4, t)
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+        imgui.EndGroup()
+    end
+
+    function qsms.render_hotkeys_and_help_tab(t)
+        local avail = imgui.GetContentRegionAvail()
+        local gap = 12
+        local colW = math.floor((avail.x - gap) * 0.5)
+        local cardBg = imgui.ImVec4(t.windowBg.x, t.windowBg.y, t.windowBg.z, 0.80)
+        local cardBorder = imgui.ImVec4(t.border.x, t.border.y, t.border.z, 0.45)
+
+        local function drawCardHeader(icon, title)
+            imgui.TextColored(t.accent, icon .. "  " .. title)
+            imgui.Separator()
+            imgui.Spacing()
+        end
+
+        local function drawToggleRow(id, icon, title, subtitle, boolVar, onToggle)
+            local dl = imgui.GetWindowDrawList()
+            local p = imgui.GetCursorScreenPos()
+            local w = imgui.GetContentRegionAvailWidth()
+            local h = subtitle and 44 or 32
+            imgui.InvisibleButton("##qsms_tgl_" .. id, imgui.ImVec2(w, h))
+            local hov = imgui.IsItemHovered()
+            if imgui.IsItemClicked(0) then
+                boolVar.v = not boolVar.v
+                if onToggle then onToggle(boolVar.v) end
+            end
+
+            local bgAlpha = hov and 0.75 or (boolVar.v and 0.50 or 0.30)
+            local bgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, bgAlpha))
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h), bgCol, 6.0)
+            if boolVar.v then
+                dl:AddRectFilled(p, imgui.ImVec2(p.x + 3, p.y + h), imgui.ColorConvertFloat4ToU32(t.accent), 3.0)
+            end
+
+            local icCol = imgui.ColorConvertFloat4ToU32(boolVar.v and t.accent or t.textDim)
+            local txtCol = imgui.ColorConvertFloat4ToU32(boolVar.v and t.text or t.textDim)
+            local subCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.textDim.x, t.textDim.y, t.textDim.z, 0.75))
+
+            dl:AddText(imgui.ImVec2(p.x + 12, p.y + 8), icCol, icon)
+            dl:AddText(imgui.ImVec2(p.x + 34, p.y + (subtitle and 6 or 8)), txtCol, title)
+            if subtitle then
+                dl:AddText(imgui.ImVec2(p.x + 34, p.y + 24), subCol, subtitle)
+            end
+
+            local swW, swH = 34, 18
+            local swX = p.x + w - swW - 12
+            local swY = p.y + (h - swH) * 0.5
+            local swBg = boolVar.v
+                and imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.90))
+                or imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.22, 0.25, 0.30, 0.90))
+            dl:AddRectFilled(imgui.ImVec2(swX, swY), imgui.ImVec2(swX + swW, swY + swH), swBg, swH * 0.5)
+            local knobX = boolVar.v and (swX + swW - swH * 0.5) or (swX + swH * 0.5)
+            dl:AddCircleFilled(imgui.ImVec2(knobX, swY + swH * 0.5), (swH * 0.5) - 2.5, imgui.ColorConvertFloat4ToU32(imgui.ImVec4(1, 1, 1, 0.95)), 16)
+        end
+
+        local function drawInfoTile(icon, cmdBadge, title, desc)
+            local dl = imgui.GetWindowDrawList()
+            local p = imgui.GetCursorScreenPos()
+            local w = imgui.GetContentRegionAvailWidth()
+            local h = 48
+            imgui.Dummy(imgui.ImVec2(w, h))
+
+            local bgCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.38))
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + w, p.y + h), bgCol, 6.0)
+            dl:AddRectFilled(p, imgui.ImVec2(p.x + 3, p.y + h), imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.75)), 3.0)
+
+            local cx, cy = p.x + 24, p.y + h * 0.5
+            dl:AddCircleFilled(imgui.ImVec2(cx, cy), 13, imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.18)), 20)
+            local icSz = imgui.CalcTextSize(icon)
+            dl:AddText(imgui.ImVec2(cx - icSz.x * 0.5, cy - icSz.y * 0.5), imgui.ColorConvertFloat4ToU32(t.accent), icon)
+
+            local textX = p.x + 46
+            dl:AddText(imgui.ImVec2(textX, p.y + 7), imgui.ColorConvertFloat4ToU32(t.text), title)
+
+            if cmdBadge and cmdBadge ~= "" then
+                local bSz = imgui.CalcTextSize(cmdBadge)
+                local bW = bSz.x + 12
+                local bH = 18
+                local bX = p.x + w - bW - 10
+                local bY = p.y + 6
+                dl:AddRectFilled(imgui.ImVec2(bX, bY), imgui.ImVec2(bX + bW, bY + bH), imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.22)), 4.0)
+                dl:AddText(imgui.ImVec2(bX + 6, bY + 2), imgui.ColorConvertFloat4ToU32(t.accent), cmdBadge)
+            end
+
+            dl:AddText(imgui.ImVec2(textX, p.y + 26), imgui.ColorConvertFloat4ToU32(t.textDim), desc)
+        end
+
+        local totalChats, impChats, cntChats, hidChats, totalMsgs = 0, 0, 0, 0, 0
+        for _, c in pairs(qsms.chats or {}) do
+            totalChats = totalChats + 1
+            if c.set then
+                if c.set.important then impChats = impChats + 1 end
+                if c.set.contacts then cntChats = cntChats + 1 end
+                if c.set.hidden then hidChats = hidChats + 1 end
+            end
+            if c.chat then totalMsgs = totalMsgs + #c.chat end
+        end
+
+        -- ============================================================
+        --  ЛЕВАЯ КОЛОНКА: ГОРЯЧИЕ КЛАВИШИ, РЕЖИМЫ И СТАТИСТИКА
+        -- ============================================================
+        imgui.BeginGroup()
+
+            -- 1. Карточка горячих клавиш
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##qsms_card_hk", imgui.ImVec2(colW, 130), true)
+
+                drawCardHeader(fa.ICON_KEYBOARD_O, u8"Горячие клавиши быстрого набора")
+
+                imgui.AlignTextToFramePadding()
+                imgui.TextColored(t.text, fa.ICON_PENCIL_SQUARE_O .. u8"  Новое SMS сообщение:")
+                imgui.SameLine(235)
+                if qsms.hotkeys.new_sms and qsms.hkeys.ImguiHotkeyEditor("##hotkeys.new_sms 1", "##hotkeys.new_sms 2", nil, qsms.hotkeys.new_sms, colW - 255) then
+                    qsms.set.new_sms = qsms.hkeys.get_keycombo(qsms.hotkeys.new_sms)
+                    qsms.mcfg.save(qsms.set, qsms.filename_set)
+                end
+
+                imgui.Spacing()
+
+                imgui.AlignTextToFramePadding()
+                imgui.TextColored(t.text, fa.ICON_REPLY .. u8"  Ответить на последнее SMS:")
+                imgui.SameLine(235)
+                if qsms.hotkeys.reply_sms and qsms.hkeys.ImguiHotkeyEditor("##hotkeys.reply_sms 1", "##hotkeys.reply_sms 2", nil, qsms.hotkeys.reply_sms, colW - 255) then
+                    qsms.set.reply_sms = qsms.hkeys.get_keycombo(qsms.hotkeys.reply_sms)
+                    qsms.mcfg.save(qsms.set, qsms.filename_set)
+                end
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+            imgui.Spacing()
+
+            -- 2. Карточка параметров и режима отправки
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##qsms_card_modes", imgui.ImVec2(colW, 148), true)
+
+                drawCardHeader(fa.ICON_SLIDERS, u8"Режим отправки и интерфейс чата")
+
+                drawToggleRow("ooc_mode", fa.ICON_COMMENT_O,
+                    u8"Отправлять OOC SMS (( текст ))",
+                    u8"Оборачивает сообщения в двойные скобки для внеигрового общения",
+                    qsms.img.ooc, function(val)
+                        qsms.set.ooc = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+
+                imgui.Dummy(imgui.ImVec2(1, 4))
+
+                drawToggleRow("chat_overlay", fa.ICON_WINDOW_MAXIMIZE,
+                    u8"Всплывающая панель диалогов под чатом (F6)",
+                    u8"Показывает быстрый поиск и историю при вводе /sms или /t",
+                    qsms.img.show_overlay, function(val)
+                        qsms.set.show_chat_overlay = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+            imgui.Spacing()
+
+            -- 3. Карточка статистики базы сообщений
+            local statH = math.max(115, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##qsms_card_stats", imgui.ImVec2(colW, statH), true)
+
+                drawCardHeader(fa.ICON_BAR_CHART, u8"Статистика базы Мессенджера")
+
+                local dl = imgui.GetWindowDrawList()
+                local availW = imgui.GetContentRegionAvailWidth()
+                local boxGap = 8
+                local boxW = math.floor((availW - boxGap * 3) / 4)
+                local boxH = math.max(54, imgui.GetContentRegionAvail().y - 6)
+
+                local statsDef = {
+                    { label = u8"Диалогов",  val = tostring(totalChats), icon = fa.ICON_COMMENTS,     col = t.accent },
+                    { label = u8"Сообщений", val = tostring(totalMsgs),  icon = fa.ICON_ENVELOPE_O,   col = imgui.ImVec4(0.35, 0.80, 0.95, 1.0) },
+                    { label = u8"Важных",    val = tostring(impChats),   icon = fa.ICON_STAR,         col = imgui.ImVec4(0.95, 0.75, 0.25, 1.0) },
+                    { label = u8"Контактов", val = tostring(cntChats),   icon = fa.ICON_ADDRESS_BOOK, col = imgui.ImVec4(0.40, 0.85, 0.55, 1.0) },
+                }
+
+                for i, st in ipairs(statsDef) do
+                    if i > 1 then imgui.SameLine(0, boxGap) end
+                    local p = imgui.GetCursorScreenPos()
+                    imgui.Dummy(imgui.ImVec2(boxW, boxH))
+                    dl:AddRectFilled(p, imgui.ImVec2(p.x + boxW, p.y + boxH),
+                        imgui.ColorConvertFloat4ToU32(imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.45)), 6.0)
+                    dl:AddRectFilled(p, imgui.ImVec2(p.x + boxW, p.y + 3),
+                        imgui.ColorConvertFloat4ToU32(st.col), 3.0)
+
+                    dl:AddText(imgui.ImVec2(p.x + 10, p.y + 10), imgui.ColorConvertFloat4ToU32(st.col), st.icon .. "  " .. st.val)
+                    dl:AddText(imgui.ImVec2(p.x + 10, p.y + 30), imgui.ColorConvertFloat4ToU32(t.textDim), st.label)
+                end
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+        imgui.EndGroup()
+
+        -- ============================================================
+        --  ПРАВАЯ КОЛОНКА: СПРАВОЧНИК КОМАНД И ФИШЕК
+        -- ============================================================
+        imgui.SameLine(0, gap)
+        imgui.BeginGroup()
+
+            local rightH = math.max(400, imgui.GetContentRegionAvail().y)
+            imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
+            imgui.PushStyleColor(imgui.Col.Border, cardBorder)
+            imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
+            imgui.BeginChild("##qsms_card_help", imgui.ImVec2(colW, rightH), true)
+
+                drawCardHeader(fa.ICON_BOOK, u8"Справочник команд и возможностей")
+
+                drawInfoTile(fa.ICON_TERMINAL, u8"/smss  /sms  /t",
+                    u8"Быстрое открытие Мессенджера",
+                    u8"Ввод команды без аргументов сразу открывает этот раздел")
+
+                imgui.Dummy(imgui.ImVec2(1, 4))
+                drawInfoTile(fa.ICON_USER, u8"/sms [ID / Ник] [Текст]",
+                    u8"Отправка по ID или никнейму игрока",
+                    u8"Скрипт сам найдет номер через телефонную книгу (/number)")
+
+                imgui.Dummy(imgui.ImVec2(1, 4))
+                drawInfoTile(fa.ICON_PHONE, u8"/sms +123456 [Текст]",
+                    u8"Прямая отправка по номеру телефона",
+                    u8"Знак «+» перед номером отправляет SMS напрямую без поиска")
+
+                imgui.Dummy(imgui.ImVec2(1, 4))
+                drawInfoTile(fa.ICON_EXCHANGE, u8"Клавиша TAB",
+                    u8"Умное управление в строке чата (F6)",
+                    u8"При поиске переключает вкладки или подставляет найденный ник")
+
+                imgui.Dummy(imgui.ImVec2(1, 4))
+                drawInfoTile(fa.ICON_EYE_SLASH, u8"Иконка глаза у поиска",
+                    u8"Приватный раздел «Скрытые диалоги»",
+                    u8"Скрытые чаты прячутся под кнопкой глаза справа от строки поиска")
+
+            imgui.EndChild()
+            imgui.PopStyleVar()
+            imgui.PopStyleColor(2)
+
+        imgui.EndGroup()
+    end
+
+    function qsms.sendServerCmd(cmd)
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt32(bs, #cmd)
+        raknetBitStreamWriteString(bs, cmd)
+        raknetSendRpc(RPC_SERVERCOMMAND or 50, bs)
+        raknetDeleteBitStream(bs)
+    end
+
+    function qsms.call_func(somebody)
+        qsms.who = somebody
+        qsms.do_call = true
+        sampSetChatInputEnabled(false)
+        if qsms.who:match("^%+[%d%-]+") then
+            qsms.sendServerCmd("/call "..qsms.who:gsub("%+", ""))
+            qsms.do_call = false
+            qsms.who = nil
+            return
+        end
+        if not qsms.who:match("^%d+$") then
+            for id = 0, sampGetMaxPlayerId(false) do
+                if sampIsPlayerConnected(id) then
+                    if sampGetPlayerNickname(id):lower() == qsms.who:lower() then
+                        qsms.who = tostring(id)
+                        break
+                    end
+                end
+            end
+        end
+        qsms.sendServerCmd("/number "..qsms.who)
+    end
+
+    function qsms.sms_func(args)
+        args = args or ""
+        qsms.do_call = false
+        if args == "" then
+            main_window_state.v = true
+            openTab("quicksms", u8"Мессенджер")
+            return
+        end
+        if not hasAccess("advertising") then
+            qsms.sendServerCmd("/sms "..args)
+            return
+        end
+        local exceptions = {
+            ["radiols"] = true,
+            ["radious"] = true,
+            ["radiosf"] = true,
+            ["radioaf"] = true,
+            ["radiolv"] = true,
+            ["radiorc"] = true,
+            ["studiols"] = true,
+            ["studious"] = true,
+            ["studiosf"] = true,
+            ["studioaf"] = true,
+            ["studiolv"] = true,
+            ["studiorc"] = true,
+            ["radio"] = true,
+            ["studio"] = true,
+        }
+        local radio = args:match("^(%S+)")
+        if radio and exceptions[radio:lower()] then
+            qsms.sendServerCmd("/sms "..args)
+            return
+        end
+        local who_arg, sms_arg = args:match("^(%S+)%s+(.+)$")
+        if who_arg then
+            qsms.who = who_arg
+            qsms.sms = sms_arg
+            if qsms.who:match("^%+[%d%-]+") then
+                if qsms.set.ooc then
+                    qsms.sendServerCmd("/t "..qsms.who:gsub("%+", "").." (( "..qsms.sms.." ))")
+                else
+                    qsms.sendServerCmd("/t "..qsms.who:gsub("%+", "").." "..qsms.sms)
+                end
+                qsms.who = nil
+                return
+            end
+            if not qsms.who:match("^%d+$") then
+                for id = 0, sampGetMaxPlayerId(false) do
+                    if sampIsPlayerConnected(id) then
+                        if sampGetPlayerNickname(id):lower() == qsms.who:lower() then
+                            qsms.who = tostring(id)
+                            break
+                        end
+                    end
+                end
+            end
+            qsms.sendServerCmd("/number "..qsms.who)
+        end
+    end
+
+    function qsms.onServerMessage(color_int32, text)
+        local ctext = text:gsub("{%x%x%x%x%x%x}", "")
+        if qsms.who and ctext == "Телефонный справочник:" then
+            return false
+        elseif qsms.who and (
+               ctext == "На сервере не найдено игроков по указанным вами параметрам."
+            or ctext == "Абонентов по указанным вами параметрам в сети не найдено."
+            or ctext == "Указанный вами игрок является ботом."
+            or ctext == "Указанный вами игрок не залогинен."
+            or ctext == "Человек, с указанным вами именем, не найден в телефонном справочнике."
+            or ctext == "На сервере найдено несколько игроков по указанным вами параметрам."
+            or ctext:find("не найден в телефонном справочнике")
+            or ctext:find("не найдено игроков")
+            or ctext:find("не имеет мобильного телефона")
+        ) then
+            qsms.who = nil
+            qsms.do_call = false
+        end
+        if qsms.who then
+            local number = ctext:match("Имя:%s*%S+%s+Телефон:%s*([%d%-]+)")
+            if number then
+                local sms_to_send = qsms.sms or ""
+                local is_call = qsms.do_call
+                qsms.who = nil
+                qsms.do_call = false
+                lua_thread.create(function()
+                    wait(0)
+                    if is_call then
+                        qsms.sendServerCmd("/call "..number)
+                    else
+                        if qsms.set.ooc then
+                            qsms.sendServerCmd("/t "..number.." (( "..sms_to_send.." ))")
+                        else
+                            qsms.sendServerCmd("/t "..number.." "..sms_to_send)
+                        end
+                    end
+                end)
+                return false
+            end
+        end
+        if qsms.part then
+            local check_part = ctext:match("^%.%.%.(.+)$")
+            if check_part then
+                ctext = qsms.part.." "..check_part
+            end
+        end
+        local check_part = ctext:match("^(SMS: .+)%.%.%.$")
+        if check_part then
+            qsms.part = check_part
+        end
+        local srv_dir = qsms.current_server_name or qsms.getServerName() or "trinity"
+        local outcoming_sms, nickname = ctext:match("^SMS: (.+) Для: (%S+) Тел: [%d%-]+$")
+        if outcoming_sms then
+            qsms.part = nil
+            local lnickname = nickname:lower()
+            if not qsms.chats[lnickname] then
+                qsms.chats[lnickname] = {
+                    set = {
+                        nickname = nickname,
+                        new = false
+                    },
+                    chat = {}
+                }
+            end
+            qsms.chats[lnickname].set.nickname = nickname
+            qsms.chats[lnickname].set.new = false
+            qsms.chats[lnickname].set.ctime = os.time()
+            qsms.chats[lnickname].set.hidden = false
+            local value = {text = outcoming_sms, outcoming = true, nickname = qsms.sampGetMyNickname(), ctime = qsms.chats[lnickname].set.ctime}
+            table.insert(qsms.chats[lnickname].chat, value)
+            if qsms.auto_scroll then
+                qsms.do_max_scroll = true
+            end
+            qsms.mcfg.append_value(value, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\chat.cfg")
+            qsms.mcfg.save(qsms.chats[lnickname].set, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\set.cfg")
+        end
+        local incoming_sms, in_nickname = ctext:match("^SMS: (.+) От: (%S+) Тел: [%d%-]+$")
+        if incoming_sms then
+            qsms.part = nil
+            local lnickname = in_nickname:lower()
+            if not qsms.chats[lnickname] then
+                qsms.chats[lnickname] = {
+                    set = {
+                        nickname = in_nickname,
+                        new = true
+                    },
+                    chat = {}
+                }
+            end
+            qsms.chats[lnickname].set.new = true
+            qsms.chats[lnickname].set.nickname = in_nickname
+            qsms.chats[lnickname].set.ctime = os.time()
+            qsms.chats[lnickname].set.hidden = false
+            local value = {text = incoming_sms, outcoming = false, nickname = in_nickname, ctime = qsms.chats[lnickname].set.ctime}
+            table.insert(qsms.chats[lnickname].chat, value)
+            if qsms.auto_scroll then
+                qsms.do_max_scroll = true
+            end
+            qsms.mcfg.append_value(value, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\chat.cfg")
+            qsms.mcfg.save(qsms.chats[lnickname].set, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\set.cfg")
+            qsms.try_autoresponder(in_nickname, lnickname)
+        end
+    end
+
+    function qsms.getChatInputPos()
+        local in1 = sampGetInputInfoPtr()
+        if not in1 or in1 == 0 then return 30, 300 end
+        in1 = getStructElement(in1, 0x8, 4)
+        if not in1 or in1 == 0 then return 30, 300 end
+        local in2 = getStructElement(in1, 0x8, 4)
+        local in3 = getStructElement(in1, 0xC, 4)
+        return in2, in3 + 50
+    end
+
+    function qsms.isChatOverlayActive()
+        if not hasAccess("advertising") then return false end
+        if not qsms.set.show_chat_overlay then return false end
+        if not isSampAvailable() or not sampIsChatInputActive() or sampIsScoreboardOpen() then
+            return false
+        end
+        local chat_input_text = sampGetChatInputText()
+        if not chat_input_text then return false end
+        return (chat_input_text:match("^/[sS][mM][sS]%s+") ~= nil) or (chat_input_text:match("^/[tT]%s+") ~= nil)
+    end
+
+    function qsms.renderContactActions(lcur, srv_dir, t, popup_id)
+        if not qsms.chats[lcur] then return end
+        local chatSet = qsms.chats[lcur].set
+        local isImp = chatSet.important and true or false
+        local isCnt = chatSet.contacts and true or false
+        local isHid = chatSet.hidden and true or false
+
+        imgui.SameLine(0, 6)
+        imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(4, 4))
+        imgui.PushStyleVar(imgui.StyleVar.FrameRounding, 5.0)
+
+        -- 1. Звёздочка (Важные)
+        if isImp then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.85, 0.62, 0.12, 0.35))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.90, 0.68, 0.15, 0.50))
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1.00, 0.82, 0.25, 1.00))
+        else
+            imgui.PushStyleColor(imgui.Col.Button, t.frameBg)
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, t.buttonHov)
+            imgui.PushStyleColor(imgui.Col.Text, t.textDim)
+        end
+        if imgui.Button((isImp and fa.ICON_STAR or fa.ICON_STAR_O) .. "##imp_" .. popup_id, imgui.ImVec2(26, 22)) then
+            chatSet.important = not isImp
+            qsms.mcfg.save(chatSet, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lcur).."\\set.cfg")
+        end
+        imgui.PopStyleColor(3)
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(isImp and u8"Важные (нажмите, чтобы убрать)" or u8"Добавить в важные")
+        end
+
+        -- 2. Контакт (Контакты)
+        imgui.SameLine()
+        if isCnt then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.35))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(t.accent.x, t.accent.y, t.accent.z, 0.55))
+            imgui.PushStyleColor(imgui.Col.Text, t.accent)
+        else
+            imgui.PushStyleColor(imgui.Col.Button, t.frameBg)
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, t.buttonHov)
+            imgui.PushStyleColor(imgui.Col.Text, t.textDim)
+        end
+        if imgui.Button((isCnt and fa.ICON_ADDRESS_BOOK or fa.ICON_USER_PLUS) .. "##cnt_" .. popup_id, imgui.ImVec2(26, 22)) then
+            chatSet.contacts = not isCnt
+            qsms.mcfg.save(chatSet, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lcur).."\\set.cfg")
+        end
+        imgui.PopStyleColor(3)
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(isCnt and u8"В контактах (нажмите, чтобы убрать)" or u8"Добавить в контакты")
+        end
+
+        -- 3. Скрытые (Глаз)
+        imgui.SameLine()
+        if isHid then
+            imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.85, 0.30, 0.30, 0.35))
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.90, 0.35, 0.35, 0.55))
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1.00, 0.45, 0.45, 1.00))
+        else
+            imgui.PushStyleColor(imgui.Col.Button, t.frameBg)
+            imgui.PushStyleColor(imgui.Col.ButtonHovered, t.buttonHov)
+            imgui.PushStyleColor(imgui.Col.Text, t.textDim)
+        end
+        if imgui.Button(fa.ICON_EYE_SLASH .. "##hid_" .. popup_id, imgui.ImVec2(26, 22)) then
+            chatSet.hidden = not isHid
+            qsms.mcfg.save(chatSet, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lcur).."\\set.cfg")
+        end
+        imgui.PopStyleColor(3)
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(isHid and u8"Скрытый чат (нажмите, чтобы вернуть)" or u8"Скрыть чат")
+        end
+
+        -- 4. Меню действий (...)
+        imgui.SameLine()
+        imgui.PushStyleColor(imgui.Col.Button, t.frameBg)
+        imgui.PushStyleColor(imgui.Col.ButtonHovered, t.buttonHov)
+        imgui.PushStyleColor(imgui.Col.Text, t.textDim)
+        if imgui.Button(fa.ICON_ELLIPSIS_H .. "##more_btn_" .. popup_id, imgui.ImVec2(26, 22)) then
+            imgui.OpenPopup(popup_id)
+        end
+        imgui.PopStyleColor(3)
+        if imgui.IsItemHovered() then
+            imgui.SetTooltip(u8"Управление перепиской")
+        end
+
+        imgui.PopStyleVar(2)
+
+        if imgui.BeginPopup(popup_id) then
+            if qsms.close_current_popup then
+                qsms.close_current_popup = false
+                imgui.CloseCurrentPopup()
+            end
+            if imgui.Selectable(fa.ICON_TRASH_O .. u8"  Очистить переписку") then
+                qsms.chats[lcur].chat = {}
+                qsms.mcfg.save(qsms.chats[lcur].chat, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lcur).."\\chat.cfg")
+            end
+            if imgui.Selectable(fa.ICON_TRASH .. u8"  Удалить чат") then
+                local target_dir = qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lcur)
+                if doesDirectoryExist(target_dir) then
+                    for name in lfs.dir(target_dir) do
+                        if name ~= "." and name ~= ".." then
+                            os.remove(target_dir.."\\"..name)
+                        end
+                    end
+                    lfs.rmdir(target_dir)
+                end
+                qsms.chats[lcur] = nil
+                qsms.lcurrent_nickname = nil
+                qsms.current_nickname = nil
+                qsms.last_chat_input_text = nil
+            end
+            imgui.EndPopup()
+        end
+        if popup_id == "qsms_more" then
+            qsms.popup_is_open = imgui.IsPopupOpen(popup_id)
+        end
+        if qsms.lcurrent_nickname and qsms.chats[qsms.lcurrent_nickname] and qsms.chats[qsms.lcurrent_nickname].set.new then
+            qsms.chats[qsms.lcurrent_nickname].set.new = false
+            qsms.mcfg.save(qsms.chats[qsms.lcurrent_nickname].set, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(qsms.lcurrent_nickname).."\\set.cfg")
+        end
+    end
+
+    -- Отрисовка вкладки Quick SMS прямо внутри окна TRPcomm Manager
+    function qsms.drawTab(t)
+        local sorted_chats = qsms.sort_chats(qsms.chats)
+        local srv_dir = qsms.current_server_name or qsms.getServerName() or "trinity"
+        local online = {}
+        for id = 0, sampGetMaxPlayerId(false) do
+            if sampIsPlayerConnected(id) and not sampIsPlayerNpc(id) then
+                local nickname = sampGetPlayerNickname(id)
+                online[nickname:lower()] = id
+            end
+        end
+
+        -- Панель под-вкладок Quick SMS
+        imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(6, 8))
+        if imgui.ButtonActivated(qsms.set.current_tab=="all", fa.ICON_COMMENTS .. u8" Все##qsms_tab_all", imgui.ImVec2(72, 28)) then
+            qsms.set.current_tab = "all"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.ButtonActivated(qsms.set.current_tab=="new", fa.ICON_ENVELOPE .. u8" Новые##qsms_tab_new", imgui.ImVec2(88, 28)) then
+            qsms.set.current_tab = "new"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.ButtonActivated(qsms.set.current_tab=="important", fa.ICON_STAR .. u8" Важные##qsms_tab_imp", imgui.ImVec2(95, 28)) then
+            qsms.set.current_tab = "important"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.ButtonActivated(qsms.set.current_tab=="contacts", fa.ICON_ADDRESS_BOOK .. u8" Контакты##qsms_tab_cnt", imgui.ImVec2(105, 28)) then
+            qsms.set.current_tab = "contacts"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.ButtonActivated(qsms.set.current_tab=="autoresponder", fa.ICON_CLOCK_O .. u8" Автоответчик##qsms_tab_ar", imgui.ImVec2(125, 28)) then
+            qsms.set.current_tab = "autoresponder"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.ButtonActivated(qsms.set.current_tab=="hotkeys_info", fa.ICON_COG .. u8" Клавиши и инфо##qsms_tab_hk", imgui.ImVec2(135, 28)) then
+            qsms.set.current_tab = "hotkeys_info"
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.SameLine()
+        if imgui.Checkbox(u8"OOC (( SMS ))##qsms_top_ooc", qsms.img.ooc) then
+            qsms.set.ooc = qsms.img.ooc.v
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+        imgui.PopStyleVar()
+        imgui.Separator()
+
+        if qsms.set.current_tab == "autoresponder" then
+            qsms.render_autoresponder_tab(sorted_chats)
+            return
+        elseif qsms.set.current_tab == "hotkeys_info" then
+            qsms.render_hotkeys_and_help_tab(t)
+            return
+        end
+
+        imgui.Columns(2, "qsms_main_cols", true)
+        local column_width = 250
+        imgui.SetColumnWidth(-1, imgui.GetWindowWidth() - column_width)
+
+        -- ЛЕВАЯ КОЛОНКА: Выбранный диалог и отправка сообщений
+        imgui.BeginChild("qsms_tab_left", imgui.ImVec2(0, 0), false)
+            local lcur = qsms.lcurrent_nickname
+            if qsms.current_nickname and lcur then
+                local displayNick = (qsms.chats[lcur] and qsms.chats[lcur].set.nickname) or qsms.current_nickname
+                imgui.DotGreen(online[lcur])
+                imgui.SameLine()
+                imgui.TextColored(t.accent, u8(displayNick .. (online[lcur] and (" ["..online[lcur].."]") or "")))
+                imgui.SameLine()
+                if imgui.ButtonClickable(online[lcur], fa.ICON_PHONE .. u8" Позвонить##qsms_call_btn", imgui.ImVec2(95, 22)) then
+                    qsms.call_func(lcur)
+                end
+                if qsms.set.ooc then
+                    imgui.SameLine()
+                    imgui.TextDisabled(u8"(( OOC SMS ))")
+                end
+
+                if qsms.chats[lcur] then
+                    qsms.renderContactActions(lcur, srv_dir, t, "qsms_tab_more")
+                end
+            else
+                imgui.TextColored(t.textDim, u8"Выберите диалог в списке справа или найдите игрока через поиск")
+            end
+
+            imgui.Separator()
+
+            -- История сообщений
+            imgui.BeginChild("qsms_tab_messages", imgui.ImVec2(0, -36), false)
+                if qsms.current_nickname and qsms.lcurrent_nickname and qsms.chats[qsms.lcurrent_nickname] then
+                    local last_date = nil
+                    local outCol = imgui.ImVec4(t.button.x, t.button.y, t.button.z, 0.85)
+                    local inCol  = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.95)
+                    for index, item in ipairs(qsms.chats[qsms.lcurrent_nickname].chat) do
+                        if os.date("%d.%m.%Y", item.ctime) ~= last_date then
+                            last_date = os.date("%d.%m.%Y", item.ctime)
+                            local calc = imgui.CalcTextSize(last_date)
+                            imgui.SetCursorPosX(math.max(0, imgui.GetContentRegionMax().x / 2 - calc.x / 2))
+                            imgui.TextDisabled(last_date)
+                        end
+                        if item.outcoming then
+                            if imgui.Bubble("tab_msg_"..tostring(index), outCol, u8(item.text), u8(item.nickname).." | "..os.date("%H:%M:%S | %d.%m.%Y", item.ctime), u8"Сообщение скопировано", true) then
+                                imgui.SetClipboardText(u8(item.text))
+                            end
+                        else
+                            if imgui.Bubble("tab_msg_"..tostring(index), inCol, u8(item.text), u8(item.nickname).." | "..os.date("%H:%M:%S | %d.%m.%Y", item.ctime), u8"Сообщение скопировано", false) then
+                                imgui.SetClipboardText(u8(item.text))
+                            end
+                        end
+                    end
+                    if qsms.do_max_scroll then
+                        qsms.do_max_scroll = false
+                        imgui.SetScrollHere()
+                    end
+                    qsms.auto_scroll = imgui.GetScrollY() == imgui.GetScrollMaxY()
+                elseif qsms.current_nickname then
+                    imgui.Spacing()
+                    imgui.TextColored(t.textDim, u8"История переписки с этим игроком пока пуста. Напишите первое сообщение ниже!")
+                end
+            imgui.EndChild()
+
+            -- Поле ввода и отправки SMS прямо из меню TRPcomm Manager
+            if qsms.current_nickname then
+                local availW = imgui.GetContentRegionAvail().x
+                imgui.PushItemWidth(math.max(100, availW - 105))
+                local enterPressed = imgui.InputText("##qsms_menu_sms_input", qsms.menu_sms_buf, imgui.InputTextFlags.EnterReturnsTrue)
+                imgui.PopItemWidth()
+                imgui.SameLine()
+                local sendClicked = imgui.Button(fa.ICON_PAPER_PLANE .. u8" Отправить##qsms_menu_send", imgui.ImVec2(95, 24))
+                if (enterPressed or sendClicked) and qsms.menu_sms_buf.v ~= "" then
+                    local rawMsg = u8:decode(qsms.menu_sms_buf.v)
+                    if rawMsg:gsub("%s+", "") ~= "" then
+                        qsms.sms_func(qsms.current_nickname .. " " .. rawMsg)
+                        qsms.menu_sms_buf.v = ""
+                        qsms.do_max_scroll = true
+                    end
+                end
+            end
+        imgui.EndChild()
+
+        imgui.NextColumn()
+        imgui.SetColumnWidth(-1, column_width)
+
+        -- ПРАВАЯ КОЛОНКА: Поиск и список диалогов
+        imgui.BeginChild("qsms_tab_right", imgui.ImVec2(0, 0), false)
+            imgui.TextColored(t.textDim, fa.ICON_SEARCH .. u8" Поиск игрока / чата:")
+            local isHidActive = (qsms.set.current_tab == "hidden")
+            imgui.PushItemWidth(imgui.GetContentRegionAvailWidth() - 32)
+            imgui.InputText("##qsms_menu_search", qsms.menu_search_buf)
+            imgui.PopItemWidth()
+            imgui.SameLine(0, 4)
+            local hidPushed = 0
+            if isHidActive then
+                imgui.PushStyleColor(imgui.Col.Button, t.accent)
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, t.accent)
+                hidPushed = 2
+            else
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.60))
+                imgui.PushStyleColor(imgui.Col.Text, t.textDim)
+                hidPushed = 2
+            end
+            if imgui.Button(fa.ICON_EYE_SLASH .. "##qsms_tab_hid_discreet", imgui.ImVec2(26, 20)) then
+                qsms.set.current_tab = isHidActive and "all" or "hidden"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.PopStyleColor(hidPushed)
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(isHidActive and u8"Скрытые диалоги (нажмите, чтобы вернуться ко всем)" or u8"Показать скрытые диалоги")
+            end
+            imgui.Separator()
+
+            imgui.BeginChild("qsms_tab_contacts_scroll", imgui.ImVec2(0, 0), false)
+                local rawSearch = u8:decode(qsms.menu_search_buf.v):gsub("^%s+", ""):gsub("%s+$", "")
+                local function render_contact_item(nickname, lnickname)
+                    local is_new = qsms.chats[lnickname] and qsms.chats[lnickname].set.new
+                    if is_new then
+                        imgui.PushStyleColor(imgui.Col.Text, t.accent)
+                    end
+                    imgui.DotGreen(online[lnickname])
+                    imgui.SameLine()
+                    if imgui.Selectable(" "..nickname..(online[lnickname] and " ["..online[lnickname].."]" or "").."##cnt_"..lnickname, qsms.lcurrent_nickname == lnickname) then
+                        qsms.current_nickname = nickname
+                        qsms.lcurrent_nickname = lnickname
+                        qsms.do_max_scroll = true
+                    end
+                    if is_new then
+                        imgui.PopStyleColor()
+                    end
+                end
+
+                if rawSearch ~= "" then
+                    local s_low = rawSearch:lower()
+                    for _, item in ipairs(sorted_chats) do
+                        local nickname = item[2].set.nickname
+                        local lnickname = nickname:lower()
+                        if lnickname:find(s_low, 1, true) or (tonumber(rawSearch) and online[lnickname] == tonumber(rawSearch)) then
+                            render_contact_item(nickname, lnickname)
+                        end
+                    end
+                    for lnickname, id in pairs(online) do
+                        if not qsms.chats[lnickname] then
+                            local nickname = sampGetPlayerNickname(id)
+                            if lnickname:find(s_low, 1, true) or (tonumber(rawSearch) and id == tonumber(rawSearch)) then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        end
+                    end
+                else
+                    for _, item in ipairs(sorted_chats) do
+                        local nickname = item[2].set.nickname
+                        local lnickname = nickname:lower()
+                        if qsms.set.current_tab == "all" then
+                            if not item[2].set.hidden then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        elseif qsms.set.current_tab == "new" then
+                            if item[2].set.new or qsms.lcurrent_nickname == lnickname then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        elseif qsms.set.current_tab == "important" then
+                            if item[2].set.important then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        elseif qsms.set.current_tab == "contacts" then
+                            if item[2].set.contacts then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        elseif qsms.set.current_tab == "hidden" then
+                            if item[2].set.hidden then
+                                render_contact_item(nickname, lnickname)
+                            end
+                        end
+                    end
+                end
+            imgui.EndChild()
+        imgui.EndChild()
+        imgui.Columns(1)
+    end
+
+    -- Отрисовка всплывающего помощника под чатом игры при вводе /sms или /t
+    function qsms.onDrawFrame()
+        local chatActive = qsms.isChatOverlayActive()
+        if not chatActive then
+            return
+        end
+
+        local px, py = qsms.getChatInputPos()
+        local t = getTheme()
+
+        pushThemeColors()
+        pushThemeRounding()
+
+        local chat_input_text = sampGetChatInputText() or ""
+        local online = {}
+        for id = 0, sampGetMaxPlayerId(false) do
+            if sampIsPlayerConnected(id) and not sampIsPlayerNpc(id) then
+                local nickname = sampGetPlayerNickname(id)
+                online[nickname:lower()] = id
+            end
+        end
+        if qsms.last_chat_input_text ~= chat_input_text then
+            local input = chat_input_text:match("^/[sS][mM][sS]%s+(%S+)%s+") or chat_input_text:match("^/[tT]%s+(%S+)%s+")
+            if input then
+                if input:match("^[%d%-]+$") then
+                    if sampIsPlayerConnected(tonumber(input)) then
+                        input = sampGetPlayerNickname(tonumber(input))
+                    end
+                end
+                if qsms.current_nickname ~= input then
+                    qsms.current_nickname = input
+                    qsms.lcurrent_nickname = qsms.current_nickname:lower()
+                    qsms.do_max_scroll = true
+                end
+            else
+                qsms.current_nickname = nil
+                qsms.lcurrent_nickname = nil
+            end
+            if not qsms.current_nickname then
+                qsms.search = {}
+                local s_input = chat_input_text:match("^/[sS][mM][sS]%s+(%S*)$") or chat_input_text:match("^/[tT]%s+(%S*)$") or ""
+                if s_input:match("^%+") or s_input:match("%-") then
+                    s_input = ""
+                end
+                for lnickname, id in pairs(online) do
+                    if not qsms.chats[lnickname] then
+                        local nickname = sampGetPlayerNickname(id)
+                        if lnickname:find(s_input:lower(), 1, true) or (tonumber(s_input) and sampIsPlayerConnected(tonumber(s_input)) and sampGetPlayerNickname(tonumber(s_input)) == nickname) then
+                            table.insert(qsms.search, nickname)
+                        end
+                    end
+                end
+                for lnickname, item in pairs(qsms.chats) do
+                    if lnickname:find(s_input:lower(), 1, true) or (tonumber(s_input) and sampIsPlayerConnected(tonumber(s_input)) and sampGetPlayerNickname(tonumber(s_input)) == item.set.nickname) then
+                        table.insert(qsms.search, item.set.nickname)
+                    end
+                end
+                qsms.searching = true
+                qsms.do_min_scroll = true
+            else
+                qsms.searching = false
+            end
+        end
+        qsms.last_chat_input_text = chat_input_text
+        local srv_dir = qsms.current_server_name or qsms.getServerName() or "trinity"
+        local isSearchCompact = qsms.searching and (qsms.set.current_tab ~= "autoresponder" and qsms.set.current_tab ~= "hotkeys_info")
+        local winW = 720
+        local winH = isSearchCompact and 170 or 230
+        imgui.SetNextWindowSize(imgui.ImVec2(winW, winH), imgui.Cond.Always)
+        imgui.SetNextWindowPos(imgui.ImVec2(px, py), imgui.Cond.Always)
+        imgui.Begin(u8(qsms.MAIN_TITLE).."##qsms_window_chat", qsms.img.window_chat, imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar)
+            local sorted_chats = qsms.sort_chats(qsms.chats)
+            imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(6, 8))
+            if imgui.ButtonActivated(qsms.set.current_tab=="all", fa.ICON_COMMENTS .. u8" Все", imgui.ImVec2(70, 28)) then
+                qsms.set.current_tab = "all"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.SameLine()
+            if imgui.ButtonActivated(qsms.set.current_tab=="new", fa.ICON_ENVELOPE .. u8" Новые", imgui.ImVec2(88, 28)) then
+                qsms.set.current_tab = "new"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.SameLine()
+            if imgui.ButtonActivated(qsms.set.current_tab=="autoresponder", fa.ICON_COG .. u8" Настройки", imgui.ImVec2(110, 28)) then
+                qsms.set.current_tab = "autoresponder"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.SameLine()
+            if imgui.ButtonActivated(qsms.set.current_tab=="important", fa.ICON_STAR .. u8" Важные", imgui.ImVec2(92, 28)) then
+                qsms.set.current_tab = "important"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.SameLine()
+            if imgui.ButtonActivated(qsms.set.current_tab=="contacts", fa.ICON_ADDRESS_BOOK .. u8" Контакты", imgui.ImVec2(105, 28)) then
+                qsms.set.current_tab = "contacts"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            imgui.SameLine(imgui.GetWindowWidth() - 44)
+            local isOvHid = (qsms.set.current_tab == "hidden")
+            if imgui.ButtonActivated(isOvHid, fa.ICON_EYE_SLASH .. "##ov_hid", imgui.ImVec2(30, 28)) then
+                qsms.set.current_tab = isOvHid and "all" or "hidden"
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip(isOvHid and u8"Скрытые диалоги (нажмите, чтобы вернуться)" or u8"Скрытые диалоги")
+            end
+            imgui.PopStyleVar()
+            imgui.Separator()
+            if qsms.set.current_tab == "autoresponder" or qsms.set.current_tab == "hotkeys_info" then
+                imgui.BeginChild("qsms_ov_ar_scroll", imgui.ImVec2(0, 0), false); qsms.render_autoresponder_tab(sorted_chats, true); imgui.EndChild()
+            else
+                imgui.Columns(2, nil, true)
+                local column_width = 230
+                imgui.SetColumnWidth(-1, imgui.GetWindowWidth() - column_width)
+                imgui.BeginChild("qsms_text_head", imgui.ImVec2(0, 0), false)
+                    if qsms.searching then
+                        imgui.TextDisabled(u8"Результаты поиска")
+                        imgui.Separator()
+                    elseif qsms.current_nickname then
+                        local lcur = qsms.lcurrent_nickname
+                        if qsms.chats[lcur] then
+                            imgui.DotGreen(online[lcur])
+                            imgui.SameLine()
+                            imgui.TextColored(t.accent, u8(qsms.chats[lcur].set.nickname..(online[lcur] and " ["..online[lcur].."]" or "")))
+                            imgui.SameLine()
+                            if imgui.ButtonClickable(online[lcur], fa.ICON_PHONE .. u8" Позвонить", imgui.ImVec2(95, 22)) then
+                                qsms.call_func(lcur)
+                            end
+                            qsms.renderContactActions(lcur, srv_dir, t, "qsms_more")
+                            if qsms.set.ooc then
+                                imgui.SameLine()
+                                imgui.TextDisabled(u8"(( SMS ))")
+                            end
+                            imgui.Separator()
+                        else
+                            imgui.DotGreen(online[lcur])
+                            imgui.SameLine()
+                            imgui.TextColored(t.accent, u8(qsms.current_nickname..(online[lcur] and " ["..online[lcur].."]" or "")))
+                            imgui.SameLine()
+                            if imgui.ButtonClickable(online[lcur], fa.ICON_PHONE .. u8" Позвонить", imgui.ImVec2(95, 22)) then
+                                qsms.call_func(lcur)
+                            end
+                            if qsms.set.ooc then
+                                imgui.SameLine()
+                                imgui.TextDisabled(u8"(( SMS ))")
+                            end
+                            imgui.Separator()
+                        end
+                    end
+                    imgui.BeginChild("qsms_text", imgui.ImVec2(0, 0), false)
+                        local outCol = imgui.ImVec4(t.button.x, t.button.y, t.button.z, 0.85)
+                        local inCol  = imgui.ImVec4(t.frameBg.x, t.frameBg.y, t.frameBg.z, 0.95)
+                        if qsms.current_nickname and qsms.chats[qsms.lcurrent_nickname] then
+                            local last_date = nil
+                            for index, item in ipairs(qsms.chats[qsms.lcurrent_nickname].chat) do
+                                if os.date("%d.%m.%Y", item.ctime) ~= last_date then
+                                    last_date = os.date("%d.%m.%Y", item.ctime)
+                                    local calc = imgui.CalcTextSize(last_date)
+                                    imgui.SetCursorPosX(math.max(0, imgui.GetContentRegionMax().x / 2 - calc.x / 2))
+                                    imgui.TextDisabled(last_date)
+                                end
+                                if item.outcoming then
+                                    if imgui.Bubble("ov_msg_"..tostring(index), outCol, u8(item.text), u8(item.nickname).." | "..os.date("%H:%M:%S | %d.%m.%Y", item.ctime), u8"Сообщение скопировано", true) then
+                                        imgui.SetClipboardText(u8(item.text))
+                                    end
+                                else
+                                    if imgui.Bubble("ov_msg_"..tostring(index), inCol, u8(item.text), u8(item.nickname).." | "..os.date("%H:%M:%S | %d.%m.%Y", item.ctime), u8"Сообщение скопировано", false) then
+                                        imgui.SetClipboardText(u8(item.text))
+                                    end
+                                end
+                            end
+                            if qsms.do_max_scroll then
+                                qsms.do_max_scroll = false
+                                imgui.SetScrollHere()
+                            end
+                            qsms.auto_scroll = imgui.GetScrollY() == imgui.GetScrollMaxY()
+                        elseif qsms.searching then
+                            if qsms.do_min_scroll then
+                                qsms.do_min_scroll = false
+                                imgui.SetScrollHere()
+                            end
+                            imgui.PushStyleVar(imgui.StyleVar.ItemSpacing, imgui.ImVec2(6, 4))
+                            local max_show = math.min(3, #qsms.search)
+                            for idx = 1, max_show do
+                                local nickname = qsms.search[idx]
+                                local lnickname = nickname:lower()
+                                imgui.DotGreen(online[lnickname])
+                                imgui.SameLine()
+                                if imgui.Selectable(" "..nickname..(online[lnickname] and " ["..online[lnickname].."]" or "")) then
+                                    sampSetChatInputText("/sms "..nickname.." ")
+                                end
+                            end
+                            imgui.PopStyleVar()
+                        end
+                    imgui.EndChild()
+                imgui.EndChild()
+                imgui.NextColumn()
+                imgui.SetColumnWidth(-1, column_width)
+                imgui.BeginChild("qsms_chats_head", imgui.ImVec2(0, 0), false)
+                    imgui.BeginChild("qsms_chats", imgui.ImVec2(0, 0), false)
+                        local function some_render(nickname, lnickname)
+                            local is_new = qsms.chats[lnickname].set.new
+                            if is_new then
+                                imgui.PushStyleColor(imgui.Col.Text, t.accent)
+                            end
+                            imgui.DotGreen(online[lnickname])
+                            imgui.SameLine()
+                            if imgui.Selectable(" "..nickname..(online[lnickname] and " ["..online[lnickname].."]" or ""), qsms.lcurrent_nickname == lnickname) then
+                                sampSetChatInputText("/sms "..nickname.." ")
+                            end
+                            if is_new then
+                                imgui.PopStyleColor()
+                            end
+                        end
+                        for _, item in ipairs(sorted_chats) do
+                            local nickname = item[2].set.nickname
+                            local lnickname = nickname:lower()
+                            if qsms.set.current_tab == "all" then
+                                if not item[2].set.hidden then
+                                    some_render(nickname, lnickname)
+                                end
+                            elseif qsms.set.current_tab == "new" then
+                                if item[2].set.new or qsms.lcurrent_nickname == lnickname then
+                                    some_render(nickname, lnickname)
+                                end
+                            elseif qsms.set.current_tab == "important" then
+                                if item[2].set.important then
+                                    some_render(nickname, lnickname)
+                                end
+                            elseif qsms.set.current_tab == "contacts" then
+                                if item[2].set.contacts then
+                                    some_render(nickname, lnickname)
+                                end
+                            elseif qsms.set.current_tab == "hidden" then
+                                if item[2].set.hidden then
+                                    some_render(nickname, lnickname)
+                                end
+                            end
+                        end
+                    imgui.EndChild()
+                imgui.EndChild()
+                imgui.Columns(1)
+            end
+            local size = imgui.GetWindowSize()
+            if size.x ~= qsms.set.chat_size[1] or size.y ~= qsms.set.chat_size[2] then
+                qsms.set.chat_size = {size.x, size.y}
+                qsms.mcfg.save(qsms.set, qsms.filename_set)
+            end
+        imgui.End()
+
+        imgui.PopStyleVar(THEME_ROUNDING_COUNT)
+        imgui.PopStyleColor(THEME_COLOR_COUNT)
+    end
+
+    function qsms.init()
+        qsms.indicator = renderCreateFont("Arial", 12, 5)
+        sampRegisterChatCommand("sms", qsms.sms_func)
+        sampRegisterChatCommand("smss", qsms.sms_func)
+        sampRegisterChatCommand("t", qsms.sms_func)
+        qsms.hotkeys = {
+            new_sms = qsms.hkeys.register(qsms.set.new_sms, qsms.hkeys.DOWN, false, true, qsms.new_sms),
+            reply_sms = qsms.hkeys.register(qsms.set.reply_sms, qsms.hkeys.DOWN, false, true, qsms.reply_sms),
+        }
+    end
+
+    function qsms.tick(chatOverlayActive)
+        local inMenuTab = main_window_state.v and open_tabs[active_tab_idx] and open_tabs[active_tab_idx].kind == "quicksms"
+        if not chatOverlayActive and not inMenuTab then
+            if qsms.popup_is_open then
+                qsms.close_current_popup = true
+            end
+            qsms.last_chat_input_text = nil
+            qsms.searching = false
+        end
+
+        if qsms.set.autoresponder.enabled and qsms.set.autoresponder.end_time > 0
+           and os.time() >= qsms.set.autoresponder.end_time then
+            qsms.set.autoresponder.enabled = false
+            qsms.set.autoresponder.end_time = 0
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+            sampAddChatMessage("• {FFC800}[Мессенджер]{FFFFFF} Автоответчик отключён по таймеру.", 0xFFFFFF)
+        end
+
+        qsms.current_server_name = qsms.getServerName()
+        if qsms.current_server_name and qsms.current_server_name ~= qsms.server_name then
+            qsms.chats = {}
+            local srv_chats_dir = qsms.dirname_chats.."\\"..qsms.current_server_name
+            if not doesDirectoryExist(srv_chats_dir) then
+                createDirectory(srv_chats_dir)
+            end
+            local ok_dir, iter, dir_obj = pcall(lfs.dir, srv_chats_dir)
+            if ok_dir and iter then
+                for nickname in iter, dir_obj do
+                    if nickname ~= "." and nickname ~= ".." then
+                        local lnickname = nickname:lower()
+                        local chat_cfg = qsms.mcfg.load(srv_chats_dir.."\\"..lnickname.."\\chat.cfg")
+                        local set_cfg = qsms.mcfg.load(srv_chats_dir.."\\"..lnickname.."\\set.cfg")
+                        if chat_cfg and set_cfg and set_cfg.nickname and set_cfg.ctime then
+                            qsms.chats[set_cfg.nickname:lower()] = {
+                                set = set_cfg,
+                                chat = chat_cfg
+                            }
+                        end
+                    end
+                end
+            end
+            qsms.server_name = qsms.current_server_name
+        end
+
+        if chatOverlayActive and isKeyJustPressed(0x09) then -- VK_TAB: переключение разделов
+            local overlay_tabs = { "all", "new", "autoresponder", "important", "contacts", "hidden" }
+            local cur_idx = 1
+            for i, tname in ipairs(overlay_tabs) do
+                if tname == qsms.set.current_tab then
+                    cur_idx = i
+                    break
+                end
+            end
+            local next_idx = (cur_idx % #overlay_tabs) + 1
+            qsms.set.current_tab = overlay_tabs[next_idx]
+            qsms.mcfg.save(qsms.set, qsms.filename_set)
+        end
+
+        qsms.new = false
+        for _, item in pairs(qsms.chats) do
+            if item.set and item.set.new then
+                qsms.new = true
+                break
+            end
+        end
+
+        if qsms.new and qsms.indicator then
+            local px, py = qsms.getChatInputPos()
+            renderFontDrawText(qsms.indicator, "SMS", px + 50, py, 0xFFFF8800)
+        end
+    end
+end
+
 esc_consumed = false
 
 function onWindowMessage(msg, wparam, lparam)
@@ -6516,7 +10126,8 @@ function onWindowMessage(msg, wparam, lparam)
             return
         end
         if msg == 0x0100 then -- WM_KEYDOWN
-            if (main_window_state and main_window_state.v) or ad_add_form_open or gallery_preview_open or gallery_send_form_open or tracker_report_form_open then
+            local qsmsMenuOpen = qsms and qsms.img and qsms.img.window_menu.v
+            if (main_window_state and main_window_state.v) or ad_add_form_open or gallery_preview_open or gallery_send_form_open or tracker_report_form_open or qsmsMenuOpen then
                 esc_consumed = true
                 if ad_add_form_open then
                     ad_add_form_open = false
@@ -6527,6 +10138,8 @@ function onWindowMessage(msg, wparam, lparam)
                     gallery_send_form_open = false
                 elseif tracker_report_form_open then
                     tracker_report_form_open = false
+                elseif qsmsMenuOpen then
+                    qsms.img.window_menu.v = false
                 elseif main_window_state and main_window_state.v then
                     main_window_state.v = false
                 end
@@ -6592,9 +10205,19 @@ function main()
         event_card_timer = 210
     end)
 
+    if qsms and qsms.init then
+        qsms.init()
+    end
+
         while true do
         wait(0)
-        imgui.Process = main_window_state.v
+        local qsmsMenuOpen = (qsms and qsms.img and qsms.img.window_menu.v) or false
+        local qsmsChatOpen = (qsms and qsms.isChatOverlayActive and qsms.isChatOverlayActive()) or false
+        imgui.ShowCursor = main_window_state.v or qsmsMenuOpen
+        imgui.Process = main_window_state.v or qsmsMenuOpen or qsmsChatOpen
+        if qsms and qsms.tick then
+            qsms.tick(qsmsChatOpen)
+        end
 
         if ad_pending and not ad_awaiting_next_city and ad_pending_deadline > 0 and os.time() > ad_pending_deadline then
             ad_pending = false
