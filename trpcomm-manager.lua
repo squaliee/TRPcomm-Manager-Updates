@@ -1,6 +1,6 @@
 -- =========================
 --  TRPcomm MANAGER
---  Актуальная версия: 3.0
+--  Актуальная версия: 3.1
 -- =========================
 
 imgui = require 'imgui'
@@ -148,7 +148,7 @@ local function hasAccess(sectionKey)
     return false
 end
 
-SCRIPT_VERSION = "3.0"
+SCRIPT_VERSION = "3.1"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -2708,17 +2708,43 @@ MONTH_NAMES = {
 -- Разбирает "2026-08-20T18:00:00+03:00" или "2026-08-20" (весь день)
 local function parseISODateTime(iso)
     if not iso then return nil end
-    local y, mo, d, h, mi = iso:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+)")
+    local function toUtcTs(yr, mn, dy, hr, mi, tzOffsetSec)
+        local ref = os.time()
+        local utcTbl = os.date("!*t", ref)
+        utcTbl.isdst = false
+        local pcOffset = ref - os.time(utcTbl)
+        local tLocal = os.time({
+            year = yr, month = mn, day = dy,
+            hour = hr or 0, min = mi or 0, sec = 0,
+            isdst = false,
+        })
+        return tLocal + pcOffset - (tzOffsetSec or SERVER_TZ_OFFSET_SEC)
+    end
+
+    local y, mo, d, h, mi, rest = iso:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+)(.*)")
     if y then
-        return tonumber(y), tonumber(mo), tonumber(d), tonumber(h), tonumber(mi)
+        local tzOffset = SERVER_TZ_OFFSET_SEC
+        if rest then
+            if rest:find("Z") then
+                tzOffset = 0
+            else
+                local sign, tzh, tzm = rest:match("([+-])(%d%d):(%d%d)")
+                if sign then
+                    tzOffset = (sign == "-" and -1 or 1) * (tonumber(tzh) * 3600 + tonumber(tzm) * 60)
+                end
+            end
+        end
+        local utcTs = toUtcTs(tonumber(y), tonumber(mo), tonumber(d), tonumber(h), tonumber(mi), tzOffset)
+        local msk = os.date("!*t", utcTs + SERVER_TZ_OFFSET_SEC)
+        return msk.year, msk.month, msk.day, msk.hour, msk.min, utcTs
     end
     local y2, mo2, d2 = iso:match("(%d+)-(%d+)-(%d+)")
     if y2 then
-        return tonumber(y2), tonumber(mo2), tonumber(d2), nil, nil
+        local utcTs = toUtcTs(tonumber(y2), tonumber(mo2), tonumber(d2), 23, 59, SERVER_TZ_OFFSET_SEC)
+        return tonumber(y2), tonumber(mo2), tonumber(d2), nil, nil, utcTs
     end
     return nil
 end
-
 local function daysInMonth(year, month)
     local nextMonth, nextYear = month + 1, year
     if nextMonth > 12 then nextMonth = 1; nextYear = year + 1 end
@@ -2782,12 +2808,13 @@ local function fetchCalendarEvents()
 
             local startRaw = item.start and (item.start.dateTime or item.start.date)
             local isAllDay = item.start and item.start.date ~= nil
-            local y, mo, d, h, mi = parseISODateTime(startRaw)
+            local y, mo, d, h, mi, utcTs = parseISODateTime(startRaw)
             calendar_events[#calendar_events + 1] = {
                 summary     = (item.summary and item.summary ~= "") and item.summary or u8"Без названия",
                 description = cleanEventDescription(item.description),
                 location    = item.location,
                 y = y, mo = mo, d = d, h = h, mi = mi,
+                utcTs = utcTs,
                 isAllDay = isAllDay,
             }
         end
@@ -2795,27 +2822,20 @@ local function fetchCalendarEvents()
         local nowTime = os.time()
         local nextEvent = nil
         for _, ev in ipairs(calendar_events) do
-            if ev.y then
-                local evTime = os.time({
-                    year = ev.y, month = ev.mo, day = ev.d,
-                    hour = ev.h or 23, min = ev.mi or 59, sec = 0,
-                })
-                if evTime >= nowTime then
+            if ev.y and ev.utcTs then
+                if ev.utcTs >= nowTime then
                     nextEvent = ev
                     break
                 end
             end
         end
 
-                if nextEvent then
+        if nextEvent then
             upcoming_event_name = nextEvent.summary
-            upcoming_event_time = nextEvent.h and string.format("%02d:%02d", nextEvent.h, nextEvent.mi) or u8"весь день"
+            upcoming_event_time = nextEvent.h and (string.format("%02d:%02d", nextEvent.h, nextEvent.mi) .. u8" МСК") or u8"весь день"
 
-            if nextEvent.h and not nextEvent.isAllDay then
-                local newTimestamp = os.time({
-                    year = nextEvent.y, month = nextEvent.mo, day = nextEvent.d,
-                    hour = nextEvent.h, min = nextEvent.mi, sec = 0,
-                })
+            if nextEvent.h and not nextEvent.isAllDay and nextEvent.utcTs then
+                local newTimestamp = nextEvent.utcTs
                 if newTimestamp ~= upcoming_event_timestamp then
                     event_notify_30_sent = false
                     event_notify_10_sent = false
@@ -2903,9 +2923,8 @@ local function drawHRCalendarTab(t)
                 local hasEvents = #dayEvents > 0
                 local pushed = 0
                 if hasEvents then
-                    local todayY  = tonumber(os.date("%Y"))
-                    local todayMo = tonumber(os.date("%m"))
-                    local todayD  = tonumber(os.date("%d"))
+                    local mskToday = os.date("!*t", os.time() + SERVER_TZ_OFFSET_SEC)
+                    local todayY, todayMo, todayD = mskToday.year, mskToday.month, mskToday.day
                     local isPast = (calendar_view_year < todayY)
                         or (calendar_view_year == todayY and calendar_view_month < todayMo)
                         or (calendar_view_year == todayY and calendar_view_month == todayMo and cellDay < todayD)
@@ -4658,9 +4677,9 @@ local function drawSettingsTab(t)
         local showGhCard  = isAdManager()
 
         -- 4. Карточка игрового процесса и оптимизации (стильные строки-тумблеры)
-        local tweaksH = 214
+        local tweaksH = 202
         if not showSmsCard and not showGhCard then
-            tweaksH = math.max(214, imgui.GetContentRegionAvail().y)
+            tweaksH = math.max(202, imgui.GetContentRegionAvail().y)
         end
 
         imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
@@ -4715,7 +4734,7 @@ local function drawSettingsTab(t)
         -- 5. Карточка Мессенджера (доступна сотрудникам Рекламного отдела)
         if showSmsCard then
             imgui.Spacing()
-            local smsH = showGhCard and 112 or math.max(112, imgui.GetContentRegionAvail().y)
+            local smsH = showGhCard and 138 or math.max(138, imgui.GetContentRegionAvail().y)
             imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
             imgui.PushStyleColor(imgui.Col.Border, cardBorder)
             imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
@@ -4732,6 +4751,12 @@ local function drawSettingsTab(t)
                     imgui.Dummy(imgui.ImVec2(1, 2))
                     drawToggleRow("qsms_overlay", fa.ICON_WINDOW_MAXIMIZE, u8"Всплывающая панель под чатом (/sms, /t)", qsms.img.show_overlay, function(val)
                         qsms.set.show_chat_overlay = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+
+                    imgui.Dummy(imgui.ImVec2(1, 2))
+                    drawToggleRow("qsms_indicator", fa.ICON_BELL_O, u8"Индикатор «SMS» на экране при новых SMS", qsms.img.show_indicator, function(val)
+                        qsms.set.show_sms_indicator = val
                         qsms.mcfg.save(qsms.set, qsms.filename_set)
                     end)
                 end
@@ -7354,7 +7379,7 @@ function imgui.OnDrawFrame()
 
         imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER")
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8 "•  Версия 3.0")
+        imgui.TextColored(t.textDim, u8 "•  Версия 3.1")
 
         -- Компактная квадратная кнопка закрытия
         imgui.SameLine(imgui.GetWindowWidth() - 28)
@@ -8406,6 +8431,7 @@ do
         reply_sms = {0xA4, 0x51}, -- VK_LMENU, VK_Q
         ooc = false,
         show_chat_overlay = true,
+        show_sms_indicator = false,
         autoresponder = {
             enabled = false,
             text = "Я сейчас отошёл от игры. Вернусь через {time}.",
@@ -8417,6 +8443,7 @@ do
     }
     qsms.mcfg.update(qsms.set, qsms.filename_set)
     if qsms.set.show_chat_overlay == nil then qsms.set.show_chat_overlay = true end
+    if qsms.set.show_sms_indicator == nil then qsms.set.show_sms_indicator = false end
     if type(qsms.set.autoresponder) ~= "table" then
         qsms.set.autoresponder = {
             enabled = false,
@@ -8463,6 +8490,7 @@ do
         checkbox_hidden = imgui.ImBool(false),
         ooc = imgui.ImBool(qsms.set.ooc),
         show_overlay = imgui.ImBool(qsms.set.show_chat_overlay),
+        show_indicator = imgui.ImBool(qsms.set.show_sms_indicator),
     }
 
     qsms.ar_ui = {
@@ -8627,6 +8655,7 @@ do
                 local nickname = item[2] and item[2].set and item[2].set.nickname
                 if nickname then
                     local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                     if rawFilter == "" or lnickname:find(rawFilter, 1, true) then
                         shown = shown + 1
                         local isBlocked = (list[lnickname] == true)
@@ -8878,27 +8907,6 @@ do
                 end
                 imgui.PopItemWidth()
 
-                imgui.Spacing()
-                imgui.TextColored(t.textDim, fa.ICON_BOLT .. u8" Быстрые шаблоны (клик для подстановки):")
-                imgui.Spacing()
-
-                local presets = {
-                    { btn = u8"Отошёл от ПК",   txt = "Я сейчас отошёл от игры. Вернусь через {time}." },
-                    { btn = u8"На ивенте",      txt = "Сейчас провожу ивент, не могу ответить. Освобожусь через {time}." },
-                    { btn = u8"Занят / РП",     txt = "Сейчас занят на ситуации, отвечу вам через {time}." },
-                    { btn = u8"Скоро буду",     txt = "Временно недоступен, напишу вам как только освобожусь!" },
-                }
-                local pW = math.floor((imgui.GetContentRegionAvailWidth() - 18) / 4)
-                for idx, pr in ipairs(presets) do
-                    if idx > 1 then imgui.SameLine(0, 6) end
-                    if imgui.Button(pr.btn .. "##ar_pres_" .. idx, imgui.ImVec2(pW, 24)) then
-                        ar.text = pr.txt
-                        qsms.ar_ui.text_buf.v = u8(pr.txt)
-                        qsms.mcfg.save(qsms.set, qsms.filename_set)
-                    end
-                end
-
-                imgui.Spacing()
                 -- Живой предпросмотр
                 local previewRaw = (ar.text ~= "" and ar.text) or "Я отошёл."
                 local sampleTime = "15 мин"
@@ -9089,7 +9097,7 @@ do
             imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
             imgui.PushStyleColor(imgui.Col.Border, cardBorder)
             imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
-            imgui.BeginChild("##qsms_card_modes", imgui.ImVec2(colW, 148), true)
+            imgui.BeginChild("##qsms_card_modes", imgui.ImVec2(colW, 194), true)
 
                 drawCardHeader(fa.ICON_SLIDERS, u8"Режим отправки и интерфейс чата")
 
@@ -9111,6 +9119,16 @@ do
                         qsms.mcfg.save(qsms.set, qsms.filename_set)
                     end)
 
+                imgui.Dummy(imgui.ImVec2(1, 4))
+
+                drawToggleRow("sms_indicator", fa.ICON_BELL_O,
+                    u8"Индикатор «SMS» на экране при новых сообщениях",
+                    u8"Оранжевая надпись SMS поверх экрана, пока есть непрочитанные",
+                    qsms.img.show_indicator, function(val)
+                        qsms.set.show_sms_indicator = val
+                        qsms.mcfg.save(qsms.set, qsms.filename_set)
+                    end)
+
             imgui.EndChild()
             imgui.PopStyleVar()
             imgui.PopStyleColor(2)
@@ -9118,7 +9136,7 @@ do
             imgui.Spacing()
 
             -- 3. Карточка статистики базы сообщений
-            local statH = math.max(115, imgui.GetContentRegionAvail().y)
+            local statH = math.max(88, imgui.GetContentRegionAvail().y)
             imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
             imgui.PushStyleColor(imgui.Col.Border, cardBorder)
             imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
@@ -9211,17 +9229,77 @@ do
         raknetDeleteBitStream(bs)
     end
 
+    function qsms.start_number_lookup(target)
+        qsms.number_seq = (qsms.number_seq or 0) + 1
+        qsms.found_online_number = nil
+        qsms.found_target_nick = nil
+        qsms.number_timer_started = false
+        qsms.sendServerCmd("/number " .. target)
+    end
+
+    function qsms.finish_number_lookup(seq)
+        if seq ~= qsms.number_seq then return end
+        local number = qsms.found_online_number
+        local targetNick = qsms.found_target_nick or qsms.who or ""
+        local sms_to_send = qsms.sms or ""
+        local is_call = qsms.do_call
+        qsms.who = nil
+        qsms.do_call = false
+        qsms.found_online_number = nil
+        qsms.found_target_nick = nil
+        qsms.number_timer_started = false
+
+        if number then
+            if targetNick ~= "" and not targetNick:match("^%d+$") then
+                qsms.number_cache = qsms.number_cache or {}
+                qsms.number_cache[targetNick:lower()] = number
+                qsms.last_cached_target = targetNick:lower()
+            end
+            if is_call then
+                qsms.sendServerCmd("/call "..number:gsub("%-", ""))
+            else
+                if qsms.set.ooc then
+                    qsms.sendServerCmd("/t "..number.." (( "..sms_to_send.." ))")
+                else
+                    qsms.sendServerCmd("/t "..number.." "..sms_to_send)
+                end
+            end
+        else
+            sampAddChatMessage("{FF6B6B}[TRPcomm] {FFFFFF}У игрока {5B85C4}" .. tostring(targetNick) .. "{FFFFFF} отключён телефон (все номера не в сети).", -1)
+        end
+    end
+
+    function qsms.cmd_call(args)
+        args = (args or ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if args == "" or not hasAccess("advertising") then
+            qsms.sendServerCmd(args ~= "" and ("/call " .. args) or "/call")
+            return
+        end
+        if args:match("^%+[%d%-]+$") or args:match("%-") or (args:match("^%d+$") and #args >= 4) then
+            qsms.sendServerCmd("/call " .. args:gsub("[%+%-%s]", ""))
+            return
+        end
+        qsms.call_func(args)
+    end
+
     function qsms.call_func(somebody)
         qsms.who = somebody
         qsms.do_call = true
         sampSetChatInputEnabled(false)
         if qsms.who:match("^%+[%d%-]+") then
-            qsms.sendServerCmd("/call "..qsms.who:gsub("%+", ""))
+            qsms.sendServerCmd("/call "..qsms.who:gsub("[%+%-%s]", ""))
             qsms.do_call = false
             qsms.who = nil
             return
         end
-        if not qsms.who:match("^%d+$") then
+        local resolvedNick = nil
+        if qsms.who:match("^%d+$") then
+            local pid = tonumber(qsms.who)
+            if pid and sampIsPlayerConnected(pid) then
+                resolvedNick = sampGetPlayerNickname(pid)
+            end
+        else
+            resolvedNick = qsms.who
             for id = 0, sampGetMaxPlayerId(false) do
                 if sampIsPlayerConnected(id) then
                     if sampGetPlayerNickname(id):lower() == qsms.who:lower() then
@@ -9231,7 +9309,15 @@ do
                 end
             end
         end
-        qsms.sendServerCmd("/number "..qsms.who)
+        if resolvedNick and qsms.number_cache and qsms.number_cache[resolvedNick:lower()] then
+            local cachedNum = qsms.number_cache[resolvedNick:lower()]
+            qsms.last_cached_target = resolvedNick:lower()
+            qsms.sendServerCmd("/call " .. cachedNum:gsub("%-", ""))
+            qsms.do_call = false
+            qsms.who = nil
+            return
+        end
+        qsms.start_number_lookup(qsms.who)
     end
 
     function qsms.sms_func(args)
@@ -9269,34 +9355,51 @@ do
         end
         local who_arg, sms_arg = args:match("^(%S+)%s+(.+)$")
         if who_arg then
-            qsms.who = who_arg
-            qsms.sms = sms_arg
-            if qsms.who:match("^%+[%d%-]+") then
-                if qsms.set.ooc then
-                    qsms.sendServerCmd("/t "..qsms.who:gsub("%+", "").." (( "..qsms.sms.." ))")
+            local msgText = qsms.set.ooc and ("(( " .. sms_arg .. " ))") or sms_arg
+            if who_arg:match("^%+[%d%-]+") then
+                qsms.sendServerCmd("/t " .. who_arg:gsub("%+", "") .. " " .. msgText)
+            elseif who_arg:match("^%d+$") then
+                local pid = tonumber(who_arg)
+                if pid and sampIsPlayerConnected(pid) and not sampIsPlayerNpc(pid) then
+                    local nick = sampGetPlayerNickname(pid)
+                    qsms.sendServerCmd("/t " .. nick .. " " .. msgText)
                 else
-                    qsms.sendServerCmd("/t "..qsms.who:gsub("%+", "").." "..qsms.sms)
+                    sampAddChatMessage("{FF6B6B}[TRPcomm] {FFFFFF}Игрок с ID {5B85C4}" .. who_arg .. "{FFFFFF} не найден в сети.", -1)
                 end
-                qsms.who = nil
-                return
+            else
+                qsms.sendServerCmd("/t " .. who_arg .. " " .. msgText)
             end
-            if not qsms.who:match("^%d+$") then
-                for id = 0, sampGetMaxPlayerId(false) do
-                    if sampIsPlayerConnected(id) then
-                        if sampGetPlayerNickname(id):lower() == qsms.who:lower() then
-                            qsms.who = tostring(id)
-                            break
-                        end
-                    end
-                end
-            end
-            qsms.sendServerCmd("/number "..qsms.who)
         end
     end
 
     function qsms.onServerMessage(color_int32, text)
         local ctext = text:gsub("{%x%x%x%x%x%x}", "")
+        if qsms.last_cached_target and (
+               ctext:find("не найден в телефонном справочнике")
+            or ctext:find("Абонент не в сети")
+            or ctext:find("Телефон абонента выключен")
+            or ctext:find("Неверный номер")
+            or ctext:find("не найден")
+        ) then
+            if qsms.number_cache then
+                qsms.number_cache[qsms.last_cached_target] = nil
+            end
+            qsms.last_cached_target = nil
+        end
+
+        local function ensureLookupTimer()
+            if not qsms.number_timer_started then
+                qsms.number_timer_started = true
+                local seq = qsms.number_seq
+                lua_thread.create(function()
+                    wait(50)
+                    qsms.finish_number_lookup(seq)
+                end)
+            end
+        end
+
         if qsms.who and ctext == "Телефонный справочник:" then
+            ensureLookupTimer()
             return false
         elseif qsms.who and (
                ctext == "На сервере не найдено игроков по указанным вами параметрам."
@@ -9309,28 +9412,24 @@ do
             or ctext:find("не найдено игроков")
             or ctext:find("не имеет мобильного телефона")
         ) then
+            qsms.number_seq = (qsms.number_seq or 0) + 1
             qsms.who = nil
             qsms.do_call = false
+            qsms.found_online_number = nil
+            qsms.found_target_nick = nil
+            qsms.number_timer_started = false
         end
         if qsms.who then
-            local number = ctext:match("Имя:%s*%S+%s+Телефон:%s*([%d%-]+)")
+            local foundNick, number = ctext:match("Имя:%s*(%S+)%s+Телефон:%s*([%d%-]+)")
             if number then
-                local sms_to_send = qsms.sms or ""
-                local is_call = qsms.do_call
-                qsms.who = nil
-                qsms.do_call = false
-                lua_thread.create(function()
-                    wait(0)
-                    if is_call then
-                        qsms.sendServerCmd("/call "..number)
-                    else
-                        if qsms.set.ooc then
-                            qsms.sendServerCmd("/t "..number.." (( "..sms_to_send.." ))")
-                        else
-                            qsms.sendServerCmd("/t "..number.." "..sms_to_send)
-                        end
-                    end
-                end)
+                if foundNick then
+                    qsms.found_target_nick = qsms.found_target_nick or foundNick:gsub("%.$", "")
+                end
+                ensureLookupTimer()
+                local isOnline = (ctext:find("В СЕТИ") ~= nil) and (ctext:find("НЕ В СЕТИ") == nil)
+                if isOnline and not qsms.found_online_number then
+                    qsms.found_online_number = number
+                end
                 return false
             end
         end
@@ -9345,10 +9444,11 @@ do
             qsms.part = check_part
         end
         local srv_dir = qsms.current_server_name or qsms.getServerName() or "trinity"
-        local outcoming_sms, nickname = ctext:match("^SMS: (.+) Для: (%S+) Тел: [%d%-]+$")
+        local outcoming_sms, nickname, out_tel = ctext:match("^SMS: (.+) Для: (%S+) Тел: ([%d%-]+)$")
         if outcoming_sms then
             qsms.part = nil
             local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
             if not qsms.chats[lnickname] then
                 qsms.chats[lnickname] = {
                     set = {
@@ -9370,10 +9470,11 @@ do
             qsms.mcfg.append_value(value, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\chat.cfg")
             qsms.mcfg.save(qsms.chats[lnickname].set, qsms.dirname_chats.."\\"..srv_dir.."\\"..qsms.safe(lnickname).."\\set.cfg")
         end
-        local incoming_sms, in_nickname = ctext:match("^SMS: (.+) От: (%S+) Тел: [%d%-]+$")
+        local incoming_sms, in_nickname, in_tel = ctext:match("^SMS: (.+) От: (%S+) Тел: ([%d%-]+)$")
         if incoming_sms then
             qsms.part = nil
             local lnickname = in_nickname:lower()
+            if in_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = in_tel end
             if not qsms.chats[lnickname] then
                 qsms.chats[lnickname] = {
                     set = {
@@ -9736,6 +9837,7 @@ do
                     for _, item in ipairs(sorted_chats) do
                         local nickname = item[2].set.nickname
                         local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                         if lnickname:find(s_low, 1, true) or (tonumber(rawSearch) and online[lnickname] == tonumber(rawSearch)) then
                             render_contact_item(nickname, lnickname)
                         end
@@ -9752,6 +9854,7 @@ do
                     for _, item in ipairs(sorted_chats) do
                         local nickname = item[2].set.nickname
                         local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                         if qsms.set.current_tab == "all" then
                             if not item[2].set.hidden then
                                 render_contact_item(nickname, lnickname)
@@ -9966,6 +10069,7 @@ do
                             for idx = 1, max_show do
                                 local nickname = qsms.search[idx]
                                 local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                                 imgui.DotGreen(online[lnickname])
                                 imgui.SameLine()
                                 if imgui.Selectable(" "..nickname..(online[lnickname] and " ["..online[lnickname].."]" or "")) then
@@ -9997,6 +10101,7 @@ do
                         for _, item in ipairs(sorted_chats) do
                             local nickname = item[2].set.nickname
                             local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                             if qsms.set.current_tab == "all" then
                                 if not item[2].set.hidden then
                                     some_render(nickname, lnickname)
@@ -10039,6 +10144,7 @@ do
         sampRegisterChatCommand("sms", qsms.sms_func)
         sampRegisterChatCommand("smss", qsms.sms_func)
         sampRegisterChatCommand("t", qsms.sms_func)
+        sampRegisterChatCommand("call", qsms.cmd_call)
         qsms.hotkeys = {
             new_sms = qsms.hkeys.register(qsms.set.new_sms, qsms.hkeys.DOWN, false, true, qsms.new_sms),
             reply_sms = qsms.hkeys.register(qsms.set.reply_sms, qsms.hkeys.DOWN, false, true, qsms.reply_sms),
@@ -10075,6 +10181,7 @@ do
                 for nickname in iter, dir_obj do
                     if nickname ~= "." and nickname ~= ".." then
                         local lnickname = nickname:lower()
+            if out_tel then qsms.number_cache = qsms.number_cache or {}; qsms.number_cache[lnickname] = out_tel end
                         local chat_cfg = qsms.mcfg.load(srv_chats_dir.."\\"..lnickname.."\\chat.cfg")
                         local set_cfg = qsms.mcfg.load(srv_chats_dir.."\\"..lnickname.."\\set.cfg")
                         if chat_cfg and set_cfg and set_cfg.nickname and set_cfg.ctime then
@@ -10111,7 +10218,7 @@ do
             end
         end
 
-        if qsms.new and qsms.indicator then
+        if qsms.set.show_sms_indicator and qsms.new and qsms.indicator then
             local px, py = qsms.getChatInputPos()
             renderFontDrawText(qsms.indicator, "SMS", px + 50, py, 0xFFFF8800)
         end
