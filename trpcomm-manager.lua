@@ -1,6 +1,6 @@
 -- =========================
 --  TRPcomm MANAGER
---  Актуальная версия: 3.1
+--  Актуальная версия: 3.2
 -- =========================
 
 imgui = require 'imgui'
@@ -148,7 +148,7 @@ local function hasAccess(sectionKey)
     return false
 end
 
-SCRIPT_VERSION = "3.1"
+SCRIPT_VERSION = "3.2"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/squaliee/TRPcomm-Manager-Updates/main/version.txt"
 
 local function parseVersion(v)
@@ -997,6 +997,7 @@ local defaultSettings = {
         remove_armour = "false",
         delete_textdraw = "false",
         notifications_enabled = "true",
+        seasonal_theme = "true",
         ad_schedule_enabled = "false",
         ad_schedule_from_hour = "21",
         ad_schedule_from_min = "5",
@@ -1053,6 +1054,191 @@ if not doesDirectoryExist(TRACKER_REPORTS_DIR) then createDirectory(TRACKER_REPO
 
 local function boolFromSetting(v)
     return v == "true" or v == true
+end
+
+-- ============================================================
+--  СЕЗОННОЕ ОФОРМЛЕНИЕ (Зима / Весна / Лето / Осень)
+-- ============================================================
+seasonal = {
+    enabled = imgui.ImBool(boolFromSetting(mainIni.settings.seasonal_theme)),
+    particles = nil,
+    lastW = 0,
+    lastH = 0,
+}
+
+function seasonal.getSeason()
+    local m = tonumber(os.date("%m")) or 1
+    if m == 12 or m == 1 or m == 2 then
+        return "winter"
+    elseif m >= 3 and m <= 5 then
+        return "spring"
+    elseif m >= 6 and m <= 8 then
+        return "summer"
+    else
+        return "autumn"
+    end
+end
+
+function seasonal.getSeasonInfo()
+    local s = seasonal.getSeason()
+    if s == "winter" then
+        return fa.ICON_SNOWFLAKE_O, u8"Зима: снег и гирлянды"
+    elseif s == "spring" then
+        return fa.ICON_LEAF, u8"Весна: лепестки сакуры"
+    elseif s == "summer" then
+        return fa.ICON_SUN_O, u8"Лето: тёплые светлячки"
+    else
+        return fa.ICON_LEAF, u8"Осень: листопад"
+    end
+end
+
+function seasonal.initParticles(w, h)
+    seasonal.particles = {}
+    seasonal.lastW = w
+    seasonal.lastH = h
+    local season = seasonal.getSeason()
+    local count = (season == "summer") and 22 or 28
+
+    local autumnPalette = {
+        { 0.96, 0.62, 0.16 }, -- янтарный
+        { 0.92, 0.38, 0.14 }, -- оранжевый
+        { 0.85, 0.22, 0.16 }, -- багряный
+        { 0.98, 0.78, 0.22 }, -- золотой
+    }
+    local springPalette = {
+        { 1.00, 0.68, 0.80 }, -- нежно-розовый
+        { 0.98, 0.54, 0.72 }, -- сакура
+        { 1.00, 0.82, 0.88 }, -- бледно-розовый
+    }
+
+    for i = 1, count do
+        local p = {
+            x = math.random() * w,
+            y = math.random() * h,
+            vx = (math.random() - 0.5) * 18,
+            vy = (season == "summer") and ((math.random() - 0.5) * 14) or (22 + math.random() * 28),
+            size = (season == "winter") and (1.5 + math.random() * 2.2) or (4.0 + math.random() * 4.0),
+            alpha = 0.28 + math.random() * 0.42,
+            phase = math.random() * 6.28,
+            swayAmp = 10 + math.random() * 18,
+            swayFreq = 1.0 + math.random() * 1.4,
+            angle = math.random() * 6.28,
+            rotSpeed = (math.random() - 0.5) * 2.4,
+        }
+        if season == "autumn" then
+            p.col = autumnPalette[math.random(1, #autumnPalette)]
+            p.vx = 10 + math.random() * 16 -- лёгкий осенний ветер вправо
+        elseif season == "spring" then
+            p.col = springPalette[math.random(1, #springPalette)]
+            p.vx = 8 + math.random() * 14
+        elseif season == "summer" then
+            p.col = { 1.00, 0.86, 0.32 }
+            p.size = 2.0 + math.random() * 1.8
+        else
+            p.col = { 0.92, 0.96, 1.00 }
+        end
+        seasonal.particles[i] = p
+    end
+end
+
+function seasonal.drawOverlay()
+    if not seasonal.enabled.v then return end
+
+    local wp = imgui.GetWindowPos()
+    local ws = imgui.GetWindowSize()
+    if ws.x < 100 or ws.y < 100 then return end
+
+    if not seasonal.particles or math.abs(ws.x - seasonal.lastW) > 10 or math.abs(ws.y - seasonal.lastH) > 10 then
+        seasonal.initParticles(ws.x, ws.y)
+    end
+
+    local dt = imgui.GetIO().DeltaTime
+    if dt <= 0 or dt > 0.05 then dt = 0.016 end
+    local now = os.clock()
+    local dl = imgui.GetWindowDrawList()
+    local season = seasonal.getSeason()
+
+    -- Зимой: праздничная переливающаяся гирлянда по верхнему краю окна
+    if season == "winter" then
+        local startX = wp.x + 14
+        local endX   = wp.x + ws.x - 14
+        local baseY  = wp.y + 4
+        local bulbCount = 26
+        local step = (endX - startX) / (bulbCount - 1)
+        local bulbColors = {
+            { 1.00, 0.30, 0.30 },
+            { 1.00, 0.80, 0.20 },
+            { 0.30, 0.85, 0.45 },
+            { 0.30, 0.72, 1.00 },
+            { 0.85, 0.40, 1.00 },
+        }
+        local wireCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.18, 0.22, 0.26, 0.65))
+        for i = 1, bulbCount do
+            local bx = startX + (i - 1) * step
+            local sag = math.sin((i - 1) * 0.65) * 2.5 + 3.0
+            local by = baseY + sag
+            if i < bulbCount then
+                local nbx = startX + i * step
+                local nby = baseY + math.sin(i * 0.65) * 2.5 + 3.0
+                dl:AddLine(imgui.ImVec2(bx, by - 2), imgui.ImVec2(nbx, nby - 2), wireCol, 1.2)
+            end
+            local c = bulbColors[((i - 1) % #bulbColors) + 1]
+            local pulse = 0.55 + 0.45 * math.sin(now * 2.6 + i * 0.85)
+            local glowCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(c[1], c[2], c[3], 0.20 * pulse))
+            local coreCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(c[1], c[2], c[3], 0.55 + 0.40 * pulse))
+            dl:AddCircleFilled(imgui.ImVec2(bx, by + 1), 6.5, glowCol, 12)
+            dl:AddCircleFilled(imgui.ImVec2(bx, by + 1), 2.5, coreCol, 10)
+        end
+    end
+
+    -- Анимация и отрисовка сезонных частиц
+    for _, p in ipairs(seasonal.particles) do
+        p.phase = p.phase + p.swayFreq * dt
+        p.angle = p.angle + p.rotSpeed * dt
+
+        local sway = math.sin(p.phase) * p.swayAmp * dt
+        p.x = p.x + p.vx * dt + sway
+        p.y = p.y + p.vy * dt
+
+        if season == "summer" then
+            if p.x < 8 then p.x = ws.x - 10 elseif p.x > ws.x - 8 then p.x = 10 end
+            if p.y < 14 then p.y = ws.y - 14 elseif p.y > ws.y - 14 then p.y = 14 end
+        else
+            if p.y > ws.y - 8 then
+                p.y = 10
+                p.x = math.random() * ws.x
+            end
+            if p.x > ws.x - 6 then p.x = 8 elseif p.x < 6 then p.x = ws.x - 8 end
+        end
+
+        local sx = wp.x + p.x
+        local sy = wp.y + p.y
+
+        if sx > wp.x + 6 and sx < wp.x + ws.x - 6 and sy > wp.y + 8 and sy < wp.y + ws.y - 8 then
+            if season == "winter" then
+                local col = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(p.col[1], p.col[2], p.col[3], p.alpha))
+                dl:AddCircleFilled(imgui.ImVec2(sx, sy), p.size, col, 8)
+            elseif season == "summer" then
+                local glow = 0.45 + 0.55 * math.sin(now * 2.2 + p.phase)
+                local haloCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(p.col[1], p.col[2], p.col[3], p.alpha * 0.28 * glow))
+                local coreCol = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(p.col[1], p.col[2], p.col[3], (0.35 + 0.55 * glow) * p.alpha))
+                dl:AddCircleFilled(imgui.ImVec2(sx, sy), p.size * 2.8, haloCol, 12)
+                dl:AddCircleFilled(imgui.ImVec2(sx, sy), p.size * 0.9, coreCol, 8)
+            else
+                -- Осень (листья) и Весна (лепестки сакуры): изящный повёрнутый лепесток из двух треугольников
+                local ca, sa = math.cos(p.angle), math.sin(p.angle)
+                local len = p.size * 1.35
+                local wid = p.size * 0.55
+                local tip1 = imgui.ImVec2(sx + ca * len, sy + sa * len)
+                local tip2 = imgui.ImVec2(sx - ca * len, sy - sa * len)
+                local side1 = imgui.ImVec2(sx - sa * wid, sy + ca * wid)
+                local side2 = imgui.ImVec2(sx + sa * wid, sy - ca * wid)
+                local col = imgui.ColorConvertFloat4ToU32(imgui.ImVec4(p.col[1], p.col[2], p.col[3], p.alpha))
+                dl:AddTriangleFilled(tip1, side1, tip2, col)
+                dl:AddTriangleFilled(tip1, tip2, side2, col)
+            end
+        end
+    end
 end
 
 currentThemeIdx = tonumber(mainIni.settings.theme) or currentThemeIdx
@@ -1159,6 +1345,7 @@ local function saveSettings()
             remove_armour = tostring(remove_armour.v),
             delete_textdraw = tostring(delete_textdraw.v),
             notifications_enabled = tostring(notifications_enabled.v),
+            seasonal_theme = tostring(seasonal and seasonal.enabled and seasonal.enabled.v or false),
             ad_interval_minutes = tostring(ad_interval_minutes.v),
             ad_city_ls = tostring(ad_city_ls.v),
             ad_city_sf = tostring(ad_city_sf.v),
@@ -4677,9 +4864,9 @@ local function drawSettingsTab(t)
         local showGhCard  = isAdManager()
 
         -- 4. Карточка игрового процесса и оптимизации (стильные строки-тумблеры)
-        local tweaksH = 202
+        local tweaksH = 228
         if not showSmsCard and not showGhCard then
-            tweaksH = math.max(202, imgui.GetContentRegionAvail().y)
+            tweaksH = math.max(228, imgui.GetContentRegionAvail().y)
         end
 
         imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
@@ -4727,6 +4914,12 @@ local function drawSettingsTab(t)
                 saveSettings()
             end)
 
+            imgui.Dummy(imgui.ImVec2(1, 2))
+            local sIcon, sLabel = seasonal.getSeasonInfo()
+            drawToggleRow("seasonal_fx", sIcon, u8"Сезонное оформление (" .. sLabel .. ")", seasonal.enabled, function()
+                saveSettings()
+            end)
+
         imgui.EndChild()
         imgui.PopStyleVar()
         imgui.PopStyleColor(2)
@@ -4734,7 +4927,7 @@ local function drawSettingsTab(t)
         -- 5. Карточка Мессенджера (доступна сотрудникам Рекламного отдела)
         if showSmsCard then
             imgui.Spacing()
-            local smsH = showGhCard and 138 or math.max(138, imgui.GetContentRegionAvail().y)
+            local smsH = showGhCard and 130 or math.max(130, imgui.GetContentRegionAvail().y)
             imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
             imgui.PushStyleColor(imgui.Col.Border, cardBorder)
             imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
@@ -4769,7 +4962,7 @@ local function drawSettingsTab(t)
         -- 6. Карточка GitHub API (Только руководство)
         if showGhCard then
             imgui.Spacing()
-            local ghH = math.max(98, imgui.GetContentRegionAvail().y)
+            local ghH = math.max(88, imgui.GetContentRegionAvail().y)
             imgui.PushStyleColor(imgui.Col.ChildWindowBg, cardBg)
             imgui.PushStyleColor(imgui.Col.Border, cardBorder)
             imgui.PushStyleVar(imgui.StyleVar.ChildWindowRounding, 8.0)
@@ -7379,7 +7572,7 @@ function imgui.OnDrawFrame()
 
         imgui.TextColored(t.accent, u8 "TRPCOMM MANAGER")
         imgui.SameLine()
-        imgui.TextColored(t.textDim, u8 "•  Версия 3.1")
+        imgui.TextColored(t.textDim, u8 "•  Версия 3.2")
 
         -- Компактная квадратная кнопка закрытия
         imgui.SameLine(imgui.GetWindowWidth() - 28)
@@ -7576,6 +7769,10 @@ function imgui.OnDrawFrame()
                 end
             end
         imgui.EndChild()
+
+        if seasonal and seasonal.drawOverlay then
+        seasonal.drawOverlay()
+    end
 
     imgui.End()
     imgui.PopStyleVar(THEME_ROUNDING_COUNT)
@@ -9275,11 +9472,26 @@ do
             qsms.sendServerCmd(args ~= "" and ("/call " .. args) or "/call")
             return
         end
-        if args:match("^%+[%d%-]+$") or args:match("%-") or (args:match("^%d+$") and #args >= 4) then
+        -- Ник с нижним подчёркиванием (Name_Surname, N_M и т.п.) -> тихий поиск активной симки через /number
+        if args:find("_") then
+            qsms.call_func(args)
+            return
+        end
+        -- Телефонный номер (с +, с дефисом -, или от 4 цифр) -> убираем знаки и звоним напрямую
+        if args:match("^%+[%d%-]+$") or args:match("^[%d%-]+%-[%d%-]+$") or (args:match("^%d+$") and #args >= 4) then
             qsms.sendServerCmd("/call " .. args:gsub("[%+%-%s]", ""))
             return
         end
-        qsms.call_func(args)
+        -- Числовой ID игрока (кроме 911 и прочих коротких номеров, если такой ID реально в сети)
+        if args:match("^%d+$") and args ~= "911" then
+            local pid = tonumber(args)
+            if pid and sampIsPlayerConnected(pid) and not sampIsPlayerNpc(pid) then
+                qsms.call_func(args)
+                return
+            end
+        end
+        -- Всё остальное (/call 911, /call verdant, /call event, /call gps и т.д.) пропускаем на сервер как есть
+        qsms.sendServerCmd("/call " .. args)
     end
 
     function qsms.call_func(somebody)
